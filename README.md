@@ -61,6 +61,20 @@ Anyone who **clones the full repo** should follow this. You do **not** repeat ev
 
 **Summary:** **Bootstrap + pip** = once per clone. **Seed** = once per **empty** MySQL (or after volume wipe). **Docker + start:all + frontend** = each time you work (if things were stopped).
 
+### How many terminals?
+
+You do **not** need four or five windows if you use **`npm run start:all`** (one process runs gateway + all Node APIs + workers).
+
+| Long-running | Count | What |
+| :--- | :---: | :--- |
+| **Stack** | 1 | `npm run start:all` — leave open |
+| **Frontend** | 1 | `cd frontend && npm run dev` — leave open |
+| **AI (FastAPI)** | 0–1 | Optional: Uvicorn on **8001** only if you need **`/api/ai/*`** |
+
+**Docker** (`docker compose up -d`) finishes and returns a prompt — run it in the **same** terminal **before** `start:all`, not as another permanent tab. **Seed**, **`curl`** demo jobs, and **git** use any terminal **once** the command ends.
+
+**Avoid** starting each microservice in its own terminal unless you are debugging; that is what **`start:all`** replaces.
+
 ---
 
 ## Run everything from VS Code
