@@ -15,3 +15,8 @@ dist/
 build/
 .cache/
 *.tsbuildinfo
+
+# Python
+venv/
+.venv/
+**/venv/
