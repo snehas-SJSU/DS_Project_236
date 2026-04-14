@@ -39,8 +39,10 @@ async function seed() {
       event_type: 'member.created',
       trace_id: traceId,
       timestamp: new Date().toISOString(),
+      actor_id: memberId,
       entity: { entity_type: 'member', entity_id: memberId },
-      payload: profileData
+      payload: profileData,
+      idempotency_key: crypto.createHash('sha256').update(`seed-${memberId}`).digest('hex')
     };
 
     await producer.send({

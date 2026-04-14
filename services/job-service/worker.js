@@ -1,5 +1,6 @@
 const kafka = require('../../shared/kafka-client');
 const db = require('../../shared/mysql');
+const { alreadyProcessed, markProcessed } = require('../../shared/idempotency');
 
 const consumer = kafka.consumer({ groupId: 'job-service-group' });
 
@@ -15,6 +16,8 @@ async function initDB() {
       skills JSON,
       description TEXT,
       status VARCHAR(50) DEFAULT 'open',
+      recruiter_id VARCHAR(50) DEFAULT 'R-default',
+      views_count INT DEFAULT 0,
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     )
   `);
@@ -23,7 +26,7 @@ async function initDB() {
 async function runWorker() {
   await initDB();
   await consumer.connect();
-  await consumer.subscribe({ topic: 'job.events', fromBeginning: true });
+  await consumer.subscribe({ topic: 'job.events', fromBeginning: false });
 
   console.log("Job Service Worker listening to 'job.events'");
 
@@ -31,20 +34,59 @@ async function runWorker() {
     eachMessage: async ({ message }) => {
       try {
         const event = JSON.parse(message.value.toString());
-        
+        const idem = event.idempotency_key;
+        if (idem && (await alreadyProcessed(`job-worker:${idem}`))) {
+          return;
+        }
+
         if (event.event_type === 'job.created') {
-          const { title, company, location, salary, type, skills, description } = event.payload;
-          
+          const { title, company, location, salary, type, skills, description, recruiter_id } = event.payload;
           await db.query(
-            `INSERT INTO jobs (job_id, title, company, location, salary, type, skills, description) 
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?) ON DUPLICATE KEY UPDATE title=VALUES(title)`,
-            [event.entity.entity_id, title, company, location, salary, type, skills, description]
+            `INSERT INTO jobs (job_id, title, company, location, salary, type, skills, description, recruiter_id, status)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'open')
+             ON DUPLICATE KEY UPDATE title=VALUES(title), company=VALUES(company), location=VALUES(location),
+             salary=VALUES(salary), type=VALUES(type), skills=VALUES(skills), description=VALUES(description), recruiter_id=VALUES(recruiter_id)`,
+            [event.entity.entity_id, title, company, location, salary, type, typeof skills === 'string' ? skills : JSON.stringify(skills || []), description, recruiter_id || 'R-default']
           );
-          
+          if (idem) await markProcessed(`job-worker:${idem}`);
           console.log(`Job Worker saved ${event.entity.entity_id} to MySQL.`);
         }
+
+        if (event.event_type === 'job.viewed') {
+          await db.query(
+            'UPDATE jobs SET views_count = views_count + 1 WHERE job_id = ?',
+            [event.entity.entity_id]
+          );
+          if (idem) await markProcessed(`job-worker:${idem}`);
+        }
+
+        if (event.event_type === 'job.updated' || event.event_type === 'job.closed') {
+          const jid = event.entity.entity_id;
+          const p = event.payload || {};
+          if (event.event_type === 'job.closed') {
+            await db.query("UPDATE jobs SET status = 'closed' WHERE job_id = ?", [jid]);
+          } else {
+            const sets = [];
+            const vals = [];
+            ['title', 'company', 'location', 'salary', 'type', 'description'].forEach((k) => {
+              if (p[k] !== undefined) {
+                sets.push(`${k} = ?`);
+                vals.push(p[k]);
+              }
+            });
+            if (p.skills !== undefined) {
+              sets.push('skills = ?');
+              vals.push(JSON.stringify(p.skills));
+            }
+            if (sets.length) {
+              vals.push(jid);
+              await db.query(`UPDATE jobs SET ${sets.join(', ')} WHERE job_id = ?`, vals);
+            }
+          }
+          if (idem) await markProcessed(`job-worker:${idem}`);
+        }
       } catch (err) {
-        console.error("Worker generic fail", err);
+        console.error('Worker generic fail', err);
       }
     },
   });

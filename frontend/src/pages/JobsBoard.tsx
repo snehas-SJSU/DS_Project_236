@@ -33,19 +33,25 @@ export default function JobsBoard() {
     if (!activeJob) return;
     setIsApplying(true);
     try {
-      const response = await fetch('http://localhost:4000/api/applications/apply', {
+      const response = await fetch('http://localhost:4000/api/applications/submit', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           job_id: activeJob.id,
-          member_id: 'M-123' // Mock member ID
+          member_id: 'M-123'
         })
       });
       
+      const data = await response.json().catch(() => ({}));
       if (response.ok) {
         alert('Application submitted successfully!');
       } else {
-        alert('Failed to submit application. Please try again.');
+        const msg = data.error === 'JOB_CLOSED'
+          ? 'This job is closed — applications are not accepted.'
+          : data.error === 'DUPLICATE_APPLICATION'
+            ? 'You have already applied to this job.'
+            : data.message || 'Failed to submit application.';
+        alert(msg);
       }
     } catch (error) {
       console.error('Apply error:', error);

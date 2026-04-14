@@ -1,47 +1,179 @@
 const express = require('express');
 const crypto = require('crypto');
 const kafka = require('../../shared/kafka-client');
+const db = require('../../shared/mysql');
 
 const app = express();
 app.use(express.json());
 const producer = kafka.producer();
 
-app.post('/applications/apply', async (req, res) => {
+async function ensureApplicationsTable() {
+  await db.query(`
+    CREATE TABLE IF NOT EXISTS applications (
+      app_id VARCHAR(50) PRIMARY KEY,
+      job_id VARCHAR(50),
+      member_id VARCHAR(50),
+      status VARCHAR(50) DEFAULT 'submitted',
+      cover_letter TEXT,
+      recruiter_note TEXT,
+      applied_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE KEY uk_job_member (job_id, member_id),
+      INDEX (job_id),
+      INDEX (member_id)
+    )
+  `);
+}
+
+function envelope(eventType, traceId, actorId, entityId, payload, idempotencyKey) {
+  return {
+    event_type: eventType,
+    trace_id: traceId,
+    timestamp: new Date().toISOString(),
+    actor_id: actorId,
+    entity: { entity_type: 'application', entity_id: entityId },
+    payload,
+    idempotency_key: idempotencyKey
+  };
+}
+
+async function submitHandler(req, res) {
   try {
-    const { job_id, member_id } = req.body;
-    
+    await ensureApplicationsTable();
+    const { job_id, member_id, cover_letter } = req.body;
+
     if (!job_id || !member_id) {
-      return res.status(400).json({ error: 'MISSING_FIELDS' });
+      return res.status(400).json({ error: 'BAD_REQUEST', message: 'job_id and member_id required', trace_id: crypto.randomUUID() });
+    }
+
+    const [jobs] = await db.query('SELECT status FROM jobs WHERE job_id = ?', [job_id]);
+    if (!jobs.length) {
+      return res.status(404).json({ error: 'NOT_FOUND', message: 'Job not found', trace_id: crypto.randomUUID() });
+    }
+    if (jobs[0].status === 'closed') {
+      return res.status(422).json({ error: 'JOB_CLOSED', message: 'Cannot apply to a closed job', trace_id: crypto.randomUUID() });
+    }
+
+    const [existing] = await db.query(
+      'SELECT app_id FROM applications WHERE job_id = ? AND member_id = ?',
+      [job_id, member_id]
+    );
+    if (existing.length) {
+      return res.status(409).json({ error: 'DUPLICATE_APPLICATION', message: 'Already applied to this job', trace_id: crypto.randomUUID() });
     }
 
     const appId = 'APP-' + crypto.randomUUID().substring(0, 8);
     const traceId = crypto.randomUUID();
-    
+    const idempotencyKey = req.headers['idempotency-key'] || crypto.createHash('sha256').update(`${job_id}-${member_id}-${traceId}`).digest('hex');
+
+    const eventPayload = envelope('application.submitted', traceId, member_id, appId, {
+      job_id,
+      member_id,
+      status: 'submitted',
+      cover_letter: cover_letter || null
+    }, idempotencyKey);
+
     await producer.connect();
-
-    const eventPayload = {
-      event_type: 'application.submitted',
-      trace_id: traceId,
-      timestamp: new Date().toISOString(),
-      actor_id: member_id,
-      entity: { entity_type: 'application', entity_id: appId },
-      payload: { job_id, member_id, status: 'pending' },
-      idempotency_key: crypto.createHash('sha256').update(`app.submitted-${appId}`).digest('hex')
-    };
-
     await producer.send({
       topic: 'application.events',
       messages: [{ key: appId, value: JSON.stringify(eventPayload) }]
     });
 
-    res.status(202).json({ 
-      message: 'Application submitted', 
-      application_id: appId, 
-      trace_id: traceId 
+    res.status(201).json({
+      message: 'Application submitted',
+      application_id: appId,
+      trace_id: traceId
     });
   } catch (err) {
     console.error('Producer error:', err);
-    res.status(503).json({ error: 'KAFKA_UNAVAILABLE' });
+    res.status(503).json({ error: 'KAFKA_UNAVAILABLE', message: String(err.message), trace_id: crypto.randomUUID() });
+  }
+}
+
+app.post('/applications/submit', submitHandler);
+app.post('/applications/apply', submitHandler);
+
+app.post('/applications/get', async (req, res) => {
+  try {
+    await ensureApplicationsTable();
+    const { application_id } = req.body;
+    if (!application_id) {
+      return res.status(400).json({ error: 'BAD_REQUEST', message: 'application_id required', trace_id: crypto.randomUUID() });
+    }
+    const [rows] = await db.query('SELECT * FROM applications WHERE app_id = ?', [application_id]);
+    if (!rows.length) {
+      return res.status(404).json({ error: 'NOT_FOUND', message: 'Application not found', trace_id: crypto.randomUUID() });
+    }
+    res.status(200).json(rows[0]);
+  } catch (err) {
+    res.status(500).json({ error: 'INTERNAL_ERROR', message: err.message, trace_id: crypto.randomUUID() });
+  }
+});
+
+app.post('/applications/byJob', async (req, res) => {
+  try {
+    await ensureApplicationsTable();
+    const { job_id } = req.body;
+    if (!job_id) {
+      return res.status(400).json({ error: 'BAD_REQUEST', message: 'job_id required', trace_id: crypto.randomUUID() });
+    }
+    const [rows] = await db.query('SELECT * FROM applications WHERE job_id = ? ORDER BY applied_at DESC', [job_id]);
+    res.status(200).json(rows);
+  } catch (err) {
+    res.status(500).json({ error: 'INTERNAL_ERROR', message: err.message, trace_id: crypto.randomUUID() });
+  }
+});
+
+app.post('/applications/byMember', async (req, res) => {
+  try {
+    await ensureApplicationsTable();
+    const { member_id } = req.body;
+    if (!member_id) {
+      return res.status(400).json({ error: 'BAD_REQUEST', message: 'member_id required', trace_id: crypto.randomUUID() });
+    }
+    const [rows] = await db.query('SELECT * FROM applications WHERE member_id = ? ORDER BY applied_at DESC', [member_id]);
+    res.status(200).json(rows);
+  } catch (err) {
+    res.status(500).json({ error: 'INTERNAL_ERROR', message: err.message, trace_id: crypto.randomUUID() });
+  }
+});
+
+app.post('/applications/updateStatus', async (req, res) => {
+  try {
+    const { application_id, status, recruiter_note } = req.body;
+    if (!application_id || !status) {
+      return res.status(400).json({ error: 'BAD_REQUEST', message: 'application_id and status required', trace_id: crypto.randomUUID() });
+    }
+    const traceId = crypto.randomUUID();
+    const idem = crypto.randomUUID();
+    const eventPayload = envelope('application.status_updated', traceId, 'recruiter', application_id, {
+      application_id,
+      status,
+      recruiter_note: recruiter_note || null
+    }, idem);
+
+    await producer.connect();
+    await producer.send({
+      topic: 'application.events',
+      messages: [{ key: application_id, value: JSON.stringify(eventPayload) }]
+    });
+
+    res.status(200).json({ message: 'Status update queued', trace_id: traceId });
+  } catch (err) {
+    res.status(503).json({ error: 'KAFKA_UNAVAILABLE', message: err.message, trace_id: crypto.randomUUID() });
+  }
+});
+
+app.post('/applications/addNote', async (req, res) => {
+  try {
+    const { application_id, note } = req.body;
+    if (!application_id || note === undefined) {
+      return res.status(400).json({ error: 'BAD_REQUEST', message: 'application_id and note required', trace_id: crypto.randomUUID() });
+    }
+    await ensureApplicationsTable();
+    await db.query('UPDATE applications SET recruiter_note = ? WHERE app_id = ?', [note, application_id]);
+    res.status(200).json({ message: 'Note saved', application_id });
+  } catch (err) {
+    res.status(500).json({ error: 'INTERNAL_ERROR', message: err.message, trace_id: crypto.randomUUID() });
   }
 });
 

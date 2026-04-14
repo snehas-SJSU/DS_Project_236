@@ -14,29 +14,61 @@ const swaggerDocument = YAML.load(path.join(__dirname, 'swagger.yaml'));
 // Set up the Swagger UI /docs endpoint
 app.use('/docs', swaggerUi.serve, swaggerUi.setup(swaggerDocument));
 
-// Proxy /api/members to User Service (Port 4001)
-app.use('/api/members', createProxyMiddleware({ target: 'http://localhost:4001', changeOrigin: true, pathRewrite: {'^/api': ''} }));
+// Use 127.0.0.1 for upstreams (avoids macOS localhost → IPv6 issues with Node ↔ Docker)
+const local = (port) => `http://127.0.0.1:${port}`;
 
-// Proxy /api/jobs to Job Service (Port 4002)
-app.use('/api/jobs', createProxyMiddleware({ target: 'http://localhost:4002', changeOrigin: true, pathRewrite: {'^/api': ''} }));
+const proxy = (port, extra = {}) =>
+  createProxyMiddleware({
+    target: local(port),
+    changeOrigin: true,
+    pathRewrite: { '^/api': '' },
+    proxyTimeout: 60_000,
+    timeout: 60_000,
+    onError(err, req, res) {
+      console.error('[gateway proxy]', req.method, req.url, err.message);
+      if (!res.headersSent) res.writeHead(502, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: 'BAD_GATEWAY', message: err.message }));
+    },
+    ...extra
+  });
 
-// Proxy /api/applications to Application Service (Port 4003)
-app.use('/api/applications', createProxyMiddleware({ target: 'http://localhost:4003', changeOrigin: true, pathRewrite: {'^/api': ''} }));
+app.use('/api/members', proxy(4001));
+app.use('/api/jobs', proxy(4002));
+app.use('/api/applications', proxy(4003));
+app.use('/api/connections', proxy(4006));
+app.use('/api/threads', proxy(4004));
+app.use('/api/messages', proxy(4004));
+app.use('/api/events', proxy(4005));
+app.use('/api/analytics', proxy(4005));
 
-// Proxy /api/threads and /api/messages to Messaging Service (Port 4004)
-app.use('/api/threads', createProxyMiddleware({ target: 'http://localhost:4004', changeOrigin: true, pathRewrite: {'^/api': ''} }));
-app.use('/api/messages', createProxyMiddleware({ target: 'http://localhost:4004', changeOrigin: true, pathRewrite: {'^/api': ''} }));
-
-// Proxy /api/events and /api/analytics to Analytics Service (Port 4005)
-app.use('/api/events', createProxyMiddleware({ target: 'http://localhost:4005', changeOrigin: true, pathRewrite: {'^/api': ''} }));
-app.use('/api/analytics', createProxyMiddleware({ target: 'http://localhost:4005', changeOrigin: true, pathRewrite: {'^/api': ''} }));
-
-// Proxy /api/ai to Agentic AI Service (Port 8001)
-app.use('/api/ai', createProxyMiddleware({ target: 'http://localhost:8001', changeOrigin: true, pathRewrite: {'^/api/ai': '/ai'} }));
-
+const aiWsProxy = createProxyMiddleware({
+  target: local(8001),
+  changeOrigin: true,
+  pathRewrite: { '^/api/ai/ws': '/ws' },
+  ws: true,
+  proxyTimeout: 60_000,
+  timeout: 60_000
+});
+app.use('/api/ai/ws', aiWsProxy);
+app.use(
+  '/api/ai',
+  createProxyMiddleware({
+    target: local(8001),
+    changeOrigin: true,
+    pathRewrite: { '^/api/ai': '/ai' },
+    proxyTimeout: 60_000,
+    timeout: 60_000,
+    onError(err, req, res) {
+      console.error('[gateway ai]', req.method, req.url, err.message);
+      if (!res.headersSent) res.writeHead(502, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: 'BAD_GATEWAY', message: err.message }));
+    }
+  })
+);
 
 const PORT = process.env.PORT || 4000;
-app.listen(PORT, () => {
+const server = app.listen(PORT, () => {
   console.log(`API Gateway running on port ${PORT}`);
   console.log(`Swagger UI available at http://localhost:${PORT}/docs`);
 });
+server.on('upgrade', aiWsProxy.upgrade);

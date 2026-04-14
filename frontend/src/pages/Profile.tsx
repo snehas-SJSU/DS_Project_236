@@ -1,9 +1,10 @@
 import { useState, useEffect } from 'react';
 import { Briefcase, GraduationCap, MapPin, Sparkles, Building2, ChevronDown } from 'lucide-react';
 
+type LoadState = { status: 'loading' } | { status: 'ok'; data: any } | { status: 'error'; message: string };
+
 export default function Profile() {
-  const [profile, setProfile] = useState<any>(null);
-  const [loading, setLoading] = useState(true);
+  const [state, setState] = useState<LoadState>({ status: 'loading' });
 
   useEffect(() => {
     fetch('http://localhost:4000/api/members/get', {
@@ -11,21 +12,52 @@ export default function Profile() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ member_id: 'M-123' })
     })
-      .then(res => res.json())
-      .then(data => {
-        if (!data.error) {
-          setProfile(data);
+      .then(async (res) => {
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          if (res.status === 404 || data.error === 'NOT_FOUND' || data.error === 'MEMBER_NOT_FOUND') {
+            setState({
+              status: 'error',
+              message:
+                'No profile for member M-123 yet. With Docker + Kafka + npm run start:all running, open a terminal in the repo root and run: npm run seed:member — wait a few seconds, then refresh this page.'
+            });
+            return;
+          }
+          setState({
+            status: 'error',
+            message:
+              res.status === 504
+                ? 'Gateway timeout (504). Usually member service (:4001) was not ready yet, or MySQL was slow to accept connections. Wait ~15s after `docker compose up`, restart `npm run start:all`, then refresh. If it persists, run `npm run seed:member` once the member worker is up.'
+                : data.message || data.error || `API error (${res.status}). Check gateway :4000 and member service :4001.`
+          });
+          return;
         }
-        setLoading(false);
+        if (data.error) {
+          setState({ status: 'error', message: String(data.error) });
+          return;
+        }
+        setState({ status: 'ok', data });
       })
-      .catch(err => {
-        console.error('Failed to fetch profile:', err);
-        setLoading(false);
+      .catch(() => {
+        setState({
+          status: 'error',
+          message:
+            'Could not reach http://localhost:4000. Start the stack (npm run start:all from the repo root) and try again.'
+        });
       });
   }, []);
 
-  if (loading) return <div className="p-8 text-center">Loading profile...</div>;
-  if (!profile) return <div className="p-8 text-center text-red-500">Profile not found. Please run the seed script!</div>;
+  if (state.status === 'loading') return <div className="p-8 text-center">Loading profile...</div>;
+  if (state.status === 'error') {
+    return (
+      <div className="max-w-xl mx-auto p-8 text-center text-red-600 space-y-3">
+        <p className="font-medium">Profile could not be loaded</p>
+        <p className="text-sm text-slate-700 whitespace-pre-wrap text-left bg-slate-50 border border-slate-200 rounded-lg p-4">{state.message}</p>
+      </div>
+    );
+  }
+
+  const profile = state.data;
 
   return (
     <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">

@@ -2,7 +2,13 @@ openapi: 3.0.0
 info:
   title: LinkedIn AgenticAI API
   version: 1.0.0
-  description: Complete distributed system backend API documentation for Data 236 Project.
+  description: |
+    Complete distributed system backend API documentation for Data 236 Project.
+
+    **Agentic AI (FastAPI):** Paths under `/ai/*` match **Uvicorn** on port **8001** exactly.
+    Use this gateway (`/api` prefix) for **Try it out** — e.g. `POST /api/ai/tasks/submit` → `http://localhost:8001/ai/tasks/submit`.
+    **WebSocket:** `ws://localhost:4000/api/ai/ws/ai/tasks/{task_id}` (proxied to FastAPI `/ws/ai/tasks/{task_id}`).
+    Canonical interactive docs for the Python service alone: `http://localhost:8001/docs`.
 servers:
   - url: http://localhost:4000/api
     description: Local API Gateway
@@ -252,8 +258,23 @@ paths:
       responses:
         '200':
           description: OK
+  /analytics/member/dashboard:
+    post:
+      tags: [Analytics Service]
+      summary: Member dashboard metrics
+      responses:
+        '200':
+          description: OK
 
-  # Agentic AI Service
+  /applications/apply:
+    post:
+      tags: [Application Service]
+      summary: Submit application (alias of submit)
+      responses:
+        '201':
+          description: Created
+
+  # Agentic AI Service (same contract as FastAPI/Uvicorn :8001; gateway adds /api prefix)
   /ai/tasks/submit:
     post:
       tags: [Agentic AI Service]
@@ -261,6 +282,39 @@ paths:
       responses:
         '202':
           description: Accepted
+  /ai/tasks/{task_id}/approve:
+    post:
+      tags: [Agentic AI Service]
+      summary: Human-in-the-loop approve / edit / reject
+      parameters:
+        - name: task_id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: OK
+  /ai/tasks/{task_id}:
+    get:
+      tags: [Agentic AI Service]
+      summary: Get task status and partial results
+      parameters:
+        - name: task_id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: OK
+  /ai/health:
+    get:
+      tags: [Agentic AI Service]
+      summary: AI service health (via gateway)
+      responses:
+        '200':
+          description: OK
   /ai/resume/parse:
     post:
       tags: [Agentic AI Service]
