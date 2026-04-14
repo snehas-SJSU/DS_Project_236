@@ -1,0 +1,298 @@
+openapi: 3.0.0
+info:
+  title: LinkedIn AgenticAI API
+  version: 1.0.0
+  description: Complete distributed system backend API documentation for Data 236 Project.
+servers:
+  - url: http://localhost:4000/api
+    description: Local API Gateway
+
+paths:
+  # Member Service
+  /members/create:
+    post:
+      tags: [Profile Service]
+      summary: Create a new member profile
+      responses:
+        '201':
+          description: Created
+  /members/get:
+    post:
+      tags: [Profile Service]
+      summary: Retrieve a member profile
+      responses:
+        '200':
+          description: OK
+  /members/update:
+    post:
+      tags: [Profile Service]
+      summary: Update member fields
+      responses:
+        '200':
+          description: OK
+  /members/delete:
+    post:
+      tags: [Profile Service]
+      summary: Soft-delete member profile
+      responses:
+        '200':
+          description: OK
+  /members/search:
+    post:
+      tags: [Profile Service]
+      summary: Full-text search across members
+      responses:
+        '200':
+          description: OK
+
+  # Job Service
+  /jobs/create:
+    post:
+      tags: [Job Service]
+      summary: Create a new job posting
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                title:
+                  type: string
+                company:
+                  type: string
+                location:
+                  type: string
+                salary:
+                  type: string
+                type:
+                  type: string
+                description:
+                  type: string
+                skills:
+                  type: array
+                  items:
+                    type: string
+      responses:
+        '201':
+          description: Created
+  /jobs/get:
+    post:
+      tags: [Job Service]
+      summary: Get job details
+      responses:
+        '200':
+          description: OK
+  /jobs/update:
+    post:
+      tags: [Job Service]
+      summary: Update job fields
+      responses:
+        '200':
+          description: OK
+  /jobs/search:
+    post:
+      tags: [Job Service]
+      summary: Search and filter jobs
+      responses:
+        '200':
+          description: OK
+  /jobs/close:
+    post:
+      tags: [Job Service]
+      summary: Close a job posting
+      responses:
+        '200':
+          description: OK
+  /jobs/byRecruiter:
+    post:
+      tags: [Job Service]
+      summary: List all jobs by specific recruiter
+      responses:
+        '200':
+          description: OK
+
+  # Application Service
+  /applications/submit:
+    post:
+      tags: [Application Service]
+      summary: Submit a job application
+      responses:
+        '201':
+          description: Created
+  /applications/get:
+    post:
+      tags: [Application Service]
+      summary: Get application details
+      responses:
+        '200':
+          description: OK
+  /applications/byJob:
+    post:
+      tags: [Application Service]
+      summary: List all applications for a job
+      responses:
+        '200':
+          description: OK
+  /applications/byMember:
+    post:
+      tags: [Application Service]
+      summary: List all applications by a member
+      responses:
+        '200':
+          description: OK
+  /applications/updateStatus:
+    post:
+      tags: [Application Service]
+      summary: Update application status through funnel
+      responses:
+        '200':
+          description: OK
+  /applications/addNote:
+    post:
+      tags: [Application Service]
+      summary: Add recruiter note to application
+      responses:
+        '200':
+          description: OK
+
+  # Messaging Service
+  /threads/open:
+    post:
+      tags: [Messaging Service]
+      summary: Create a message thread
+      responses:
+        '201':
+          description: Created
+  /threads/get:
+    post:
+      tags: [Messaging Service]
+      summary: Get thread metadata
+      responses:
+        '200':
+          description: OK
+  /threads/byUser:
+    post:
+      tags: [Messaging Service]
+      summary: List all threads for a user
+      responses:
+        '200':
+          description: OK
+  /messages/send:
+    post:
+      tags: [Messaging Service]
+      summary: Send a message in thread
+      responses:
+        '201':
+          description: Created
+  /messages/list:
+    post:
+      tags: [Messaging Service]
+      summary: List messages in thread
+      responses:
+        '200':
+          description: OK
+
+  # Connections Service
+  /connections/request:
+    post:
+      tags: [Connection Service]
+      summary: Send connection request
+      responses:
+        '201':
+          description: Created
+  /connections/accept:
+    post:
+      tags: [Connection Service]
+      summary: Accept request
+      responses:
+        '200':
+          description: OK
+  /connections/reject:
+    post:
+      tags: [Connection Service]
+      summary: Reject request
+      responses:
+        '200':
+          description: OK
+  /connections/list:
+    post:
+      tags: [Connection Service]
+      summary: List all user connections
+      responses:
+        '200':
+          description: OK
+
+  # Analytics Service
+  /events/ingest:
+    post:
+      tags: [Analytics Service]
+      summary: Ingest behavioral event
+      responses:
+        '202':
+          description: Accepted
+  /analytics/jobs/top:
+    post:
+      tags: [Analytics Service]
+      summary: Top jobs by metric
+      responses:
+        '200':
+          description: OK
+  /analytics/funnel:
+    post:
+      tags: [Analytics Service]
+      summary: Application funnel
+      responses:
+        '200':
+          description: OK
+  /analytics/geo:
+    post:
+      tags: [Analytics Service]
+      summary: Geographic distribution
+      responses:
+        '200':
+          description: OK
+
+  # Agentic AI Service
+  /ai/tasks/submit:
+    post:
+      tags: [Agentic AI Service]
+      summary: Submit AI task asynchronously
+      responses:
+        '202':
+          description: Accepted
+  /ai/resume/parse:
+    post:
+      tags: [Agentic AI Service]
+      summary: Parse resume synchronously
+      responses:
+        '200':
+          description: OK
+  /ai/match/score:
+    post:
+      tags: [Agentic AI Service]
+      summary: Score job match
+      responses:
+        '200':
+          description: OK
+  /ai/shortlist:
+    post:
+      tags: [Agentic AI Service]
+      summary: Fetch ranked shortlist
+      responses:
+        '200':
+          description: OK
+  /ai/outreach/draft:
+    post:
+      tags: [Agentic AI Service]
+      summary: Draft recruiter outreach
+      responses:
+        '200':
+          description: OK
+  /ai/career-coach/suggest:
+    post:
+      tags: [Agentic AI Service]
+      summary: Get career suggestions
+      responses:
+        '200':
+          description: OK

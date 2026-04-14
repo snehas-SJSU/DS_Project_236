@@ -1,0 +1,17 @@
+# Dependencies
+node_modules/
+
+# Environment and secrets
+.env
+.env.*
+!.env.example
+
+# Logs and OS
+*.log
+.DS_Store
+
+# Build / cache
+dist/
+build/
+.cache/
+*.tsbuildinfo

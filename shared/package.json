@@ -1,0 +1,17 @@
+{
+  "name": "shared",
+  "version": "1.0.0",
+  "main": "kafka-client.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "description": "",
+  "dependencies": {
+    "kafkajs": "^2.2.4",
+    "mysql2": "^3.22.0",
+    "redis": "^5.11.0"
+  }
+}

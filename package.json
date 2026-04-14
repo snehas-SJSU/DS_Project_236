@@ -1,0 +1,19 @@
+{
+  "name": "linkedin-agentic-ai",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev:gateway": "cd api-gateway && npm run start",
+    "dev:user-api": "cd services/user-service && npm run start:api",
+    "dev:user-worker": "cd services/user-service && npm run start:worker",
+    "dev:job-api": "cd services/job-service && npm run start:api",
+    "dev:job-worker": "cd services/job-service && npm run start:worker",
+    "dev:app-api": "cd services/application-service && npm run start:api",
+    "dev:app-worker": "cd services/application-service && npm run start:worker",
+    "dev:msg-api": "cd services/messaging-service && npm run start:api",
+    "dev:msg-worker": "cd services/messaging-service && npm run start:worker",
+    "dev:analytics-api": "cd services/analytics-service && npm run start:api",
+    "dev:analytics-worker": "cd services/analytics-service && npm run start:worker",
+    "start:all": "npx concurrently \"npm:dev:*\""
+  }
+}
