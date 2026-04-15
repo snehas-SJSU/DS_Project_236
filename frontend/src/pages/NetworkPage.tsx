@@ -13,6 +13,11 @@ type Suggestion = {
   photo?: string;
 };
 
+const fallbackSuggestions: Suggestion[] = [
+  { id: 'M-DEMO-01', name: 'Nina Shah', role: 'Backend Engineer at Orbit' },
+  { id: 'M-DEMO-02', name: 'Rahul Verma', role: 'Product Manager at Flux' }
+];
+
 export default function NetworkPage() {
   const [incoming, setIncoming] = useState<any[]>([]);
   const [sent, setSent] = useState<any[]>([]);
@@ -70,7 +75,17 @@ export default function NetworkPage() {
         role: m.headline || m.title || 'LinkedIn member',
         photo: resolveAvatarUrl(m.profile_photo_url, m.name || m.member_id)
       }));
-    setSuggestions(normalizedSuggestions);
+    if (normalizedSuggestions.length > 0) {
+      setSuggestions(normalizedSuggestions);
+      return;
+    }
+
+    // Keep the Connect UI visible even in fresh/local setups with only one seeded member.
+    const fallback = fallbackSuggestions
+      .filter((s) => !connected.has(s.id))
+      .filter((s) => !sentPending.has(s.id))
+      .filter((s) => !incomingPending.has(s.id));
+    setSuggestions(fallback);
   }
 
   useEffect(() => {
