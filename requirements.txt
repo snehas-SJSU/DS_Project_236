@@ -1,0 +1,19 @@
+# ==========================================================
+# LinkedIn Simulation - Software Requirements (Team Setup)
+# ==========================================================
+# System software needed before running project:
+# 1) Node.js 20+ and npm
+# 2) Docker + Docker Compose
+# 3) Python 3.10+ and pip
+#
+# Install Python dependencies with:
+#   pip install -r requirements.txt
+#
+# Note:
+# - Node dependencies install via: npm run bootstrap
+# - Infra services (Kafka/MySQL/Mongo/Redis) run via: docker compose up -d
+
+fastapi==0.103.1
+uvicorn==0.23.2
+pydantic==2.3.0
+kafka-python==2.0.2

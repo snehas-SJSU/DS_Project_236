@@ -1,5 +1,6 @@
 const express = require('express');
 const crypto = require('crypto');
+const jwt = require('jsonwebtoken');
 const kafka = require('../../shared/kafka-client');
 const db = require('../../shared/mysql');
 const redisModule = require('../../shared/redis');
@@ -10,6 +11,53 @@ const producer = kafka.producer();
 
 const CACHE_PREFIX = 'member:';
 const CACHE_TTL = 600;
+const AUTH_TOKEN_TTL_HOURS = 24;
+const JWT_SECRET = process.env.JWT_SECRET || 'linkedin-sim-dev-secret';
+
+function hashPassword(password, salt) {
+  return crypto.pbkdf2Sync(password, salt, 100000, 64, 'sha512').toString('hex');
+}
+
+function createJwtToken(payload) {
+  return jwt.sign(payload, JWT_SECRET, { expiresIn: `${AUTH_TOKEN_TTL_HOURS}h` });
+}
+
+function verifyJwtToken(token) {
+  try {
+    return jwt.verify(token, JWT_SECRET);
+  } catch {
+    return null;
+  }
+}
+
+function isValidEmail(email) {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(email || '').trim());
+}
+
+function isStrongPassword(password) {
+  const val = String(password || '');
+  return (
+    val.length >= 7 &&
+    /[A-Z]/.test(val) &&
+    /[a-z]/.test(val) &&
+    /\d/.test(val) &&
+    /[^A-Za-z0-9]/.test(val)
+  );
+}
+
+async function getSession(token) {
+  const [rows] = await db.query(
+    'SELECT user_id, email, expires_at FROM auth_sessions WHERE token = ? LIMIT 1',
+    [token]
+  );
+  if (!rows.length) return null;
+  const session = rows[0];
+  if (new Date(session.expires_at).getTime() < Date.now()) {
+    await db.query('DELETE FROM auth_sessions WHERE token = ?', [token]);
+    return null;
+  }
+  return session;
+}
 
 function envelope(eventType, traceId, actorId, entityType, entityId, payload, idempotencyKey) {
   return {
@@ -64,6 +112,130 @@ function normalizeMemberPayload(body, partial = false) {
     resume_text: has('resume_text') ? body.resume_text : undefined
   };
 }
+
+// Auth: Signup
+app.post('/auth/signup', async (req, res) => {
+  try {
+    const { email, password, name } = req.body || {};
+    const emailNorm = String(email || '').trim().toLowerCase();
+    if (!isValidEmail(emailNorm)) {
+      return res.status(400).json({ error: 'INVALID_EMAIL', message: 'Please enter a valid email address.', trace_id: crypto.randomUUID() });
+    }
+    if (!isStrongPassword(password)) {
+      return res.status(400).json({
+        error: 'WEAK_PASSWORD',
+        message: 'Password must be at least 7 characters and include uppercase, lowercase, number, and special character.',
+        trace_id: crypto.randomUUID()
+      });
+    }
+
+    const [existing] = await db.query('SELECT user_id FROM auth_users WHERE email = ? LIMIT 1', [emailNorm]);
+    if (existing.length) {
+      return res.status(409).json({ error: 'DUPLICATE_EMAIL', message: 'An account with this email already exists.', trace_id: crypto.randomUUID() });
+    }
+
+    const userId = 'U-' + crypto.randomUUID().substring(0, 8);
+    const salt = crypto.randomBytes(16).toString('hex');
+    const passwordHash = hashPassword(password, salt);
+    await db.query(
+      'INSERT INTO auth_users (user_id, email, password_hash, password_salt, name) VALUES (?, ?, ?, ?, ?)',
+      [userId, emailNorm, passwordHash, salt, name || null]
+    );
+
+    const token = createJwtToken({ user_id: userId, email: emailNorm });
+    await db.query(
+      'INSERT INTO auth_sessions (token, user_id, email, expires_at) VALUES (?, ?, ?, DATE_ADD(NOW(), INTERVAL ? HOUR))',
+      [token, userId, emailNorm, AUTH_TOKEN_TTL_HOURS]
+    );
+
+    return res.status(201).json({
+      token,
+      user: { user_id: userId, email: emailNorm, name: name || null },
+      message: 'Signup successful'
+    });
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ error: 'INTERNAL_ERROR', message: err.message, trace_id: crypto.randomUUID() });
+  }
+});
+
+// Auth: Login
+app.post('/auth/login', async (req, res) => {
+  try {
+    const { email, password } = req.body || {};
+    const emailNorm = String(email || '').trim().toLowerCase();
+    if (!isValidEmail(emailNorm) || !password) {
+      return res.status(400).json({ error: 'BAD_REQUEST', message: 'Valid email and password are required.', trace_id: crypto.randomUUID() });
+    }
+    const [rows] = await db.query(
+      'SELECT user_id, email, password_hash, password_salt, name FROM auth_users WHERE email = ? LIMIT 1',
+      [emailNorm]
+    );
+    if (!rows.length) {
+      return res.status(401).json({ error: 'INVALID_CREDENTIALS', message: 'Invalid email or password.', trace_id: crypto.randomUUID() });
+    }
+    const user = rows[0];
+    const incomingHash = hashPassword(password, user.password_salt);
+    if (incomingHash !== user.password_hash) {
+      return res.status(401).json({ error: 'INVALID_CREDENTIALS', message: 'Invalid email or password.', trace_id: crypto.randomUUID() });
+    }
+
+    const token = createJwtToken({ user_id: user.user_id, email: user.email });
+    await db.query(
+      'INSERT INTO auth_sessions (token, user_id, email, expires_at) VALUES (?, ?, ?, DATE_ADD(NOW(), INTERVAL ? HOUR))',
+      [token, user.user_id, user.email, AUTH_TOKEN_TTL_HOURS]
+    );
+    return res.status(200).json({
+      token,
+      user: { user_id: user.user_id, email: user.email, name: user.name || null },
+      message: 'Login successful'
+    });
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ error: 'INTERNAL_ERROR', message: err.message, trace_id: crypto.randomUUID() });
+  }
+});
+
+// Auth: Me
+app.get('/auth/me', async (req, res) => {
+  try {
+    const authHeader = req.headers.authorization || '';
+    const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : '';
+    if (!token) {
+      return res.status(401).json({ error: 'UNAUTHORIZED', message: 'Missing token', trace_id: crypto.randomUUID() });
+    }
+    const decoded = verifyJwtToken(token);
+    if (!decoded) {
+      return res.status(401).json({ error: 'UNAUTHORIZED', message: 'Missing or expired JWT token', trace_id: crypto.randomUUID() });
+    }
+    const session = await getSession(token);
+    if (!session) {
+      return res.status(401).json({ error: 'UNAUTHORIZED', message: 'Session expired or invalid', trace_id: crypto.randomUUID() });
+    }
+    const [users] = await db.query('SELECT user_id, email, name FROM auth_users WHERE user_id = ? LIMIT 1', [decoded.user_id]);
+    if (!users.length) {
+      return res.status(404).json({ error: 'NOT_FOUND', message: 'User not found', trace_id: crypto.randomUUID() });
+    }
+    return res.status(200).json({ user: users[0] });
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ error: 'INTERNAL_ERROR', message: err.message, trace_id: crypto.randomUUID() });
+  }
+});
+
+// Auth: Logout
+app.post('/auth/logout', async (req, res) => {
+  try {
+    const authHeader = req.headers.authorization || '';
+    const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : '';
+    if (!token) return res.status(200).json({ message: 'Logged out' });
+    await db.query('DELETE FROM auth_sessions WHERE token = ?', [token]);
+    return res.status(200).json({ message: 'Logged out' });
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ error: 'INTERNAL_ERROR', message: err.message, trace_id: crypto.randomUUID() });
+  }
+});
 
 // Create Member — duplicate email => 409
 app.post('/members/create', async (req, res) => {
@@ -289,6 +461,29 @@ async function ensureSchema() {
       UNIQUE KEY uk_email (email)
     )
   `);
+  await db.query(`
+    CREATE TABLE IF NOT EXISTS auth_users (
+      user_id VARCHAR(50) PRIMARY KEY,
+      email VARCHAR(120) UNIQUE NOT NULL,
+      password_hash VARCHAR(256) NOT NULL,
+      password_salt VARCHAR(64) NOT NULL,
+      name VARCHAR(120),
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
+  await db.query(`
+    CREATE TABLE IF NOT EXISTS auth_sessions (
+      token VARCHAR(512) PRIMARY KEY,
+      user_id VARCHAR(50) NOT NULL,
+      email VARCHAR(120) NOT NULL,
+      expires_at DATETIME NOT NULL,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      INDEX (user_id),
+      INDEX (expires_at)
+    )
+  `);
+  // JWT tokens are longer than opaque random strings; keep column large enough.
+  await db.query('ALTER TABLE auth_sessions MODIFY COLUMN token VARCHAR(512) NOT NULL');
   await ensureColumn('first_name', 'first_name VARCHAR(100)');
   await ensureColumn('last_name', 'last_name VARCHAR(100)');
   await ensureColumn('headline', 'headline VARCHAR(150)');
@@ -304,6 +499,36 @@ async function ensureSchema() {
   await ensureColumn('resume_text', 'resume_text MEDIUMTEXT');
   await ensureColumn('connections_count', 'connections_count INT DEFAULT 0');
   await ensureColumn('profile_views', 'profile_views INT DEFAULT 0');
+
+  const dummyEmail = 'dummy.user@gmail.com';
+  const [dummyRows] = await db.query('SELECT user_id FROM auth_users WHERE email = ? LIMIT 1', [dummyEmail]);
+  if (!dummyRows.length) {
+    const dummySalt = crypto.randomBytes(16).toString('hex');
+    const dummyHash = hashPassword('Dummy@123', dummySalt);
+    await db.query(
+      'INSERT INTO auth_users (user_id, email, password_hash, password_salt, name) VALUES (?, ?, ?, ?, ?)',
+      ['U-DUMMY01', dummyEmail, dummyHash, dummySalt, 'Dummy User']
+    );
+    console.log('Seeded auth dummy user:', dummyEmail);
+  }
+
+  const adminEmail = 'admin@test.com';
+  const adminSalt = crypto.randomBytes(16).toString('hex');
+  const adminHash = hashPassword('admin123', adminSalt);
+  const [adminRows] = await db.query('SELECT user_id FROM auth_users WHERE email = ? LIMIT 1', [adminEmail]);
+  if (!adminRows.length) {
+    await db.query(
+      'INSERT INTO auth_users (user_id, email, password_hash, password_salt, name) VALUES (?, ?, ?, ?, ?)',
+      ['U-ADMIN01', adminEmail, adminHash, adminSalt, 'Admin Test']
+    );
+    console.log('Seeded auth admin user:', adminEmail);
+  } else {
+    await db.query(
+      'UPDATE auth_users SET password_hash = ?, password_salt = ? WHERE email = ?',
+      [adminHash, adminSalt, adminEmail]
+    );
+    console.log('Updated auth admin password for:', adminEmail);
+  }
 }
 
 const PORT = process.env.PORT || 4001;

@@ -7,11 +7,16 @@ import ApplicationsPage from './pages/ApplicationsPage';
 import MessagingPage from './pages/MessagingPage';
 import NetworkPage from './pages/NetworkPage';
 import NotificationsPage from './pages/NotificationsPage';
+import LoginLandingPage from './pages/LoginLandingPage';
+import SignInPage from './pages/SignInPage';
+import JoinPage from './pages/JoinPage';
+import SignOutPage from './pages/SignOutPage';
 import Profile from './pages/Profile';
 import RecruiterDashboard from './pages/RecruiterDashboard';
 import RecruiterAdminPage from './pages/RecruiterAdminPage';
 import MemberAnalyticsPage from './pages/MemberAnalyticsPage';
 import StaticPage from './pages/StaticPage';
+import { isAuthenticated } from './lib/auth';
 import { MEMBER_ID, resolveAvatarUrl } from './lib/memberProfile';
 
 function FeedPlaceholder() {
@@ -156,28 +161,38 @@ function AppShell({ children }: { children: React.ReactNode }) {
   );
 }
 
+function RequireAuth({ children }: { children: React.ReactNode }) {
+  if (!isAuthenticated()) {
+    return <Navigate to="/login/email" replace />;
+  }
+  return <>{children}</>;
+}
+
 function App() {
   return (
     <BrowserRouter>
       <div className="min-h-screen bg-[#f3f2ef] text-slate-900">
         <Routes>
-          <Route path="/" element={<Navigate to="/feed" replace />} />
-          <Route path="/feed" element={<AppShell><FeedPlaceholder /></AppShell>} />
-          <Route path="/jobs" element={<JobsBoard />} />
-          <Route path="/jobs/search" element={<JobsSearchPage />} />
-          <Route path="/jobs/search-results" element={<JobsSearchPage />} />
-          <Route path="/applications" element={<AppShell><ApplicationsPage /></AppShell>} />
-          <Route path="/profile" element={<AppShell><Profile /></AppShell>} />
-          <Route path="/analytics/member" element={<AppShell><MemberAnalyticsPage /></AppShell>} />
-          <Route path="/recruiter" element={<AppShell><RecruiterDashboard /></AppShell>} />
-          <Route path="/recruiter/admin" element={<AppShell><RecruiterAdminPage /></AppShell>} />
-          <Route path="/messaging" element={<MessagingPage />} />
+          <Route path="/" element={<LoginLandingPage />} />
+          <Route path="/login" element={<LoginLandingPage />} />
+          <Route path="/login/email" element={<SignInPage />} />
+          <Route path="/signup" element={<JoinPage />} />
+          <Route path="/feed" element={<RequireAuth><AppShell><FeedPlaceholder /></AppShell></RequireAuth>} />
+          <Route path="/jobs" element={<RequireAuth><JobsBoard /></RequireAuth>} />
+          <Route path="/jobs/search" element={<RequireAuth><JobsSearchPage /></RequireAuth>} />
+          <Route path="/jobs/search-results" element={<RequireAuth><JobsSearchPage /></RequireAuth>} />
+          <Route path="/applications" element={<RequireAuth><AppShell><ApplicationsPage /></AppShell></RequireAuth>} />
+          <Route path="/profile" element={<RequireAuth><AppShell><Profile /></AppShell></RequireAuth>} />
+          <Route path="/analytics/member" element={<RequireAuth><AppShell><MemberAnalyticsPage /></AppShell></RequireAuth>} />
+          <Route path="/recruiter" element={<RequireAuth><AppShell><RecruiterDashboard /></AppShell></RequireAuth>} />
+          <Route path="/recruiter/admin" element={<RequireAuth><AppShell><RecruiterAdminPage /></AppShell></RequireAuth>} />
+          <Route path="/messaging" element={<RequireAuth><MessagingPage /></RequireAuth>} />
           <Route path="/messaging/compose" element={<AppShell><StaticPage title="Compose Message" description="Start a new conversation with a connection." ctaLabel="Open messaging" items={['Search and pick a connection', 'Write your message', 'Send and track replies']} /></AppShell>} />
           <Route path="/messaging/filter/focused" element={<AppShell><StaticPage title="Focused Messages" description="Priority conversations and important updates." ctaLabel="Back to inbox" items={['Unread important threads', 'Recruiter responses', 'Connection follow-ups']} /></AppShell>} />
           <Route path="/messaging/filter/jobs" element={<AppShell><StaticPage title="Job Messages" description="Conversations related to job opportunities." ctaLabel="Back to inbox" items={['Recruiter outreach', 'Application follow-ups', 'Interview scheduling']} /></AppShell>} />
           <Route path="/messaging/filter/unread" element={<AppShell><StaticPage title="Unread Messages" description="Messages you have not opened yet." ctaLabel="Back to inbox" items={['New recruiter ping', 'New connection request reply', 'Pending team discussion']} /></AppShell>} />
           <Route path="/messaging/filter/connections" element={<AppShell><StaticPage title="Connections Messages" description="Messages from your network connections." ctaLabel="Back to inbox" items={['Recent connection chat', 'Alumni network thread', 'Community group conversation']} /></AppShell>} />
-          <Route path="/network" element={<NetworkPage />} />
+          <Route path="/network" element={<RequireAuth><NetworkPage /></RequireAuth>} />
           <Route path="/network/invitations" element={<AppShell><StaticPage title="All Invitations" description="Review all received connection invitations." ctaLabel="Manage invitations" items={['Pending requests', 'Accepted recently', 'Ignored requests']} /></AppShell>} />
           <Route path="/network/suggestions" element={<AppShell><StaticPage title="People You May Know" description="Expand your network with suggested profiles." ctaLabel="Discover more people" items={['Similar role recommendations', 'Alumni suggestions', 'Mutual connections']} /></AppShell>} />
           <Route path="/network/connections" element={<AppShell><StaticPage title="Connections" description="People in your professional network." ctaLabel="Manage connections" items={['View accepted connections', 'Remove or organize contacts', 'See shared interests']} /></AppShell>} />
@@ -186,18 +201,18 @@ function App() {
           <Route path="/network/events" element={<AppShell><StaticPage title="Events" description="Professional and learning events from your network." ctaLabel="Find events" items={['Webinar: Kafka best practices', 'Hiring fair: Backend roles', 'Meetup: Microservices architecture']} /></AppShell>} />
           <Route path="/network/pages" element={<AppShell><StaticPage title="Pages" description="Company and creator pages you follow." ctaLabel="Explore pages" items={['Acme Engineering', 'Nova Labs Careers', 'Cloud Native Weekly']} /></AppShell>} />
           <Route path="/network/newsletters" element={<AppShell><StaticPage title="Newsletters" description="Newsletters subscribed through your network." ctaLabel="Manage subscriptions" items={['System Design Weekly', 'AI Builders Digest', 'Career Growth Notes']} /></AppShell>} />
-          <Route path="/notifications" element={<NotificationsPage />} />
-          <Route path="/notifications/jobs" element={<NotificationsPage />} />
-          <Route path="/notifications/posts" element={<NotificationsPage />} />
-          <Route path="/notifications/mentions" element={<NotificationsPage />} />
-          <Route path="/business" element={<AppShell><StaticPage title="For Business" description="Access business products and hiring tools." ctaLabel="Explore products" items={['Talent Solutions', 'Marketing Solutions', 'Sales Navigator']} /></AppShell>} />
-          <Route path="/premium" element={<AppShell><StaticPage title="Try Premium for $0" description="Explore premium features to boost visibility and opportunities." ctaLabel="Start free trial" items={['InMail credits', 'Applicant insights', 'Advanced profile analytics']} /></AppShell>} />
-          <Route path="/settings" element={<AppShell><StaticPage title="Settings & Privacy" description="Manage account, privacy, and preference settings." ctaLabel="Save settings" items={['Profile visibility: Public', 'Job seeking preference: Open to work', 'Messaging preference: Anyone can message']} /></AppShell>} />
-          <Route path="/help" element={<AppShell><StaticPage title="Help Center" description="Find support resources and frequently asked questions." ctaLabel="Contact support" items={['How to update my profile information?', 'How to apply to jobs using Easy Apply?', 'How to manage connection requests?']} /></AppShell>} />
-          <Route path="/language" element={<AppShell><StaticPage title="Language Preferences" description="Select your preferred language and regional settings." ctaLabel="Update language" items={['Primary language: English (US)', 'Secondary language: Hindi', 'Region: United States']} /></AppShell>} />
+          <Route path="/notifications" element={<RequireAuth><NotificationsPage /></RequireAuth>} />
+          <Route path="/notifications/jobs" element={<RequireAuth><NotificationsPage /></RequireAuth>} />
+          <Route path="/notifications/posts" element={<RequireAuth><NotificationsPage /></RequireAuth>} />
+          <Route path="/notifications/mentions" element={<RequireAuth><NotificationsPage /></RequireAuth>} />
+          <Route path="/business" element={<RequireAuth><AppShell><StaticPage title="For Business" description="Access business products and hiring tools." ctaLabel="Explore products" items={['Talent Solutions', 'Marketing Solutions', 'Sales Navigator']} /></AppShell></RequireAuth>} />
+          <Route path="/premium" element={<RequireAuth><AppShell><StaticPage title="Try Premium for $0" description="Explore premium features to boost visibility and opportunities." ctaLabel="Start free trial" items={['InMail credits', 'Applicant insights', 'Advanced profile analytics']} /></AppShell></RequireAuth>} />
+          <Route path="/settings" element={<RequireAuth><AppShell><StaticPage title="Settings & Privacy" description="Manage account, privacy, and preference settings." ctaLabel="Save settings" items={['Profile visibility: Public', 'Job seeking preference: Open to work', 'Messaging preference: Anyone can message']} /></AppShell></RequireAuth>} />
+          <Route path="/help" element={<RequireAuth><AppShell><StaticPage title="Help Center" description="Find support resources and frequently asked questions." ctaLabel="Contact support" items={['How to update my profile information?', 'How to apply to jobs using Easy Apply?', 'How to manage connection requests?']} /></AppShell></RequireAuth>} />
+          <Route path="/language" element={<RequireAuth><AppShell><StaticPage title="Language Preferences" description="Select your preferred language and regional settings." ctaLabel="Update language" items={['Primary language: English (US)', 'Secondary language: Hindi', 'Region: United States']} /></AppShell></RequireAuth>} />
           <Route path="/profile/activity" element={<AppShell><StaticPage title="Posts & Activity" description="Review your recent posts, comments, and engagement." ctaLabel="Create post" items={['Commented on Distributed Systems roadmap', 'Shared Kafka scaling article', 'Liked 12 posts this week']} /></AppShell>} />
           <Route path="/saved" element={<AppShell><StaticPage title="Saved Items" description="Revisit jobs, posts, and resources you saved." ctaLabel="Manage saved items" items={['Saved job: Senior Software Engineer (J-8c5f4db5)', 'Saved article: Event-driven workflows', 'Saved post: Resume tips for backend roles']} /></AppShell>} />
-          <Route path="/signout" element={<AppShell><StaticPage title="Sign Out" description="You have been signed out in this demo environment." ctaLabel="Back to home" items={['Session ended successfully', 'All local demo changes are still available']} /></AppShell>} />
+          <Route path="/signout" element={<SignOutPage />} />
           <Route path="/jobs/preferences" element={<AppShell><StaticPage title="Job Preferences" description="Set role, location, salary and work type preferences." ctaLabel="Save preferences" items={['Preferred role: Software Engineer', 'Preferred location: San Jose, CA', 'Open to remote opportunities']} /></AppShell>} />
           <Route path="/jobs/tracker" element={<AppShell><StaticPage title="Job Tracker" description="Track saved jobs, applications, and interview progress." ctaLabel="Open tracker board" items={['J-8c5f4db5: Applied', 'J-2a24be6b: Saved', 'J-9f9210ce: Interview']} /></AppShell>} />
           <Route path="/jobs/insights" element={<AppShell><StaticPage title="Career Insights" description="Insights based on your profile skills and market demand." ctaLabel="View recommendations" items={['Top matched role: Full Stack Engineer', 'High demand skill: Kafka', 'Recommended certification: AWS Developer']} /></AppShell>} />

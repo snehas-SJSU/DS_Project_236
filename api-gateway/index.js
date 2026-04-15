@@ -33,6 +33,7 @@ const proxy = (port, extra = {}) =>
   });
 
 app.use('/api/members', proxy(4001));
+app.use('/api/auth', proxy(4001));
 app.use('/api/jobs', proxy(4002));
 app.use('/api/recruiters', proxy(4002));
 app.use('/api/applications', proxy(4003));

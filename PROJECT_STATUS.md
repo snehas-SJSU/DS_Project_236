@@ -19,6 +19,11 @@ Last updated: final non-AI completion pass.
 - Analytics module: ingest/jobs top/funnel/geo/member dashboard + day/week trend charts.
 - Frontend routing/link wiring completed across major pages.
 - Reliability handling: duplicate email, duplicate application, closed-job apply checks, message retry, Kafka idempotency guards.
+- Auth: email/password signup/login/logout implemented with JWT bearer tokens.
+
+## Pending note (auth)
+
+- Google OAuth is not implemented yet. The `Continue with Google` button is currently UI-only and intentionally pending.
 
 ## Runbook
 
@@ -29,4 +34,4 @@ Last updated: final non-AI completion pass.
 
 ## Final note
 
-Non-AI implementation is complete and demo-ready. Remaining work is only the intentionally excluded items (AI, JMeter, AWS) plus final submission packaging/screenshots.
+Non-AI implementation is complete and demo-ready. Remaining work is the intentionally excluded items (AI, JMeter, AWS), Google OAuth completion, and final submission packaging/screenshots.
