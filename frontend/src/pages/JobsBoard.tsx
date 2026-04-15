@@ -6,6 +6,7 @@ import { Sparkles, FileText, CheckCircle2 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { MEMBER_ID, resolveAvatarUrl } from '../lib/memberProfile';
 import { addActivity, readJson, SAVED_JOBS_KEY, writeJson } from '../lib/localData';
+import { showToast } from '../lib/toast';
 
 export default function JobsBoard() {
   const [jobs, setJobs] = useState<Job[]>([]);
@@ -98,18 +99,18 @@ export default function JobsBoard() {
       const data = await response.json().catch(() => ({}));
       if (response.ok) {
         addActivity(`Applied to ${activeJob.title} at ${activeJob.company}`);
-        alert('Application submitted successfully!');
+        showToast('Application submitted successfully!', 'success');
       } else {
         const msg = data.error === 'JOB_CLOSED'
           ? 'This job is closed — applications are not accepted.'
           : data.error === 'DUPLICATE_APPLICATION'
             ? 'You have already applied to this job.'
             : data.message || 'Failed to submit application.';
-        alert(msg);
+        showToast(msg, 'error');
       }
     } catch (error) {
       console.error('Apply error:', error);
-      alert('Error connecting to the application service.');
+      showToast('Error connecting to the application service.', 'error');
     } finally {
       setIsApplying(false);
     }
@@ -136,9 +137,9 @@ export default function JobsBoard() {
       ];
       writeJson(SAVED_JOBS_KEY, next.slice(0, 100));
       addActivity(`Saved job ${activeJob.title} at ${activeJob.company}`);
-      alert('Job saved');
+      showToast('Job saved.', 'success');
     } catch {
-      alert('Unable to save job right now');
+      showToast('Unable to save job right now.', 'error');
     }
   };
 

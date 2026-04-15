@@ -4,6 +4,21 @@ const { alreadyProcessed, markProcessed } = require('../../shared/idempotency');
 
 const consumer = kafka.consumer({ groupId: 'job-service-group' });
 
+async function ensureColumn(table, name, ddl) {
+  const [rows] = await db.query(
+    `SELECT COUNT(*) AS cnt FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND COLUMN_NAME = ?`,
+    [table, name]
+  );
+  if (!rows[0]?.cnt) {
+    try {
+      await db.query(`ALTER TABLE ${table} ADD COLUMN ${ddl}`);
+    } catch (err) {
+      // Handle race with API startup applying the same migration.
+      if (err && err.code !== 'ER_DUP_FIELDNAME') throw err;
+    }
+  }
+}
+
 async function initDB() {
   await db.query(`
     CREATE TABLE IF NOT EXISTS jobs (
@@ -27,6 +42,13 @@ async function initDB() {
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     )
   `);
+  await ensureColumn('jobs', 'industry', 'industry VARCHAR(100)');
+  await ensureColumn('jobs', 'remote_mode', 'remote_mode VARCHAR(20)');
+  await ensureColumn('jobs', 'seniority_level', 'seniority_level VARCHAR(50)');
+  await ensureColumn('jobs', 'employment_type', 'employment_type VARCHAR(50)');
+  await ensureColumn('jobs', 'views_count', 'views_count INT DEFAULT 0');
+  await ensureColumn('jobs', 'saves_count', 'saves_count INT DEFAULT 0');
+  await ensureColumn('jobs', 'applicants_count', 'applicants_count INT DEFAULT 0');
 }
 
 async function runWorker() {

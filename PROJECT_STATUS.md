@@ -1,6 +1,6 @@
 # Project Status (Single Source)
 
-Last updated: final non-AI completion pass.
+Last updated: functionality stabilization pass (Phase 1.3+).
 
 ## Scope status
 
@@ -18,8 +18,18 @@ Last updated: final non-AI completion pass.
 - Connection module: request/accept/reject/list/mutual + LinkedIn-style network UI.
 - Analytics module: ingest/jobs top/funnel/geo/member dashboard + day/week trend charts.
 - Frontend routing/link wiring completed across major pages.
+- UX consistency updates: toast-based feedback, functional Premium/Language/Job Post/Company pages, and notification read-state persistence.
 - Reliability handling: duplicate email, duplicate application, closed-job apply checks, message retry, Kafka idempotency guards.
 - Auth: email/password signup/login/logout implemented with JWT bearer tokens.
+- Backend stabilization: job-service schema compatibility migration for legacy MySQL (`industry`, `remote_mode`, `seniority_level`, `employment_type`, counts columns) to keep workers healthy across fresh and old DB states.
+
+## Latest verification snapshot
+
+- Smoke test passes (`scripts/smoke-test.sh`).
+- Duplicate signup returns `DUPLICATE_EMAIL`.
+- Duplicate apply returns `DUPLICATE_APPLICATION`.
+- Apply-to-closed-job returns `JOB_CLOSED`.
+- Premium navigation hardened with alias redirects to `/premium` (`/try-premium`, `/premium/free-trial`, `/premium/trial`).
 
 ## Pending note (auth)
 

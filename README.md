@@ -269,6 +269,12 @@ chmod +x scripts/smoke-test.sh
 3. If DB state is corrupted, run `docker compose down -v`, then start again.
 4. If Swagger is not loading, run `npm run dev:gateway`.
 5. If auth endpoints return 404, restart gateway and member API.
+6. If jobs/applications APIs return `BAD_GATEWAY` or apply says `Job not found`, start/verify these services:
+   - `npm run dev:job-api`
+   - `npm run dev:job-worker`
+   - `npm run dev:app-api`
+   - `npm run dev:app-worker`
+7. Premium page aliases supported: `/premium`, `/try-premium`, `/premium/free-trial`, `/premium/trial`.
 
 ---
 

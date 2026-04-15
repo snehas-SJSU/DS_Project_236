@@ -2,6 +2,7 @@ export const SAVED_JOBS_KEY = 'li_sim_saved_jobs';
 export const ACTIVITY_KEY = 'li_sim_activity_feed';
 export const SETTINGS_KEY = 'li_sim_user_settings';
 export const JOB_PREFS_KEY = 'li_sim_job_preferences';
+export const NOTIFICATIONS_READ_KEY = 'li_sim_notifications_read_by_member';
 
 type ActivityItem = {
   id: string;

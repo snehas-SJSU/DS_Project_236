@@ -25,8 +25,13 @@ import JobTrackerPage from './pages/JobTrackerPage';
 import JobInsightsPage from './pages/JobInsightsPage';
 import NetworkCollectionsPage from './pages/NetworkCollectionsPage';
 import HelpCenterPage from './pages/HelpCenterPage';
+import PremiumPage from './pages/PremiumPage';
+import LanguagePage from './pages/LanguagePage';
+import JobPostPage from './pages/JobPostPage';
+import CompanyPage from './pages/CompanyPage';
 import { isAuthenticated } from './lib/auth';
 import { MEMBER_ID, resolveAvatarUrl } from './lib/memberProfile';
+import { ToastViewport } from './lib/toast';
 
 function FeedPlaceholder() {
   const feedItems = [
@@ -215,20 +220,24 @@ function App() {
           <Route path="/notifications/posts" element={<RequireAuth><NotificationsPage /></RequireAuth>} />
           <Route path="/notifications/mentions" element={<RequireAuth><NotificationsPage /></RequireAuth>} />
           <Route path="/business" element={<RequireAuth><AppShell><BusinessPage /></AppShell></RequireAuth>} />
-          <Route path="/premium" element={<RequireAuth><AppShell><StaticPage title="Try Premium for $0" description="Explore premium features to boost visibility and opportunities." ctaLabel="Start free trial" items={['InMail credits', 'Applicant insights', 'Advanced profile analytics']} /></AppShell></RequireAuth>} />
+          <Route path="/premium" element={<RequireAuth><AppShell><PremiumPage /></AppShell></RequireAuth>} />
+          <Route path="/try-premium" element={<Navigate to="/premium" replace />} />
+          <Route path="/premium/free-trial" element={<Navigate to="/premium" replace />} />
+          <Route path="/premium/trial" element={<Navigate to="/premium" replace />} />
           <Route path="/settings" element={<RequireAuth><AppShell><SettingsPage /></AppShell></RequireAuth>} />
           <Route path="/help" element={<RequireAuth><AppShell><HelpCenterPage /></AppShell></RequireAuth>} />
-          <Route path="/language" element={<RequireAuth><AppShell><StaticPage title="Language Preferences" description="Select your preferred language and regional settings." ctaLabel="Update language" items={['Primary language: English (US)', 'Secondary language: Hindi', 'Region: United States']} /></AppShell></RequireAuth>} />
+          <Route path="/language" element={<RequireAuth><AppShell><LanguagePage /></AppShell></RequireAuth>} />
           <Route path="/profile/activity" element={<RequireAuth><AppShell><ActivityPage /></AppShell></RequireAuth>} />
           <Route path="/saved" element={<RequireAuth><AppShell><SavedItemsPage /></AppShell></RequireAuth>} />
           <Route path="/signout" element={<SignOutPage />} />
           <Route path="/jobs/preferences" element={<RequireAuth><AppShell><JobPreferencesPage /></AppShell></RequireAuth>} />
           <Route path="/jobs/tracker" element={<RequireAuth><AppShell><JobTrackerPage /></AppShell></RequireAuth>} />
           <Route path="/jobs/insights" element={<RequireAuth><AppShell><JobInsightsPage /></AppShell></RequireAuth>} />
-          <Route path="/jobs/post" element={<AppShell><StaticPage title="Post a Free Job" description="Create a recruiter-style job posting in minutes." ctaLabel="Create posting" items={['Set title and role requirements', 'Add screening questions', 'Publish and track applicants']} /></AppShell>} />
-          <Route path="/company/acme" element={<AppShell><StaticPage title="Acme Company Page" description="Company profile, culture highlights, and open positions." ctaLabel="Follow company" items={['Open jobs: 12', 'Employees: 1,500+', 'Headquarters: San Jose, CA']} /></AppShell>} />
+          <Route path="/jobs/post" element={<RequireAuth><AppShell><JobPostPage /></AppShell></RequireAuth>} />
+          <Route path="/company/acme" element={<RequireAuth><AppShell><CompanyPage /></AppShell></RequireAuth>} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
+        <ToastViewport />
       </div>
     </BrowserRouter>
   );

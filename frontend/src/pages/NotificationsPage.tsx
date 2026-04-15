@@ -2,6 +2,8 @@ import { useEffect, useMemo, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import Navbar from '../components/layout/Navbar';
 import { MEMBER_ID, resolveAvatarUrl } from '../lib/memberProfile';
+import { NOTIFICATIONS_READ_KEY, readJson, writeJson } from '../lib/localData';
+import { showToast } from '../lib/toast';
 
 type NotificationItem = {
   id: string;
@@ -28,6 +30,12 @@ export default function NotificationsPage() {
     school: 'San Jose State University',
     photo: resolveAvatarUrl(undefined, 'Sneha Singh')
   });
+  const [readIds, setReadIds] = useState<string[]>([]);
+
+  useEffect(() => {
+    const byMember = readJson<Record<string, string[]>>(NOTIFICATIONS_READ_KEY, {});
+    setReadIds(byMember[MEMBER_ID] || []);
+  }, []);
 
   useEffect(() => {
     fetch('http://localhost:4000/api/members/get', {
@@ -56,6 +64,26 @@ export default function NotificationsPage() {
   }, [location.pathname]);
 
   const visibleNotifications = notifications.filter((item) => activeTab === 'all' || item.category === activeTab);
+  const unreadCount = visibleNotifications.filter((item) => !readIds.includes(item.id)).length;
+
+  const persistReadIds = (next: string[]) => {
+    setReadIds(next);
+    const byMember = readJson<Record<string, string[]>>(NOTIFICATIONS_READ_KEY, {});
+    writeJson(NOTIFICATIONS_READ_KEY, { ...byMember, [MEMBER_ID]: next });
+  };
+
+  const markAsRead = (id: string) => {
+    if (readIds.includes(id)) return;
+    persistReadIds([...readIds, id]);
+    showToast('Notification marked as read.', 'success');
+  };
+
+  const markAllAsRead = () => {
+    const allVisible = visibleNotifications.map((item) => item.id);
+    const merged = Array.from(new Set([...readIds, ...allVisible]));
+    persistReadIds(merged);
+    showToast('All visible notifications marked as read.', 'success');
+  };
 
   return (
     <div className="min-h-screen bg-[#f3f2ef]">
@@ -85,18 +113,25 @@ export default function NotificationsPage() {
           </aside>
           <main className="space-y-3 lg:col-span-6">
             <section className="li-card p-3">
-              <div className="flex flex-wrap gap-2">
+              <div className="flex flex-wrap items-center gap-2">
                 <Link to="/notifications" className={`rounded-full border px-3 py-1.5 text-sm font-semibold ${activeTab === 'all' ? 'border-[#057642] bg-[#057642] text-white' : 'border-[#d0d7de] text-[#444]'}`}>All</Link>
                 <Link to="/notifications/jobs" className={`rounded-full border px-3 py-1.5 text-sm font-semibold ${activeTab === 'jobs' ? 'border-[#057642] bg-[#057642] text-white' : 'border-[#d0d7de] text-[#444]'}`}>Jobs</Link>
                 <Link to="/notifications/posts" className={`rounded-full border px-3 py-1.5 text-sm font-semibold ${activeTab === 'posts' ? 'border-[#057642] bg-[#057642] text-white' : 'border-[#d0d7de] text-[#444]'}`}>My posts</Link>
                 <Link to="/notifications/mentions" className={`rounded-full border px-3 py-1.5 text-sm font-semibold ${activeTab === 'mentions' ? 'border-[#057642] bg-[#057642] text-white' : 'border-[#d0d7de] text-[#444]'}`}>Mentions</Link>
+                <span className="ml-auto text-xs font-semibold text-[#666]">Unread: {unreadCount}</span>
+                <button
+                  onClick={markAllAsRead}
+                  className="rounded-full border border-[#0a66c2] px-3 py-1.5 text-xs font-semibold text-[#0a66c2] hover:bg-[#edf3f8]"
+                >
+                  Mark all as read
+                </button>
               </div>
             </section>
             <section className="li-card overflow-hidden p-0">
               {visibleNotifications.map((item) => (
-                <article key={item.id} className="border-b border-[#edf0f3] bg-[#eaf4ff] px-4 py-3 last:border-b-0">
+                <article key={item.id} className={`border-b border-[#edf0f3] px-4 py-3 last:border-b-0 ${readIds.includes(item.id) ? 'bg-white' : 'bg-[#eaf4ff]'}`}>
                   <div className="flex items-start gap-3">
-                    <div className="mt-1 h-2 w-2 rounded-full bg-[#0a66c2]" />
+                    <div className={`mt-1 h-2 w-2 rounded-full ${readIds.includes(item.id) ? 'bg-slate-300' : 'bg-[#0a66c2]'}`} />
                     <div className="flex-1">
                       <p className="text-[15px] leading-5 text-[#191919]">{item.text}</p>
                       {item.cta ? (
@@ -105,7 +140,19 @@ export default function NotificationsPage() {
                         </Link>
                       ) : null}
                     </div>
-                    <span className="text-xs text-[#666]">{item.age}</span>
+                    <div className="flex flex-col items-end gap-2">
+                      <span className="text-xs text-[#666]">{item.age}</span>
+                      {!readIds.includes(item.id) ? (
+                        <button
+                          onClick={() => markAsRead(item.id)}
+                          className="text-xs font-semibold text-[#0a66c2] hover:underline"
+                        >
+                          Mark as read
+                        </button>
+                      ) : (
+                        <span className="text-[11px] font-semibold text-slate-400">Read</span>
+                      )}
+                    </div>
                   </div>
                 </article>
               ))}
@@ -116,17 +163,17 @@ export default function NotificationsPage() {
               <div className="h-24 bg-gradient-to-r from-[#f5d36a] to-[#f0be42]" />
               <div className="p-4">
                 <p className="text-sm text-[#666]">Reactivate premium for free trial</p>
-                <Link to="/jobs/insights" className="mt-2 inline-block rounded-full border border-[#0a66c2] px-4 py-1.5 text-sm font-semibold text-[#0a66c2] hover:bg-[#edf3f8]">
+                <Link to="/premium" className="mt-2 inline-block rounded-full border border-[#0a66c2] px-4 py-1.5 text-sm font-semibold text-[#0a66c2] hover:bg-[#edf3f8]">
                   Reactivate Trial
                 </Link>
               </div>
             </section>
             <section className="li-card p-4 text-xs text-[#666]">
               <div className="flex flex-wrap gap-x-3 gap-y-1">
-                <Link to="/help" className="hover:text-[#191919]">About</Link>
-                <Link to="/settings" className="hover:text-[#191919]">Privacy & Terms</Link>
+                <button onClick={() => showToast('About page is coming soon.', 'info')} className="hover:text-[#191919]">About</button>
+                <button onClick={() => showToast('Privacy & Terms details are coming soon.', 'info')} className="hover:text-[#191919]">Privacy & Terms</button>
                 <Link to="/help" className="hover:text-[#191919]">Help Center</Link>
-                <Link to="/saved" className="hover:text-[#191919]">Advertising</Link>
+                <button onClick={() => showToast('Advertising center is coming soon.', 'info')} className="hover:text-[#191919]">Advertising</button>
               </div>
             </section>
           </aside>
