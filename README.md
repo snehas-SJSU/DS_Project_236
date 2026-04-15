@@ -1,6 +1,6 @@
 # LinkedIn Simulation (Data 236)
 
-Distributed LinkedIn-style project with React frontend, API gateway, Node microservices, Kafka workers, MySQL, MongoDB, and Redis.
+Distributed LinkedIn-style project with React frontend, API gateway, Node microservices, Kafka workers, MySQL, MongoDB, Redis, Agentic AI, and deployment/benchmarking readiness.
 
 ---
 
@@ -9,32 +9,73 @@ Distributed LinkedIn-style project with React frontend, API gateway, Node micros
 
 ```mermaid
 graph TD
-    User((Browser)) -->|HTTP| FE[Frontend :3000]
-    FE -->|/api/*| Gateway[API Gateway :4000]
+    User((Browser / Recruiter / Member)) -->|HTTPS| FE[React Frontend]
+    FE -->|/api/*| Gateway[API Gateway]
 
-    Gateway --> Member[Member Service :4001]
-    Gateway --> Job[Job Service :4002]
-    Gateway --> App[Application Service :4003]
-    Gateway --> Msg[Messaging Service :4004]
-    Gateway --> Analytics[Analytics Service :4005]
-    Gateway --> Conn[Connection Service :4006]
-    Gateway --> AI[AI Service :8001]
+    subgraph Core_Microservices["Core Microservices (Node.js / Express)"]
+      Member[Member Service]
+      Job[Job Service]
+      App[Application Service]
+      Msg[Messaging Service]
+      Analytics[Analytics Service]
+      Conn[Connection Service]
+    end
 
-    Member --> Kafka[(Kafka)]
+    Gateway --> Member
+    Gateway --> Job
+    Gateway --> App
+    Gateway --> Msg
+    Gateway --> Analytics
+    Gateway --> Conn
+
+    subgraph Agentic_AI["Agentic AI Layer (FastAPI)"]
+      AIAPI[AI API Service]
+      Supervisor[Hiring Assistant Supervisor]
+      Skills[Resume Parse / Match / Outreach Agents]
+    end
+
+    Gateway -->|/api/ai/*| AIAPI
+    AIAPI --> Supervisor
+    Supervisor --> Skills
+
+    subgraph Event_Streaming["Async Event Streaming"]
+      Kafka[(Kafka)]
+      ZK[(Zookeeper)]
+    end
+    ZK --> Kafka
+    Member --> Kafka
     Job --> Kafka
     App --> Kafka
     Msg --> Kafka
     Conn --> Kafka
     Analytics --> Kafka
+    AIAPI --> Kafka
 
-    Member --> MySQL[(MySQL)]
+    subgraph Data_Stores["Data Layer"]
+      MySQL[(MySQL - transactional)]
+      Mongo[(MongoDB - events/messages)]
+      Redis[(Redis - cache/idempotency)]
+    end
+    Member --> MySQL
     Job --> MySQL
     App --> MySQL
     Conn --> MySQL
-    Msg --> Mongo[(MongoDB)]
+    Msg --> Mongo
     Analytics --> Mongo
-    Member --> Redis[(Redis)]
+    Member --> Redis
     Job --> Redis
+    App --> Redis
+
+    subgraph Validation_Deployment["Validation + Deployment"]
+      JMeter[JMeter Load Tests]
+      AWS[AWS Deployment Target]
+    end
+    JMeter --> FE
+    JMeter --> Gateway
+    Gateway --> AWS
+    Core_Microservices --> AWS
+    Agentic_AI --> AWS
+    Data_Stores --> AWS
 ```
 
 ---
