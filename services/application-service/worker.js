@@ -46,6 +46,7 @@ async function runWorker() {
               'INSERT INTO applications (app_id, job_id, member_id, status, cover_letter) VALUES (?, ?, ?, ?, ?)',
               [appId, job_id, member_id, status || 'submitted', cover_letter || null]
             );
+            await db.query('UPDATE jobs SET applicants_count = COALESCE(applicants_count, 0) + 1 WHERE job_id = ?', [job_id]);
           } catch (e) {
             if (e.code === 'ER_DUP_ENTRY') {
               console.log('Duplicate application skipped (idempotent)');

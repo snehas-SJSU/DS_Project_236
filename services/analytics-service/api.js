@@ -50,13 +50,24 @@ app.post('/analytics/jobs/top', async (req, res) => {
     const since = new Date();
     since.setDate(since.getDate() - Number(window_days));
 
-    if (metric === 'applications') {
+    if (metric === 'applications' || metric === 'low_applications') {
       await ensureApplicationsTable();
       const wd = Number(window_days);
       const [rows] = await db.query(
-        `SELECT job_id, COUNT(*) AS c FROM applications
+        `SELECT j.job_id, COALESCE(COUNT(a.app_id), 0) AS c, MAX(j.title) AS title FROM jobs j
+         LEFT JOIN applications a ON j.job_id = a.job_id
          WHERE applied_at >= DATE_SUB(NOW(), INTERVAL ${wd} DAY)
-         GROUP BY job_id ORDER BY c DESC LIMIT 10`
+         OR a.app_id IS NULL
+         GROUP BY j.job_id
+         ORDER BY c ${metric === 'low_applications' ? 'ASC' : 'DESC'} LIMIT 10`
+      );
+      return res.status(200).json({ metric, window_days, jobs: rows });
+    }
+
+    if (metric === 'clicks' || metric === 'saves') {
+      const [rows] = await db.query(
+        `SELECT job_id, title, ${metric === 'clicks' ? 'views_count' : 'saves_count'} AS c
+         FROM jobs ORDER BY c DESC LIMIT 10`
       );
       return res.status(200).json({ metric, window_days, jobs: rows });
     }
@@ -114,15 +125,16 @@ app.post('/analytics/funnel', async (req, res) => {
 app.post('/analytics/geo', async (req, res) => {
   try {
     await ensureApplicationsTable();
-    const { job_id } = req.body;
+    const { job_id, window_days = 30 } = req.body;
     const [rows] = await db.query(
       `SELECT COALESCE(m.location, 'unknown') AS location, COUNT(*) AS applicants
        FROM applications a LEFT JOIN members m ON a.member_id = m.member_id
        WHERE a.job_id = ?
+       AND a.applied_at >= DATE_SUB(NOW(), INTERVAL ? DAY)
        GROUP BY m.location`,
-      [job_id]
+      [job_id, Number(window_days)]
     );
-    res.status(200).json({ job_id, distribution: rows });
+    res.status(200).json({ job_id, window_days, distribution: rows });
   } catch (err) {
     res.status(200).json({ job_id: req.body.job_id, distribution: [] });
   }
@@ -157,6 +169,43 @@ app.post('/analytics/member/dashboard', async (req, res) => {
     });
   } catch (err) {
     res.status(500).json({ error: 'INTERNAL_ERROR', message: err.message, trace_id: crypto.randomUUID() });
+  }
+});
+
+app.post('/analytics/jobs/timeseries', async (req, res) => {
+  try {
+    const { event_type = 'job.saved', granularity = 'day', window_days = 30 } = req.body;
+    const mongo = await getMongoDb();
+    const since = new Date();
+    since.setDate(since.getDate() - Number(window_days));
+
+    const events = await mongo.collection('events').find({
+      event_type,
+      timestamp: { $gte: since.toISOString() }
+    }).toArray();
+
+    const bucket = new Map();
+    for (const e of events) {
+      const iso = String(e.timestamp || '').slice(0, 10);
+      if (!iso) continue;
+      const key = granularity === 'week'
+        ? (() => {
+            const d = new Date(iso);
+            const day = d.getUTCDay() || 7;
+            d.setUTCDate(d.getUTCDate() - day + 1);
+            return d.toISOString().slice(0, 10);
+          })()
+        : iso;
+      bucket.set(key, (bucket.get(key) || 0) + 1);
+    }
+
+    const series = Array.from(bucket.entries())
+      .sort((a, b) => a[0].localeCompare(b[0]))
+      .map(([period, count]) => ({ period, count }));
+
+    res.status(200).json({ event_type, granularity, window_days, series });
+  } catch (err) {
+    res.status(200).json({ event_type: req.body.event_type, granularity: req.body.granularity, series: [] });
   }
 });
 

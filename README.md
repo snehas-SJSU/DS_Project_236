@@ -61,20 +61,6 @@ Anyone who **clones the full repo** should follow this. You do **not** repeat ev
 
 **Summary:** **Bootstrap + pip** = once per clone. **Seed** = once per **empty** MySQL (or after volume wipe). **Docker + start:all + frontend** = each time you work (if things were stopped).
 
-### How many terminals?
-
-You do **not** need four or five windows if you use **`npm run start:all`** (one process runs gateway + all Node APIs + workers).
-
-| Long-running | Count | What |
-| :--- | :---: | :--- |
-| **Stack** | 1 | `npm run start:all` — leave open |
-| **Frontend** | 1 | `cd frontend && npm run dev` — leave open |
-| **AI (FastAPI)** | 0–1 | Optional: Uvicorn on **8001** only if you need **`/api/ai/*`** |
-
-**Docker** (`docker compose up -d`) finishes and returns a prompt — run it in the **same** terminal **before** `start:all`, not as another permanent tab. **Seed**, **`curl`** demo jobs, and **git** use any terminal **once** the command ends.
-
-**Avoid** starting each microservice in its own terminal unless you are debugging; that is what **`start:all`** replaces.
-
 ---
 
 ## Run everything from VS Code
@@ -284,3 +270,36 @@ If those two lists **differ**, refresh **:4000/docs** (hard refresh) and ensure 
 ---
 
 *Data 236 — Distributed Systems — LinkedIn Simulation + Agentic AI.*
+
+---
+
+## Non-AI completion runbook
+
+Use this sequence for the full frontend + backend (AI deferred) pass:
+
+1. `docker compose up -d`
+2. `npm run start:all`
+3. In another terminal: `cd frontend && npm run dev`
+4. Optional seed profile: `npm run seed:member`
+
+Core UI routes:
+
+- `/` home shell
+- `/profile` member profile + analytics card
+- `/jobs` job search/filter/get/apply/save
+- `/applications` member applications + recruiter review actions
+- `/messaging` threads/messages/send
+- `/network` requests/accept/reject/list
+- `/recruiter` live recruiter analytics charts
+
+Smoke test:
+
+```bash
+chmod +x scripts/smoke-test.sh
+./scripts/smoke-test.sh
+```
+
+Additional closeout docs:
+
+- `DATASET_PIPELINE.md` — datasets + schema mapping + ingestion strategy
+- `SUBMISSION_ARTIFACTS_CHECKLIST.md` — final report/demo checklist

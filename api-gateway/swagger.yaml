@@ -117,6 +117,13 @@ paths:
       responses:
         '200':
           description: OK
+  /jobs/save:
+    post:
+      tags: [Job Service]
+      summary: Save a job for a member
+      responses:
+        '200':
+          description: OK
 
   # Application Service
   /applications/submit:
@@ -225,6 +232,13 @@ paths:
     post:
       tags: [Connection Service]
       summary: List all user connections
+      responses:
+        '200':
+          description: OK
+  /connections/requestsByUser:
+    post:
+      tags: [Connection Service]
+      summary: List incoming and sent connection requests by user
       responses:
         '200':
           description: OK

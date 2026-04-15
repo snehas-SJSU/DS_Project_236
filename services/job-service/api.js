@@ -30,13 +30,19 @@ async function sendJobEvent(payload) {
 
 app.post('/jobs/create', async (req, res) => {
   try {
-    const { title, company, location, salary, type, skills, description, recruiter_id } = req.body;
+    const {
+      title, company, location, salary, type, skills, description, recruiter_id,
+      industry, seniority_level, employment_type, remote_mode
+    } = req.body;
     const jobId = 'J-' + crypto.randomUUID().substring(0, 8);
     const traceId = crypto.randomUUID();
     const idempotencyKey = req.headers['idempotency-key'] || crypto.createHash('sha256').update(`job.created-${jobId}-${Date.now()}`).digest('hex');
 
     const eventPayload = env('job.created', traceId, recruiter_id || 'recruiter', jobId, {
-      title, company, location, salary, type, skills, description, recruiter_id: recruiter_id || 'R-default'
+      title, company, location, salary, type: type || employment_type, skills, description,
+      recruiter_id: recruiter_id || 'R-default', industry: industry || null,
+      seniority_level: seniority_level || null, employment_type: employment_type || type || null,
+      remote_mode: remote_mode || null
     }, idempotencyKey);
 
     await sendJobEvent(eventPayload);
@@ -54,7 +60,11 @@ app.post('/jobs/search', async (req, res) => {
         job_id VARCHAR(50) PRIMARY KEY,
         title VARCHAR(255),
         company VARCHAR(255),
+        industry VARCHAR(100),
         location VARCHAR(100),
+        remote_mode VARCHAR(20),
+        seniority_level VARCHAR(50),
+        employment_type VARCHAR(50),
         salary VARCHAR(100),
         type VARCHAR(50),
         skills JSON,
@@ -62,10 +72,12 @@ app.post('/jobs/search', async (req, res) => {
         status VARCHAR(50) DEFAULT 'open',
         recruiter_id VARCHAR(50) DEFAULT 'R-default',
         views_count INT DEFAULT 0,
+        saves_count INT DEFAULT 0,
+        applicants_count INT DEFAULT 0,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       )
     `);
-    const { keyword, location, type } = req.body;
+    const { keyword, location, type, industry, remote } = req.body;
     let sql = "SELECT * FROM jobs WHERE status = 'open'";
     const params = [];
     if (keyword) {
@@ -78,8 +90,16 @@ app.post('/jobs/search', async (req, res) => {
       params.push(`%${location}%`);
     }
     if (type) {
-      sql += ' AND type = ?';
-      params.push(type);
+      sql += ' AND (type = ? OR employment_type = ?)';
+      params.push(type, type);
+    }
+    if (industry) {
+      sql += ' AND industry LIKE ?';
+      params.push(`%${industry}%`);
+    }
+    if (remote) {
+      sql += ' AND remote_mode = ?';
+      params.push(remote);
     }
     sql += ' ORDER BY created_at DESC LIMIT 50';
     const [rows] = await db.query(sql, params);
@@ -94,7 +114,12 @@ app.post('/jobs/search', async (req, res) => {
       skills: typeof r.skills === 'string' ? JSON.parse(r.skills || '[]') : r.skills,
       description: r.description,
       status: r.status,
-      recruiter_id: r.recruiter_id
+      recruiter_id: r.recruiter_id,
+      industry: r.industry,
+      remote_mode: r.remote_mode,
+      seniority_level: r.seniority_level,
+      employment_type: r.employment_type,
+      applicants: r.applicants_count || 0
     }));
     res.status(200).json(formatted);
   } catch (err) {
@@ -136,6 +161,7 @@ app.post('/jobs/get', async (req, res) => {
     });
 
     let applied = false;
+    let saved = false;
     if (member_id) {
       try {
         const [apps] = await db.query(
@@ -143,12 +169,56 @@ app.post('/jobs/get', async (req, res) => {
           [job_id, member_id]
         );
         applied = apps.length > 0;
+        const [savedRows] = await db.query(
+          'SELECT 1 FROM saved_jobs WHERE job_id = ? AND member_id = ? LIMIT 1',
+          [job_id, member_id]
+        );
+        saved = savedRows.length > 0;
       } catch {
         /* applications table may not exist yet */
       }
     }
 
-    res.status(200).json({ ...job, applied });
+    res.status(200).json({ ...job, applied, saved });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'INTERNAL_ERROR', message: err.message, trace_id: crypto.randomUUID() });
+  }
+});
+
+app.post('/jobs/save', async (req, res) => {
+  try {
+    const { job_id, member_id } = req.body;
+    if (!job_id || !member_id) {
+      return res.status(400).json({ error: 'BAD_REQUEST', message: 'job_id and member_id required', trace_id: crypto.randomUUID() });
+    }
+
+    await db.query(`
+      CREATE TABLE IF NOT EXISTS saved_jobs (
+        job_id VARCHAR(50),
+        member_id VARCHAR(50),
+        saved_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        PRIMARY KEY (job_id, member_id)
+      )
+    `);
+    await db.query(
+      'INSERT IGNORE INTO saved_jobs (job_id, member_id) VALUES (?, ?)',
+      [job_id, member_id]
+    );
+    await db.query('UPDATE jobs SET saves_count = COALESCE(saves_count, 0) + 1 WHERE job_id = ?', [job_id]);
+
+    const traceId = crypto.randomUUID();
+    const idem = crypto.randomUUID();
+    await producer.connect();
+    await producer.send({
+      topic: 'job.events',
+      messages: [{
+        key: job_id,
+        value: JSON.stringify(env('job.saved', traceId, member_id, job_id, { job_id, member_id }, idem))
+      }]
+    });
+
+    res.status(200).json({ message: 'Saved', job_id, member_id, trace_id: traceId });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'INTERNAL_ERROR', message: err.message, trace_id: crypto.randomUUID() });
@@ -208,6 +278,132 @@ app.post('/jobs/byRecruiter', async (req, res) => {
     res.status(200).json(rows);
   } catch (err) {
     console.error(err);
+    res.status(500).json({ error: 'INTERNAL_ERROR', message: err.message, trace_id: crypto.randomUUID() });
+  }
+});
+
+async function ensureRecruitersTable() {
+  await db.query(`
+    CREATE TABLE IF NOT EXISTS recruiters (
+      recruiter_id VARCHAR(50) PRIMARY KEY,
+      company_id VARCHAR(50),
+      name VARCHAR(100),
+      email VARCHAR(100),
+      phone VARCHAR(30),
+      company_name VARCHAR(150),
+      company_industry VARCHAR(100),
+      company_size VARCHAR(50),
+      access_level VARCHAR(50) DEFAULT 'admin',
+      status VARCHAR(20) DEFAULT 'active',
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE KEY uk_recruiter_email (email)
+    )
+  `);
+}
+
+app.post('/recruiters/create', async (req, res) => {
+  try {
+    await ensureRecruitersTable();
+    const {
+      recruiter_id = `R-${crypto.randomUUID().slice(0, 8)}`,
+      company_id,
+      name,
+      email,
+      phone,
+      company_name,
+      company_industry,
+      company_size,
+      access_level = 'admin'
+    } = req.body;
+    if (!email || !name) {
+      return res.status(400).json({ error: 'BAD_REQUEST', message: 'name and email required', trace_id: crypto.randomUUID() });
+    }
+    await db.query(
+      `INSERT INTO recruiters
+      (recruiter_id, company_id, name, email, phone, company_name, company_industry, company_size, access_level)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [recruiter_id, company_id || null, name, email, phone || null, company_name || null, company_industry || null, company_size || null, access_level]
+    );
+    res.status(201).json({ recruiter_id, message: 'Recruiter created' });
+  } catch (err) {
+    if (String(err.message).includes('Duplicate')) {
+      return res.status(409).json({ error: 'DUPLICATE_EMAIL', message: 'Recruiter email already exists', trace_id: crypto.randomUUID() });
+    }
+    res.status(500).json({ error: 'INTERNAL_ERROR', message: err.message, trace_id: crypto.randomUUID() });
+  }
+});
+
+app.post('/recruiters/get', async (req, res) => {
+  try {
+    await ensureRecruitersTable();
+    const { recruiter_id } = req.body;
+    if (!recruiter_id) {
+      return res.status(400).json({ error: 'BAD_REQUEST', message: 'recruiter_id required', trace_id: crypto.randomUUID() });
+    }
+    const [rows] = await db.query('SELECT * FROM recruiters WHERE recruiter_id = ? AND status != ?', [recruiter_id, 'deleted']);
+    if (!rows.length) return res.status(404).json({ error: 'NOT_FOUND', message: 'Recruiter not found', trace_id: crypto.randomUUID() });
+    res.status(200).json(rows[0]);
+  } catch (err) {
+    res.status(500).json({ error: 'INTERNAL_ERROR', message: err.message, trace_id: crypto.randomUUID() });
+  }
+});
+
+app.post('/recruiters/update', async (req, res) => {
+  try {
+    await ensureRecruitersTable();
+    const { recruiter_id, ...fields } = req.body;
+    if (!recruiter_id) {
+      return res.status(400).json({ error: 'BAD_REQUEST', message: 'recruiter_id required', trace_id: crypto.randomUUID() });
+    }
+    const allowed = ['company_id', 'name', 'email', 'phone', 'company_name', 'company_industry', 'company_size', 'access_level', 'status'];
+    const updates = [];
+    const vals = [];
+    for (const k of allowed) {
+      if (fields[k] !== undefined) {
+        updates.push(`${k} = ?`);
+        vals.push(fields[k]);
+      }
+    }
+    if (!updates.length) {
+      return res.status(400).json({ error: 'BAD_REQUEST', message: 'No fields to update', trace_id: crypto.randomUUID() });
+    }
+    vals.push(recruiter_id);
+    await db.query(`UPDATE recruiters SET ${updates.join(', ')} WHERE recruiter_id = ?`, vals);
+    res.status(200).json({ recruiter_id, message: 'Recruiter updated' });
+  } catch (err) {
+    res.status(500).json({ error: 'INTERNAL_ERROR', message: err.message, trace_id: crypto.randomUUID() });
+  }
+});
+
+app.post('/recruiters/delete', async (req, res) => {
+  try {
+    await ensureRecruitersTable();
+    const { recruiter_id } = req.body;
+    if (!recruiter_id) {
+      return res.status(400).json({ error: 'BAD_REQUEST', message: 'recruiter_id required', trace_id: crypto.randomUUID() });
+    }
+    await db.query('UPDATE recruiters SET status = ? WHERE recruiter_id = ?', ['deleted', recruiter_id]);
+    res.status(200).json({ recruiter_id, message: 'Recruiter deleted' });
+  } catch (err) {
+    res.status(500).json({ error: 'INTERNAL_ERROR', message: err.message, trace_id: crypto.randomUUID() });
+  }
+});
+
+app.post('/recruiters/search', async (req, res) => {
+  try {
+    await ensureRecruitersTable();
+    const { keyword } = req.body;
+    let sql = 'SELECT * FROM recruiters WHERE status != ?';
+    const params = ['deleted'];
+    if (keyword) {
+      sql += ' AND (name LIKE ? OR company_name LIKE ? OR company_industry LIKE ?)';
+      const k = `%${keyword}%`;
+      params.push(k, k, k);
+    }
+    sql += ' ORDER BY created_at DESC LIMIT 100';
+    const [rows] = await db.query(sql, params);
+    res.status(200).json(rows);
+  } catch (err) {
     res.status(500).json({ error: 'INTERNAL_ERROR', message: err.message, trace_id: crypto.randomUUID() });
   }
 });

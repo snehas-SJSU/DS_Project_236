@@ -11,46 +11,46 @@ export default function JobCard({ job, isActive, onClick }: JobCardProps) {
   return (
     <div 
       onClick={onClick}
-      className={`p-4 border-b border-slate-200 cursor-pointer transition-all hover:bg-slate-50 ${
-        isActive ? 'bg-blue-50/50 border-l-4 border-l-blue-600' : 'bg-white border-l-4 border-l-transparent'
+      className={`cursor-pointer border-b border-[#e0dfdc] p-3 transition-all hover:bg-[#f9fafb] ${
+        isActive ? 'border-l-4 border-l-[#0a66c2] bg-[#eef3f8]' : 'border-l-4 border-l-transparent bg-white'
       }`}
     >
-      <div className="flex justify-between items-start mb-2">
-        <h3 className={`font-semibold text-lg ${isActive ? 'text-blue-700' : 'text-slate-900'} leading-tight`}>
+      <div className="mb-1.5 flex items-start justify-between gap-2">
+        <h3 className={`line-clamp-2 text-[18px] font-semibold leading-[1.15] ${isActive ? 'text-[#0a66c2]' : 'text-[#191919]'}`}>
           {job.title}
         </h3>
-        <button className="text-slate-400 hover:text-blue-600">
+        <span className="text-slate-400 hover:text-[#0a66c2]">
           <Briefcase size={18} />
-        </button>
+        </span>
       </div>
       
-      <div className="flex items-center text-slate-700 text-sm mb-1.5 font-medium">
-        <Building2 size={16} className="mr-1.5 text-slate-400" />
+      <div className="mb-1 flex items-center text-sm font-medium text-[#444444]">
+        <Building2 size={15} className="mr-1.5 text-slate-400" />
         {job.company}
       </div>
       
-      <div className="flex items-center text-slate-500 text-sm mb-3">
-        <MapPin size={16} className="mr-1.5 text-slate-400" />
+      <div className="mb-2.5 flex items-center text-sm text-[#666666]">
+        <MapPin size={15} className="mr-1.5 text-slate-400" />
         {job.location}
       </div>
       
-      <div className="flex flex-wrap gap-2 mb-3">
+      <div className="mb-2.5 flex flex-wrap gap-1.5">
         {job.skills.slice(0, 3).map((skill, idx) => (
           <span 
             key={idx}
-            className="px-2 py-1 bg-slate-100 text-slate-600 text-xs font-medium rounded-md border border-slate-200"
+            className="rounded-full border border-[#d0d7de] bg-white px-2 py-0.5 text-[11px] font-medium text-[#44546a]"
           >
             {skill}
           </span>
         ))}
         {job.skills.length > 3 && (
-          <span className="px-2 py-1 bg-slate-50 text-slate-500 text-xs font-medium rounded-md">
+          <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-medium text-slate-500">
             +{job.skills.length - 3} more
           </span>
         )}
       </div>
 
-      <div className="flex items-center text-xs text-slate-400 mt-2 pt-2 border-t border-slate-100 font-medium">
+      <div className="mt-1 flex items-center border-t border-slate-100 pt-2 text-xs font-medium text-[#666666]">
         <Clock size={14} className="mr-1 inline" />
         {job.postedAt} 
         <span className="mx-2">•</span> 

@@ -20,3 +20,14 @@ build/
 venv/
 .venv/
 **/venv/
+# Added by code-review-graph
+.code-review-graph/
+
+# Local AI/editor tooling files
+.cursor/
+.claude/
+.kiro/
+.cursorrules
+.windsurfrules
+.mcp.json
+.opencode.json

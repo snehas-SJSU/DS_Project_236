@@ -23,15 +23,57 @@ function envelope(eventType, traceId, actorId, entityType, entityId, payload, id
   };
 }
 
+function normalizeMemberPayload(body, partial = false) {
+  const has = (key) => Object.prototype.hasOwnProperty.call(body, key);
+  const firstName =
+    has('first_name') ? body.first_name :
+    has('firstName') ? body.firstName :
+    (!partial && body.name ? String(body.name).split(' ')[0] : undefined);
+  const lastName =
+    has('last_name') ? body.last_name :
+    has('lastName') ? body.lastName :
+    (!partial && body.name ? String(body.name).split(' ').slice(1).join(' ') : undefined);
+  const headline = has('headline') ? body.headline : has('title') ? body.title : undefined;
+  const city = has('city') ? body.city : undefined;
+  const state = has('state') ? body.state : undefined;
+  const country = has('country') ? body.country : undefined;
+  const location = has('location') ? body.location : (!partial ? [city, state, country].filter(Boolean).join(', ') || null : undefined);
+  const about = has('about') ? body.about : has('summary') ? body.summary : undefined;
+  const fullName = has('name') ? body.name : (!partial ? [firstName, lastName].filter(Boolean).join(' ').trim() : undefined);
+  return {
+    first_name: firstName,
+    last_name: lastName,
+    name: fullName,
+    email: has('email') ? body.email : undefined,
+    phone: has('phone') ? body.phone : undefined,
+    city,
+    state,
+    country,
+    location,
+    headline,
+    title: headline !== undefined ? headline : undefined,
+    about,
+    summary: about !== undefined ? about : undefined,
+    skills: has('skills') ? body.skills : undefined,
+    experience: has('experience') ? body.experience : undefined,
+    education: has('education') ? body.education : undefined,
+    profile_photo_url: has('profile_photo_url') ? body.profile_photo_url : undefined,
+    cover_photo_url: has('cover_photo_url') ? body.cover_photo_url : undefined,
+    cover_theme: has('cover_theme') ? body.cover_theme : undefined,
+    resume_url: has('resume_url') ? body.resume_url : undefined,
+    resume_text: has('resume_text') ? body.resume_text : undefined
+  };
+}
+
 // Create Member — duplicate email => 409
 app.post('/members/create', async (req, res) => {
   try {
-    const { name, title, location, email, skills, about, experience, education } = req.body;
-    if (!email) {
+    const normalized = normalizeMemberPayload(req.body || {});
+    if (!normalized.email) {
       return res.status(400).json({ error: 'BAD_REQUEST', message: 'email required', trace_id: crypto.randomUUID() });
     }
 
-    const [dup] = await db.query('SELECT member_id FROM members WHERE email = ? AND status != ?', [email, 'deleted']);
+    const [dup] = await db.query('SELECT member_id FROM members WHERE email = ? AND status != ?', [normalized.email, 'deleted']);
     if (dup.length) {
       return res.status(409).json({ error: 'DUPLICATE_EMAIL', message: 'A member with this email already exists', trace_id: crypto.randomUUID() });
     }
@@ -42,7 +84,7 @@ app.post('/members/create', async (req, res) => {
 
     await producer.connect();
     const eventPayload = envelope('member.created', traceId, memberId, 'member', memberId, {
-      name, title, location, email, skills, about, experience, education
+      ...normalized
     }, idempotencyKey);
 
     await producer.send({
@@ -112,21 +154,27 @@ app.post('/members/update', async (req, res) => {
       return res.status(400).json({ error: 'BAD_REQUEST', message: 'member_id required', trace_id: crypto.randomUUID() });
     }
 
-    const allowed = ['name', 'title', 'location', 'email', 'about', 'skills', 'experience', 'education'];
+    const mapped = normalizeMemberPayload(fields, true);
+    const merged = { ...fields, ...mapped };
+    const allowed = [
+      'name', 'first_name', 'last_name', 'title', 'headline', 'location',
+      'city', 'state', 'country', 'email', 'phone', 'about', 'summary',
+      'skills', 'experience', 'education', 'profile_photo_url', 'cover_photo_url', 'cover_theme', 'resume_url', 'resume_text'
+    ];
     const updates = [];
     const vals = [];
     for (const k of allowed) {
-      if (fields[k] !== undefined) {
+      if (merged[k] !== undefined) {
         updates.push(`${k} = ?`);
-        vals.push(['skills', 'experience', 'education'].includes(k) ? JSON.stringify(fields[k]) : fields[k]);
+        vals.push(['skills', 'experience', 'education'].includes(k) ? JSON.stringify(merged[k]) : merged[k]);
       }
     }
     if (updates.length === 0) {
       return res.status(400).json({ error: 'BAD_REQUEST', message: 'No fields to update', trace_id: crypto.randomUUID() });
     }
 
-    if (fields.email) {
-      const [e] = await db.query('SELECT member_id FROM members WHERE email = ? AND member_id != ?', [fields.email, member_id]);
+    if (merged.email) {
+      const [e] = await db.query('SELECT member_id FROM members WHERE email = ? AND member_id != ?', [merged.email, member_id]);
       if (e.length) {
         return res.status(409).json({ error: 'DUPLICATE_EMAIL', message: 'Email already in use', trace_id: crypto.randomUUID() });
       }
@@ -205,22 +253,57 @@ app.post('/members/search', async (req, res) => {
 });
 
 async function ensureSchema() {
+  const ensureColumn = async (columnName, ddl) => {
+    const [rows] = await db.query('SHOW COLUMNS FROM members LIKE ?', [columnName]);
+    if (!rows.length) await db.query(`ALTER TABLE members ADD COLUMN ${ddl}`);
+  };
+
   await db.query(`
     CREATE TABLE IF NOT EXISTS members (
       member_id VARCHAR(50) PRIMARY KEY,
       name VARCHAR(100),
+      first_name VARCHAR(100),
+      last_name VARCHAR(100),
       title VARCHAR(150),
+      headline VARCHAR(150),
       location VARCHAR(100),
+      city VARCHAR(100),
+      state VARCHAR(100),
+      country VARCHAR(100),
       email VARCHAR(100),
+      phone VARCHAR(30),
       about TEXT,
+      summary TEXT,
       skills JSON,
       experience JSON,
       education JSON,
+      profile_photo_url MEDIUMTEXT,
+      cover_photo_url MEDIUMTEXT,
+      cover_theme VARCHAR(30) DEFAULT 'blue',
+      resume_url TEXT,
+      resume_text MEDIUMTEXT,
+      connections_count INT DEFAULT 0,
+      profile_views INT DEFAULT 0,
       status VARCHAR(20) DEFAULT 'active',
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
       UNIQUE KEY uk_email (email)
     )
   `);
+  await ensureColumn('first_name', 'first_name VARCHAR(100)');
+  await ensureColumn('last_name', 'last_name VARCHAR(100)');
+  await ensureColumn('headline', 'headline VARCHAR(150)');
+  await ensureColumn('city', 'city VARCHAR(100)');
+  await ensureColumn('state', 'state VARCHAR(100)');
+  await ensureColumn('country', 'country VARCHAR(100)');
+  await ensureColumn('phone', 'phone VARCHAR(30)');
+  await ensureColumn('summary', 'summary TEXT');
+  await ensureColumn('profile_photo_url', 'profile_photo_url MEDIUMTEXT');
+  await ensureColumn('cover_photo_url', 'cover_photo_url MEDIUMTEXT');
+  await ensureColumn('cover_theme', 'cover_theme VARCHAR(30) DEFAULT "blue"');
+  await ensureColumn('resume_url', 'resume_url TEXT');
+  await ensureColumn('resume_text', 'resume_text MEDIUMTEXT');
+  await ensureColumn('connections_count', 'connections_count INT DEFAULT 0');
+  await ensureColumn('profile_views', 'profile_views INT DEFAULT 0');
 }
 
 const PORT = process.env.PORT || 4001;

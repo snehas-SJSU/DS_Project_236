@@ -32,6 +32,21 @@ function envelope(eventType, traceId, actorId, entityId, payload, idempotencyKey
   };
 }
 
+async function sendKafkaWithRetry(payload, maxAttempts = 3) {
+  let lastError = null;
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      await producer.connect();
+      await producer.send(payload);
+      return;
+    } catch (error) {
+      lastError = error;
+      await new Promise((resolve) => setTimeout(resolve, 200 * attempt));
+    }
+  }
+  throw lastError;
+}
+
 app.post('/threads/open', async (req, res) => {
   try {
     await ensureThreadsTable();
@@ -87,6 +102,11 @@ app.post('/messages/send', async (req, res) => {
     if (!thread_id || !sender_id || !text) {
       return res.status(400).json({ error: 'BAD_REQUEST', message: 'thread_id, sender_id, text required', trace_id: crypto.randomUUID() });
     }
+    await ensureThreadsTable();
+    const [threadRows] = await db.query('SELECT * FROM message_threads WHERE thread_id = ?', [thread_id]);
+    if (!threadRows.length) {
+      return res.status(404).json({ error: 'NOT_FOUND', message: 'Thread not found', trace_id: crypto.randomUUID() });
+    }
     const mongo = await getMongoDb();
     const msgId = 'MSG-' + crypto.randomUUID().substring(0, 8);
     const doc = {
@@ -105,8 +125,7 @@ app.post('/messages/send', async (req, res) => {
 
     const traceId = crypto.randomUUID();
     const idem = crypto.randomUUID();
-    await producer.connect();
-    await producer.send({
+    await sendKafkaWithRetry({
       topic: 'message.events',
       messages: [{
         key: thread_id,
@@ -117,7 +136,7 @@ app.post('/messages/send', async (req, res) => {
     res.status(201).json({ message_id: msgId, thread_id });
   } catch (err) {
     console.error(err);
-    res.status(500).json({ error: 'INTERNAL_ERROR', message: err.message, trace_id: crypto.randomUUID() });
+    res.status(503).json({ error: 'MESSAGE_SEND_FAILED', message: err.message, trace_id: crypto.randomUUID() });
   }
 });
 

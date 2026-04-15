@@ -139,6 +139,27 @@ app.post('/connections/list', async (req, res) => {
   }
 });
 
+app.post('/connections/requestsByUser', async (req, res) => {
+  try {
+    await ensureSchema();
+    const { user_id } = req.body;
+    if (!user_id) {
+      return res.status(400).json({ error: 'BAD_REQUEST', message: 'user_id required', trace_id: crypto.randomUUID() });
+    }
+    const [incoming] = await db.query(
+      'SELECT * FROM connection_requests WHERE receiver_id = ? AND status = ? ORDER BY created_at DESC',
+      [user_id, 'pending']
+    );
+    const [sent] = await db.query(
+      'SELECT * FROM connection_requests WHERE requester_id = ? ORDER BY created_at DESC',
+      [user_id]
+    );
+    res.status(200).json({ incoming, sent });
+  } catch (err) {
+    res.status(500).json({ error: 'INTERNAL_ERROR', message: err.message, trace_id: crypto.randomUUID() });
+  }
+});
+
 app.post('/connections/mutual', async (req, res) => {
   try {
     await ensureSchema();

@@ -9,6 +9,11 @@ export interface Job {
   skills: string[];
   description: string;
   logoUrl?: string;
+  applicants?: number;
+  industry?: string;
+  remote_mode?: string;
+  seniority_level?: string;
+  employment_type?: string;
 }
 
 export const MOCK_JOBS: Job[] = [
