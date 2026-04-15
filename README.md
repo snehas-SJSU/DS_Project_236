@@ -97,6 +97,15 @@ npm run dev
 1. App: [http://localhost:3000](http://localhost:3000)
 2. Swagger: [http://localhost:4000/docs](http://localhost:4000/docs)
 
+### 2.5.1 Quick access URLs
+
+1. Public home: [http://localhost:3000/](http://localhost:3000/)
+2. Sign in: [http://localhost:3000/login/email](http://localhost:3000/login/email)
+3. Sign up: [http://localhost:3000/signup](http://localhost:3000/signup)
+4. Feed (post-login): [http://localhost:3000/feed](http://localhost:3000/feed)
+5. Swagger API docs: [http://localhost:4000/docs](http://localhost:4000/docs)
+6. AI FastAPI docs (only when AI service is running): [http://localhost:8001/docs](http://localhost:8001/docs)
+
 ### 2.6 Exact terminal commands (copy/paste)
 
 1. Terminal 1 (repo root) - install + infrastructure + backend:
