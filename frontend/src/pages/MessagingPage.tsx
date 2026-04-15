@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useState } from 'react';
-import { SendHorizonal } from 'lucide-react';
+import { MoreHorizontal, SendHorizonal, SquarePen } from 'lucide-react';
 import { MEMBER_ID, resolveAvatarUrl } from '../lib/memberProfile';
 import Navbar from '../components/layout/Navbar';
 import { Link, useLocation } from 'react-router-dom';
 import { addActivity } from '../lib/localData';
+import { showToast } from '../lib/toast';
 
 type Thread = {
   id: string;
@@ -19,6 +20,17 @@ type Message = {
   timestamp: string;
 };
 
+type Person = {
+  id: string;
+  name: string;
+  headline?: string;
+};
+
+const fallbackPeople: Person[] = [
+  { id: 'M-DEMO-01', name: 'Nina Shah', headline: 'Backend Engineer at Orbit' },
+  { id: 'M-DEMO-02', name: 'Rahul Verma', headline: 'Product Manager at Flux' }
+];
+
 export default function MessagingPage() {
   const location = useLocation();
   const [threads, setThreads] = useState<Thread[]>([]);
@@ -28,7 +40,14 @@ export default function MessagingPage() {
   const [draft, setDraft] = useState('');
   const [memberPhoto, setMemberPhoto] = useState<string>(resolveAvatarUrl(undefined, 'Me'));
   const [search, setSearch] = useState('');
+  const [people, setPeople] = useState<Person[]>([]);
+  const [personNameMap, setPersonNameMap] = useState<Record<string, string>>({});
+  const [personHeadlineMap, setPersonHeadlineMap] = useState<Record<string, string>>({});
+  const [composeQuery, setComposeQuery] = useState('');
+  const [composeToId, setComposeToId] = useState('');
   const memberId = MEMBER_ID;
+
+  const displayNameFor = (idOrName: string) => personNameMap[idOrName] || idOrName;
 
   async function loadThreads() {
     setLoading(true);
@@ -38,21 +57,71 @@ export default function MessagingPage() {
       body: JSON.stringify({ user_id: memberId })
     });
     const data = await res.json().catch(() => []);
-    const mapped = (Array.isArray(data) ? data : []).map((thread: any) => ({
-      id: thread.thread_id,
-      title: thread.participant_a === memberId ? thread.participant_b : thread.participant_a,
-      preview: 'Open thread',
-      participants: [thread.participant_a, thread.participant_b]
-    }));
-    setThreads(mapped);
-    if (mapped.length && !activeThreadId) {
-      setActiveThreadId(mapped[0].id);
+    const mapped = (Array.isArray(data) ? data : []).map((thread: any) => {
+      const peerId = thread.participant_a === memberId ? thread.participant_b : thread.participant_a;
+      return {
+        id: thread.thread_id,
+        title: peerId,
+        preview: personHeadlineMap[peerId] || 'Message conversation',
+        participants: [thread.participant_a, thread.participant_b]
+      };
+    });
+    const dedupedByPeer: Thread[] = [];
+    const seen = new Set<string>();
+    for (const thread of mapped) {
+      if (seen.has(thread.title)) continue;
+      seen.add(thread.title);
+      dedupedByPeer.push(thread);
+    }
+    setThreads(dedupedByPeer);
+    if (dedupedByPeer.length && !activeThreadId) {
+      setActiveThreadId(dedupedByPeer[0].id);
     }
     setLoading(false);
   }
 
   useEffect(() => {
     loadThreads().catch(() => setLoading(false));
+    fetch('http://localhost:4000/api/members/search', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ keyword: '' })
+    })
+      .then((res) => res.json())
+      .then((data) => {
+        const fromApi: Person[] = (Array.isArray(data) ? data : [])
+          .filter((m: any) => m.member_id && m.member_id !== memberId)
+          .slice(0, 50)
+          .map((m: any) => ({
+            id: m.member_id,
+            name: m.name || `${m.first_name || ''} ${m.last_name || ''}`.trim() || m.member_id,
+            headline: m.headline || m.title || ''
+          }));
+        const merged = [...fromApi];
+        fallbackPeople.forEach((p) => {
+          if (!merged.some((x) => x.id === p.id)) merged.push(p);
+        });
+        setPeople(merged);
+        const map: Record<string, string> = {};
+        const headlineMap: Record<string, string> = {};
+        merged.forEach((p) => {
+          map[p.id] = p.name;
+          headlineMap[p.id] = p.headline || '';
+        });
+        setPersonNameMap(map);
+        setPersonHeadlineMap(headlineMap);
+      })
+      .catch(() => {
+        setPeople(fallbackPeople);
+        setPersonNameMap({
+          'M-DEMO-01': 'Nina Shah',
+          'M-DEMO-02': 'Rahul Verma'
+        });
+        setPersonHeadlineMap({
+          'M-DEMO-01': 'Backend Engineer at Orbit',
+          'M-DEMO-02': 'Product Manager at Flux'
+        });
+      });
     fetch('http://localhost:4000/api/members/get', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -65,6 +134,15 @@ export default function MessagingPage() {
       })
       .catch(() => undefined);
   }, []);
+
+  useEffect(() => {
+    setThreads((prev) =>
+      prev.map((t) => ({
+        ...t,
+        preview: personHeadlineMap[t.title] || t.preview || 'Message conversation'
+      }))
+    );
+  }, [personHeadlineMap]);
 
   useEffect(() => {
     if (!activeThreadId) return;
@@ -82,6 +160,7 @@ export default function MessagingPage() {
     () => threads.find((thread) => thread.id === activeThreadId),
     [threads, activeThreadId]
   );
+  const isComposeMode = useMemo(() => location.pathname.endsWith('/compose'), [location.pathname]);
   const activeFilter = useMemo(() => {
     if (location.pathname.endsWith('/jobs')) return 'jobs';
     if (location.pathname.endsWith('/unread')) return 'unread';
@@ -99,8 +178,42 @@ export default function MessagingPage() {
     if (!q) return byFilter;
     return byFilter.filter((thread) => thread.title.toLowerCase().includes(q));
   }, [threads, activeFilter, search]);
+
+  const filteredPeople = useMemo(() => {
+    const q = composeQuery.trim().toLowerCase();
+    if (!q) return people.slice(0, 6);
+    return people
+      .filter((p) => p.name.toLowerCase().includes(q) || p.id.toLowerCase().includes(q))
+      .slice(0, 8);
+  }, [composeQuery, people]);
   const peerAvatar = (idOrName?: string) =>
     `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(idOrName || 'Contact')}`;
+
+  async function startOrOpenConversation(receiverId: string, receiverName?: string) {
+    if (!receiverId || receiverId === memberId) {
+      showToast('Please select a valid recipient.', 'error');
+      return;
+    }
+    const existing = threads.find((t) => t.participants.includes(receiverId));
+    if (existing) {
+      setActiveThreadId(existing.id);
+      showToast(`Opened conversation with ${displayNameFor(existing.title)}.`, 'info');
+      return;
+    }
+    const openRes = await fetch('http://localhost:4000/api/threads/open', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ participant_a: memberId, participant_b: receiverId })
+    });
+    const openData = await openRes.json().catch(() => ({}));
+    if (!openRes.ok || !openData.thread_id) {
+      showToast('Unable to open conversation right now.', 'error');
+      return;
+    }
+    setActiveThreadId(openData.thread_id);
+    await loadThreads().catch(() => undefined);
+    showToast(`Conversation started with ${receiverName || displayNameFor(receiverId)}.`, 'success');
+  }
 
   return (
     <div className="min-h-screen bg-[#f3f2ef]">
@@ -113,8 +226,64 @@ export default function MessagingPage() {
                 <div className="border-b border-slate-200 px-4 py-3">
                   <div className="mb-2 flex items-center justify-between">
                     <h2 className="font-semibold text-slate-900">Messaging</h2>
-                    <Link to="/messaging/compose" className="text-xs font-semibold text-[#0a66c2] hover:underline">Compose</Link>
+                    <div className="flex items-center gap-1">
+                      <button
+                        type="button"
+                        title="More actions"
+                        className="rounded p-1 text-slate-500 hover:bg-slate-100 hover:text-slate-700"
+                      >
+                        <MoreHorizontal size={16} />
+                      </button>
+                      <Link
+                        to="/messaging/compose"
+                        title="Compose message"
+                        className="inline-flex items-center gap-1 rounded p-1 text-slate-600 hover:bg-slate-100 hover:text-slate-900"
+                      >
+                        <SquarePen size={16} />
+                        <span className="text-xs font-semibold">Compose</span>
+                      </Link>
+                    </div>
                   </div>
+                  {isComposeMode ? (
+                    <div className="mb-2 space-y-1">
+                      <input
+                        type="text"
+                        placeholder="To: search people by name"
+                        value={composeQuery}
+                        onChange={(e) => {
+                          setComposeQuery(e.target.value);
+                          if (composeToId) setComposeToId('');
+                        }}
+                        className="w-full rounded border border-slate-300 px-3 py-1.5 text-sm focus:outline-none"
+                      />
+                      {filteredPeople.length > 0 ? (
+                        <div className="max-h-36 overflow-y-auto rounded-md border border-slate-200 bg-white">
+                          {filteredPeople.map((p) => (
+                            <button
+                              key={p.id}
+                              type="button"
+                              onClick={() => {
+                                setComposeToId(p.id);
+                                setComposeQuery(p.name);
+                              }}
+                              className={`flex w-full items-start gap-2 border-b border-slate-100 px-3 py-2 text-left last:border-b-0 hover:bg-slate-50 ${composeToId === p.id ? 'bg-blue-50' : ''}`}
+                            >
+                              <div className="h-7 w-7 overflow-hidden rounded-full border border-slate-200">
+                                <img src={peerAvatar(p.name)} alt={p.name} className="h-full w-full object-cover" />
+                              </div>
+                              <div className="min-w-0">
+                                <p className="truncate text-xs font-semibold text-slate-900">{p.name}</p>
+                                <p className="truncate text-[11px] text-slate-500">{p.headline || p.id}</p>
+                              </div>
+                            </button>
+                          ))}
+                        </div>
+                      ) : null}
+                      <Link to="/messaging" className="inline-block text-[11px] font-semibold text-[#0a66c2] hover:underline">
+                        Exit compose mode
+                      </Link>
+                    </div>
+                  ) : null}
                   <input
                     type="text"
                     placeholder="Search messages"
@@ -138,7 +307,38 @@ export default function MessagingPage() {
                   {loading ? (
                     <p className="px-4 py-3 text-sm text-slate-500">Loading threads...</p>
                   ) : filteredThreads.length === 0 ? (
-                    <p className="px-4 py-3 text-sm text-slate-500">No conversations yet. Connect with someone to start messaging.</p>
+                    <div className="px-4 py-3 text-sm text-slate-500">
+                      <p>No conversations yet. Connect with someone to start messaging.</p>
+                      {!isComposeMode && search.trim() ? (
+                        <div className="mt-3 rounded-md border border-slate-200 bg-white">
+                          <p className="border-b border-slate-100 px-3 py-2 text-xs font-semibold text-slate-600">
+                            Start a conversation
+                          </p>
+                          {people
+                            .filter((p) => p.name.toLowerCase().includes(search.trim().toLowerCase()))
+                            .slice(0, 5)
+                            .map((p) => (
+                              <button
+                                key={p.id}
+                                type="button"
+                                onClick={async () => {
+                                  await startOrOpenConversation(p.id, p.name);
+                                  setSearch('');
+                                }}
+                                className="flex w-full items-start gap-2 border-b border-slate-100 px-3 py-2 text-left last:border-b-0 hover:bg-slate-50"
+                              >
+                                <div className="h-7 w-7 overflow-hidden rounded-full border border-slate-200">
+                                  <img src={peerAvatar(p.name)} alt={p.name} className="h-full w-full object-cover" />
+                                </div>
+                                <div className="min-w-0">
+                                  <p className="truncate text-xs font-semibold text-slate-900">{p.name}</p>
+                                  <p className="truncate text-[11px] text-slate-500">{p.headline || p.id}</p>
+                                </div>
+                              </button>
+                            ))}
+                        </div>
+                      ) : null}
+                    </div>
                   ) : filteredThreads.map((thread) => (
                     <button
                       key={thread.id}
@@ -152,7 +352,7 @@ export default function MessagingPage() {
                           <img src={peerAvatar(thread.title)} alt={thread.title} className="h-full w-full object-cover" />
                         </div>
                         <div className="min-w-0">
-                          <p className="font-medium text-slate-900">{thread.title}</p>
+                          <p className="font-medium text-slate-900">{displayNameFor(thread.title)}</p>
                           <p className="truncate text-sm text-slate-600">{thread.preview}</p>
                         </div>
                       </div>
@@ -162,8 +362,12 @@ export default function MessagingPage() {
               </section>
               <section className="md:col-span-7">
                 <div className="border-b border-slate-200 px-4 py-3">
-                  <p className="font-semibold text-slate-900">{activeThread?.title || 'Select a conversation'}</p>
-                  {activeThread && <p className="text-xs text-slate-500">Thread ID: {activeThread.id}</p>}
+                  <p className="font-semibold text-slate-900">{activeThread ? displayNameFor(activeThread.title) : 'Select a conversation'}</p>
+                  {activeThread ? (
+                    <p className="text-xs text-slate-500">
+                      {personHeadlineMap[activeThread.title] || '1st degree connection'}
+                    </p>
+                  ) : null}
                 </div>
                 <div className="h-[calc(100%-3.5rem)] p-4">
                   <div className="h-[calc(100%-3.5rem)] space-y-3 overflow-y-auto rounded-lg bg-slate-50 p-4 text-sm text-slate-600">
@@ -195,25 +399,61 @@ export default function MessagingPage() {
                     className="mt-3 flex gap-2"
                     onSubmit={async (event) => {
                       event.preventDefault();
-                      if (!draft.trim() || !activeThreadId) return;
-                      await fetch('http://localhost:4000/api/messages/send', {
+                      if (!draft.trim()) return;
+                      let threadId = activeThreadId;
+
+                      if (!threadId && isComposeMode) {
+                        const receiverId = composeToId.trim();
+                        if (!receiverId) {
+                          showToast('Select a recipient from the list.', 'error');
+                          return;
+                        }
+                        await startOrOpenConversation(receiverId, composeQuery);
+                        threadId = activeThreadId || threadId;
+                        if (!threadId) {
+                          const latest = await fetch('http://localhost:4000/api/threads/byUser', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ user_id: memberId })
+                          }).then((res) => res.json()).catch(() => []);
+                          const found = (Array.isArray(latest) ? latest : []).find(
+                            (t: any) => t.participant_a === receiverId || t.participant_b === receiverId
+                          );
+                          if (found?.thread_id) {
+                            threadId = found.thread_id;
+                            setActiveThreadId(found.thread_id);
+                          }
+                        }
+                      }
+
+                      if (!threadId) {
+                        showToast('Select a conversation or use Compose.', 'info');
+                        return;
+                      }
+
+                      const sendRes = await fetch('http://localhost:4000/api/messages/send', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({
-                          thread_id: activeThreadId,
+                          thread_id: threadId,
                           sender_id: memberId,
                           text: draft.trim()
                         })
                       });
+                      if (!sendRes.ok) {
+                        showToast('Message could not be sent right now.', 'error');
+                        return;
+                      }
                       setDraft('');
                       const refreshed = await fetch('http://localhost:4000/api/messages/list', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ thread_id: activeThreadId, limit: 100 })
+                        body: JSON.stringify({ thread_id: threadId, limit: 100 })
                       });
                       const refreshedData = await refreshed.json().catch(() => []);
                       setMessages(Array.isArray(refreshedData) ? refreshedData : []);
-                      addActivity(`Sent a message to ${activeThread?.title || 'connection'}`);
+                      addActivity(`Sent a message to ${displayNameFor(activeThread?.title || composeToId || 'connection')}`);
+                      showToast('Message sent.', 'success');
                     }}
                   >
                     <input

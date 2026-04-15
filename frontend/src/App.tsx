@@ -183,15 +183,22 @@ function RequireAuth({ children }: { children: React.ReactNode }) {
   return <>{children}</>;
 }
 
+function RedirectIfAuthenticated({ children }: { children: React.ReactNode }) {
+  if (isAuthenticated()) {
+    return <Navigate to="/feed" replace />;
+  }
+  return <>{children}</>;
+}
+
 function App() {
   return (
     <BrowserRouter>
       <div className="min-h-screen bg-[#f3f2ef] text-slate-900">
         <Routes>
-          <Route path="/" element={<LoginLandingPage />} />
-          <Route path="/login" element={<LoginLandingPage />} />
-          <Route path="/login/email" element={<SignInPage />} />
-          <Route path="/signup" element={<JoinPage />} />
+          <Route path="/" element={<RedirectIfAuthenticated><LoginLandingPage /></RedirectIfAuthenticated>} />
+          <Route path="/login" element={<RedirectIfAuthenticated><LoginLandingPage /></RedirectIfAuthenticated>} />
+          <Route path="/login/email" element={<RedirectIfAuthenticated><SignInPage /></RedirectIfAuthenticated>} />
+          <Route path="/signup" element={<RedirectIfAuthenticated><JoinPage /></RedirectIfAuthenticated>} />
           <Route path="/feed" element={<RequireAuth><AppShell><FeedPlaceholder /></AppShell></RequireAuth>} />
           <Route path="/jobs" element={<RequireAuth><JobsBoard /></RequireAuth>} />
           <Route path="/jobs/search" element={<RequireAuth><JobsSearchPage /></RequireAuth>} />

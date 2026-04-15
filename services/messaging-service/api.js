@@ -61,6 +61,22 @@ app.post('/threads/open', async (req, res) => {
     if (!participant_a || !participant_b) {
       return res.status(400).json({ error: 'BAD_REQUEST', message: 'participant_a and participant_b required', trace_id: crypto.randomUUID() });
     }
+    if (participant_a === participant_b) {
+      return res.status(400).json({ error: 'BAD_REQUEST', message: 'participants must be different', trace_id: crypto.randomUUID() });
+    }
+
+    const [existing] = await db.query(
+      `SELECT thread_id FROM message_threads
+       WHERE (participant_a = ? AND participant_b = ?)
+          OR (participant_a = ? AND participant_b = ?)
+       ORDER BY last_activity DESC
+       LIMIT 1`,
+      [participant_a, participant_b, participant_b, participant_a]
+    );
+    if (existing.length) {
+      return res.status(200).json({ thread_id: existing[0].thread_id, reused: true });
+    }
+
     const threadId = 'T-' + crypto.randomUUID().substring(0, 8);
     await db.query(
       'INSERT INTO message_threads (thread_id, participant_a, participant_b) VALUES (?, ?, ?)',
