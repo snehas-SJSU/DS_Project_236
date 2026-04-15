@@ -5,6 +5,7 @@ import Navbar from '../components/layout/Navbar';
 import { Sparkles, FileText, CheckCircle2 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { MEMBER_ID, resolveAvatarUrl } from '../lib/memberProfile';
+import { addActivity, readJson, SAVED_JOBS_KEY, writeJson } from '../lib/localData';
 
 export default function JobsBoard() {
   const [jobs, setJobs] = useState<Job[]>([]);
@@ -96,6 +97,7 @@ export default function JobsBoard() {
       
       const data = await response.json().catch(() => ({}));
       if (response.ok) {
+        addActivity(`Applied to ${activeJob.title} at ${activeJob.company}`);
         alert('Application submitted successfully!');
       } else {
         const msg = data.error === 'JOB_CLOSED'
@@ -121,6 +123,19 @@ export default function JobsBoard() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ job_id: activeJob.id, member_id: MEMBER_ID })
       });
+      const existing = readJson<any[]>(SAVED_JOBS_KEY, []);
+      const next = [
+        {
+          id: activeJob.id,
+          title: activeJob.title,
+          company: activeJob.company,
+          location: activeJob.location,
+          savedAt: new Date().toLocaleDateString()
+        },
+        ...existing.filter((item) => item.id !== activeJob.id)
+      ];
+      writeJson(SAVED_JOBS_KEY, next.slice(0, 100));
+      addActivity(`Saved job ${activeJob.title} at ${activeJob.company}`);
       alert('Job saved');
     } catch {
       alert('Unable to save job right now');

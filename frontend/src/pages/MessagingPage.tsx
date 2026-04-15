@@ -2,7 +2,8 @@ import { useEffect, useMemo, useState } from 'react';
 import { SendHorizonal } from 'lucide-react';
 import { MEMBER_ID, resolveAvatarUrl } from '../lib/memberProfile';
 import Navbar from '../components/layout/Navbar';
-import { Link } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
+import { addActivity } from '../lib/localData';
 
 type Thread = {
   id: string;
@@ -19,12 +20,14 @@ type Message = {
 };
 
 export default function MessagingPage() {
+  const location = useLocation();
   const [threads, setThreads] = useState<Thread[]>([]);
   const [activeThreadId, setActiveThreadId] = useState<string>('');
   const [messages, setMessages] = useState<Message[]>([]);
   const [loading, setLoading] = useState(true);
   const [draft, setDraft] = useState('');
   const [memberPhoto, setMemberPhoto] = useState<string>(resolveAvatarUrl(undefined, 'Me'));
+  const [search, setSearch] = useState('');
   const memberId = MEMBER_ID;
 
   async function loadThreads() {
@@ -79,6 +82,23 @@ export default function MessagingPage() {
     () => threads.find((thread) => thread.id === activeThreadId),
     [threads, activeThreadId]
   );
+  const activeFilter = useMemo(() => {
+    if (location.pathname.endsWith('/jobs')) return 'jobs';
+    if (location.pathname.endsWith('/unread')) return 'unread';
+    if (location.pathname.endsWith('/connections')) return 'connections';
+    return 'focused';
+  }, [location.pathname]);
+  const filteredThreads = useMemo(() => {
+    const byFilter = threads.filter((thread) => {
+      if (activeFilter === 'jobs') return /recruit|job|hiring/i.test(thread.title);
+      if (activeFilter === 'connections') return true;
+      if (activeFilter === 'unread') return thread.preview.toLowerCase().includes('open');
+      return true;
+    });
+    const q = search.trim().toLowerCase();
+    if (!q) return byFilter;
+    return byFilter.filter((thread) => thread.title.toLowerCase().includes(q));
+  }, [threads, activeFilter, search]);
   const peerAvatar = (idOrName?: string) =>
     `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(idOrName || 'Contact')}`;
 
@@ -98,6 +118,8 @@ export default function MessagingPage() {
                   <input
                     type="text"
                     placeholder="Search messages"
+                    value={search}
+                    onChange={(e) => setSearch(e.target.value)}
                     className="w-full rounded bg-[#edf3f8] px-3 py-1.5 text-sm focus:outline-none"
                   />
                   <div className="mt-2 flex flex-wrap gap-2 text-xs">
@@ -115,9 +137,9 @@ export default function MessagingPage() {
                 <div className="overflow-y-auto">
                   {loading ? (
                     <p className="px-4 py-3 text-sm text-slate-500">Loading threads...</p>
-                  ) : threads.length === 0 ? (
+                  ) : filteredThreads.length === 0 ? (
                     <p className="px-4 py-3 text-sm text-slate-500">No conversations yet. Connect with someone to start messaging.</p>
-                  ) : threads.map((thread) => (
+                  ) : filteredThreads.map((thread) => (
                     <button
                       key={thread.id}
                       className={`w-full border-b px-4 py-3 text-left transition ${
@@ -191,6 +213,7 @@ export default function MessagingPage() {
                       });
                       const refreshedData = await refreshed.json().catch(() => []);
                       setMessages(Array.isArray(refreshedData) ? refreshedData : []);
+                      addActivity(`Sent a message to ${activeThread?.title || 'connection'}`);
                     }}
                   >
                     <input

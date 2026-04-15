@@ -3,6 +3,7 @@ import { MEMBER_ID, resolveAvatarUrl } from '../lib/memberProfile';
 import Navbar from '../components/layout/Navbar';
 import { CalendarDays, FileText, Rss, Users, UsersRound } from 'lucide-react';
 import { Link } from 'react-router-dom';
+import { addActivity } from '../lib/localData';
 
 const suggestions = [
   { id: 'SUG-1', name: 'Nina Shah', role: 'Backend Engineer at Orbit' },
@@ -138,6 +139,7 @@ export default function NetworkPage() {
                             headers: { 'Content-Type': 'application/json' },
                             body: JSON.stringify({ request_id: request.request_id })
                           });
+                          addActivity(`Ignored connection request from ${request.requester_id}`);
                           await refreshAll();
                         }}
                       >
@@ -151,6 +153,7 @@ export default function NetworkPage() {
                             headers: { 'Content-Type': 'application/json' },
                             body: JSON.stringify({ request_id: request.request_id })
                           });
+                          addActivity(`Accepted connection request from ${request.requester_id}`);
                           await refreshAll();
                         }}
                       >
@@ -185,6 +188,7 @@ export default function NetworkPage() {
                             headers: { 'Content-Type': 'application/json' },
                             body: JSON.stringify({ requester_id: memberId, receiver_id: suggestion.id })
                           });
+                          addActivity(`Sent connection request to ${suggestion.name}`);
                           await refreshAll();
                         }}
                       >
