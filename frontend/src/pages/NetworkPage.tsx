@@ -4,16 +4,20 @@ import Navbar from '../components/layout/Navbar';
 import { CalendarDays, FileText, Rss, Users, UsersRound } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { addActivity } from '../lib/localData';
+import { showToast } from '../lib/toast';
 
-const suggestions = [
-  { id: 'SUG-1', name: 'Nina Shah', role: 'Backend Engineer at Orbit' },
-  { id: 'SUG-2', name: 'Rahul Verma', role: 'Product Manager at Flux' }
-];
+type Suggestion = {
+  id: string;
+  name: string;
+  role: string;
+  photo?: string;
+};
 
 export default function NetworkPage() {
   const [incoming, setIncoming] = useState<any[]>([]);
   const [sent, setSent] = useState<any[]>([]);
   const [connections, setConnections] = useState<string[]>([]);
+  const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
   const [activeTab, setActiveTab] = useState<'grow' | 'catchup'>('grow');
   const [memberPhoto, setMemberPhoto] = useState<string>(resolveAvatarUrl(undefined, 'Me'));
   const memberId = MEMBER_ID;
@@ -36,6 +40,37 @@ export default function NetworkPage() {
     });
     const listData = await listRes.json().catch(() => []);
     setConnections(Array.isArray(listData) ? listData : []);
+
+    const membersRes = await fetch('http://localhost:4000/api/members/search', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ keyword: '' })
+    });
+    const members = await membersRes.json().catch(() => []);
+    const connected = new Set(Array.isArray(listData) ? listData : []);
+    const sentPending = new Set(
+      (reqData.sent || [])
+        .filter((r: any) => r.status === 'pending')
+        .map((r: any) => r.receiver_id)
+    );
+    const incomingPending = new Set(
+      (reqData.incoming || [])
+        .filter((r: any) => r.status === 'pending')
+        .map((r: any) => r.requester_id)
+    );
+    const normalizedSuggestions: Suggestion[] = (Array.isArray(members) ? members : [])
+      .filter((m: any) => m.member_id && m.member_id !== memberId)
+      .filter((m: any) => !connected.has(m.member_id))
+      .filter((m: any) => !sentPending.has(m.member_id))
+      .filter((m: any) => !incomingPending.has(m.member_id))
+      .slice(0, 8)
+      .map((m: any) => ({
+        id: m.member_id,
+        name: m.name || `${m.first_name || ''} ${m.last_name || ''}`.trim() || m.member_id,
+        role: m.headline || m.title || 'LinkedIn member',
+        photo: resolveAvatarUrl(m.profile_photo_url, m.name || m.member_id)
+      }));
+    setSuggestions(normalizedSuggestions);
   }
 
   useEffect(() => {
@@ -52,6 +87,13 @@ export default function NetworkPage() {
       })
       .catch(() => undefined);
   }, []);
+
+  const buttonStateFor = (suggestionId: string): 'connected' | 'pending' | 'incoming' | 'connect' => {
+    if (connections.includes(suggestionId)) return 'connected';
+    if (sent.some((r) => r.receiver_id === suggestionId && r.status === 'pending')) return 'pending';
+    if (incoming.some((r) => r.requester_id === suggestionId && r.status === 'pending')) return 'incoming';
+    return 'connect';
+  };
 
   return (
     <div className="min-h-screen bg-[#f3f2ef]">
@@ -171,32 +213,64 @@ export default function NetworkPage() {
                 <Link to="/network/suggestions" className="text-sm font-semibold text-[#444] hover:text-[#191919]">Show all</Link>
               </div>
               <div className="grid gap-3 p-4 md:grid-cols-2 xl:grid-cols-4">
-                {suggestions.map((suggestion) => (
+                {suggestions.map((suggestion) => {
+                  const state = buttonStateFor(suggestion.id);
+                  return (
                   <div key={suggestion.id} className="overflow-hidden rounded-lg border border-[#e0dfdc]">
                     <div className="h-14 bg-gradient-to-r from-[#c7d2fe] to-[#bfdbfe]" />
                     <div className="px-3 pb-3">
                       <div className="-mt-6 h-14 w-14 overflow-hidden rounded-full border-2 border-white bg-slate-100">
-                        <img src={avatarFor(suggestion.name)} alt={suggestion.name} className="h-full w-full object-cover" />
+                        <img src={suggestion.photo || avatarFor(suggestion.name)} alt={suggestion.name} className="h-full w-full object-cover" />
                       </div>
                       <p className="mt-2 text-sm font-semibold text-[#191919]">{suggestion.name}</p>
                       <p className="line-clamp-2 min-h-[32px] text-xs text-[#666]">{suggestion.role}</p>
-                      <button
-                        className="mt-3 w-full rounded-full border border-[#0a66c2] px-3 py-1.5 text-sm font-semibold text-[#0a66c2] hover:bg-[#edf3f8]"
-                        onClick={async () => {
-                          await fetch('http://localhost:4000/api/connections/request', {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ requester_id: memberId, receiver_id: suggestion.id })
-                          });
-                          addActivity(`Sent connection request to ${suggestion.name}`);
-                          await refreshAll();
-                        }}
-                      >
-                        Connect
-                      </button>
+                      {state === 'connect' ? (
+                        <button
+                          className="mt-3 w-full rounded-full border border-[#0a66c2] px-3 py-1.5 text-sm font-semibold text-[#0a66c2] hover:bg-[#edf3f8]"
+                          onClick={async () => {
+                            const response = await fetch('http://localhost:4000/api/connections/request', {
+                              method: 'POST',
+                              headers: { 'Content-Type': 'application/json' },
+                              body: JSON.stringify({ requester_id: memberId, receiver_id: suggestion.id })
+                            });
+                            if (response.status === 409) {
+                              showToast('Connection request already exists.', 'info');
+                            } else if (response.ok) {
+                              addActivity(`Sent connection request to ${suggestion.name}`);
+                              showToast(`Request sent to ${suggestion.name}.`, 'success');
+                            } else {
+                              showToast('Unable to send request right now.', 'error');
+                            }
+                            await refreshAll();
+                          }}
+                        >
+                          Connect
+                        </button>
+                      ) : state === 'pending' ? (
+                        <button
+                          disabled
+                          className="mt-3 w-full cursor-not-allowed rounded-full border border-slate-300 px-3 py-1.5 text-sm font-semibold text-slate-500"
+                        >
+                          Pending
+                        </button>
+                      ) : state === 'connected' ? (
+                        <button
+                          disabled
+                          className="mt-3 w-full cursor-not-allowed rounded-full border border-[#057642] px-3 py-1.5 text-sm font-semibold text-[#057642]"
+                        >
+                          Connected
+                        </button>
+                      ) : (
+                        <button
+                          disabled
+                          className="mt-3 w-full cursor-not-allowed rounded-full border border-slate-300 px-3 py-1.5 text-sm font-semibold text-slate-500"
+                        >
+                          Respond
+                        </button>
+                      )}
                     </div>
                   </div>
-                ))}
+                )})}
               </div>
             </section>
 
