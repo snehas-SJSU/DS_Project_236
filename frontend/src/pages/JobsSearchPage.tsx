@@ -3,6 +3,7 @@ import { Link, useLocation } from 'react-router-dom';
 import Navbar from '../components/layout/Navbar';
 import { Job } from '../mockData/jobs';
 import { MEMBER_ID } from '../lib/memberProfile';
+import { addActivity, readJson, SAVED_JOBS_KEY, writeJson } from '../lib/localData';
 
 const chips = ['Date posted', 'Remote', 'Inside Sales', 'Outside Sales', 'Healthcare', 'Biotech', 'Easy Apply', 'Employment type', 'Company', 'Under 10 applicants', 'In my network'];
 
@@ -57,6 +58,7 @@ export default function JobsSearchPage() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ job_id: activeJob.id, member_id: MEMBER_ID })
     });
+    addActivity(`Applied to ${activeJob.title} at ${activeJob.company}`);
     setIsApplying(false);
   };
 
@@ -67,6 +69,19 @@ export default function JobsSearchPage() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ job_id: activeJob.id, member_id: MEMBER_ID })
     });
+    const existing = readJson<any[]>(SAVED_JOBS_KEY, []);
+    const next = [
+      {
+        id: activeJob.id,
+        title: activeJob.title,
+        company: activeJob.company,
+        location: activeJob.location,
+        savedAt: new Date().toLocaleDateString()
+      },
+      ...existing.filter((item) => item.id !== activeJob.id)
+    ];
+    writeJson(SAVED_JOBS_KEY, next.slice(0, 100));
+    addActivity(`Saved job ${activeJob.title} at ${activeJob.company}`);
   };
 
   return (
