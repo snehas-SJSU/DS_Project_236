@@ -12,6 +12,7 @@ import SignInPage from './pages/SignInPage';
 import JoinPage from './pages/JoinPage';
 import SignOutPage from './pages/SignOutPage';
 import Profile from './pages/Profile';
+import MemberPublicProfilePage from './pages/MemberPublicProfilePage';
 import RecruiterDashboard from './pages/RecruiterDashboard';
 import RecruiterAdminPage from './pages/RecruiterAdminPage';
 import MemberAnalyticsPage from './pages/MemberAnalyticsPage';
@@ -197,6 +198,7 @@ function App() {
           <Route path="/jobs/search-results" element={<RequireAuth><JobsSearchPage /></RequireAuth>} />
           <Route path="/applications" element={<RequireAuth><AppShell><ApplicationsPage /></AppShell></RequireAuth>} />
           <Route path="/profile" element={<RequireAuth><AppShell><Profile /></AppShell></RequireAuth>} />
+          <Route path="/profile/:memberId" element={<RequireAuth><AppShell><MemberPublicProfilePage /></AppShell></RequireAuth>} />
           <Route path="/analytics/member" element={<RequireAuth><AppShell><MemberAnalyticsPage /></AppShell></RequireAuth>} />
           <Route path="/recruiter" element={<RequireAuth><AppShell><RecruiterDashboard /></AppShell></RequireAuth>} />
           <Route path="/recruiter/admin" element={<RequireAuth><AppShell><RecruiterAdminPage /></AppShell></RequireAuth>} />

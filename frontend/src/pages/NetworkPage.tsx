@@ -23,10 +23,12 @@ export default function NetworkPage() {
   const [sent, setSent] = useState<any[]>([]);
   const [connections, setConnections] = useState<string[]>([]);
   const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
+  const [memberNameMap, setMemberNameMap] = useState<Record<string, string>>({});
   const [activeTab, setActiveTab] = useState<'grow' | 'catchup'>('grow');
   const [memberPhoto, setMemberPhoto] = useState<string>(resolveAvatarUrl(undefined, 'Me'));
   const memberId = MEMBER_ID;
   const avatarFor = (seed: string) => `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(seed)}`;
+  const displayNameFor = (id: string) => memberNameMap[id] || id;
 
   async function refreshAll() {
     const reqRes = await fetch('http://localhost:4000/api/connections/requestsByUser', {
@@ -52,6 +54,16 @@ export default function NetworkPage() {
       body: JSON.stringify({ keyword: '' })
     });
     const members = await membersRes.json().catch(() => []);
+    const nextNameMap: Record<string, string> = {
+      'M-DEMO-01': 'Nina Shah',
+      'M-DEMO-02': 'Rahul Verma'
+    };
+    (Array.isArray(members) ? members : []).forEach((m: any) => {
+      if (!m?.member_id) return;
+      const name = m.name || `${m.first_name || ''} ${m.last_name || ''}`.trim() || m.member_id;
+      nextNameMap[m.member_id] = name;
+    });
+    setMemberNameMap(nextNameMap);
     const connected = new Set(Array.isArray(listData) ? listData : []);
     const sentPending = new Set(
       (reqData.sent || [])
@@ -183,7 +195,9 @@ export default function NetworkPage() {
                         <img src={avatarFor(request.requester_id)} alt={request.requester_id} className="h-full w-full object-cover" />
                       </div>
                       <div>
-                        <p className="text-[15px] font-semibold text-[#191919]">{request.requester_id}</p>
+                        <Link to={`/profile/${encodeURIComponent(request.requester_id)}`} className="text-[15px] font-semibold text-[#191919] hover:text-[#0a66c2] hover:underline">
+                          {displayNameFor(request.requester_id)}
+                        </Link>
                         <p className="text-xs text-[#666]">Wants to connect with you</p>
                       </div>
                     </div>
@@ -237,7 +251,9 @@ export default function NetworkPage() {
                       <div className="-mt-6 h-14 w-14 overflow-hidden rounded-full border-2 border-white bg-slate-100">
                         <img src={suggestion.photo || avatarFor(suggestion.name)} alt={suggestion.name} className="h-full w-full object-cover" />
                       </div>
-                      <p className="mt-2 text-sm font-semibold text-[#191919]">{suggestion.name}</p>
+                      <Link to={`/profile/${encodeURIComponent(suggestion.id)}`} className="mt-2 block text-sm font-semibold text-[#191919] hover:text-[#0a66c2] hover:underline">
+                        {suggestion.name}
+                      </Link>
                       <p className="line-clamp-2 min-h-[32px] text-xs text-[#666]">{suggestion.role}</p>
                       {state === 'connect' ? (
                         <button
@@ -300,7 +316,12 @@ export default function NetworkPage() {
                       <div className="h-8 w-8 overflow-hidden rounded-full border border-slate-200">
                         <img src={memberPhoto} alt="Me" className="h-full w-full object-cover" />
                       </div>
-                      <span>{request.receiver_id} - {request.status}</span>
+                      <span>
+                        <Link to={`/profile/${encodeURIComponent(request.receiver_id)}`} className="font-semibold text-[#0a66c2] hover:underline">
+                          {displayNameFor(request.receiver_id)}
+                        </Link>{' '}
+                        - {request.status}
+                      </span>
                     </div>
                   ))
                 )}
