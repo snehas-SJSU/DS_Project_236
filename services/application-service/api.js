@@ -15,6 +15,7 @@ async function ensureApplicationsTable() {
       member_id VARCHAR(50),
       status VARCHAR(50) DEFAULT 'submitted',
       cover_letter TEXT,
+      answers JSON,
       recruiter_note TEXT,
       applied_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
       UNIQUE KEY uk_job_member (job_id, member_id),
@@ -22,6 +23,11 @@ async function ensureApplicationsTable() {
       INDEX (member_id)
     )
   `);
+  const ensureColumn = async (columnName, ddl) => {
+    const [rows] = await db.query('SHOW COLUMNS FROM applications LIKE ?', [columnName]);
+    if (!rows.length) await db.query(`ALTER TABLE applications ADD COLUMN ${ddl}`);
+  };
+  await ensureColumn('answers', 'answers JSON');
 }
 
 function envelope(eventType, traceId, actorId, entityId, payload, idempotencyKey) {
@@ -39,7 +45,7 @@ function envelope(eventType, traceId, actorId, entityId, payload, idempotencyKey
 async function submitHandler(req, res) {
   try {
     await ensureApplicationsTable();
-    const { job_id, member_id, cover_letter } = req.body;
+    const { job_id, member_id, cover_letter, answers } = req.body;
 
     if (!job_id || !member_id) {
       return res.status(400).json({ error: 'BAD_REQUEST', message: 'job_id and member_id required', trace_id: crypto.randomUUID() });
@@ -69,7 +75,8 @@ async function submitHandler(req, res) {
       job_id,
       member_id,
       status: 'submitted',
-      cover_letter: cover_letter || null
+      cover_letter: cover_letter || null,
+      answers: answers || null
     }, idempotencyKey);
 
     await producer.connect();

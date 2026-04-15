@@ -154,6 +154,15 @@ export default function JobsBoard() {
               <Link to="/jobs/post" className="text-sm font-semibold text-[#0a66c2] hover:underline">Post a free job</Link>
             </div>
           </div>
+          <div className="li-card p-4">
+            <div className="flex items-center justify-between text-sm font-semibold text-[#191919]">
+              <span>Profile viewers</span>
+              <span className="text-[#0a66c2]">14</span>
+            </div>
+            <Link to="/analytics/member" className="mt-3 block text-base font-semibold text-[#191919] hover:text-[#0a66c2]">
+              View all analytics
+            </Link>
+          </div>
         </aside>
           <main className="space-y-3 lg:col-span-9">
           <div className="li-card p-4">

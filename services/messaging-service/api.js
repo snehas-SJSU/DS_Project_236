@@ -20,6 +20,13 @@ async function ensureThreadsTable() {
   `);
 }
 
+async function resolveReceiverId(threadId, senderId) {
+  const [rows] = await db.query('SELECT participant_a, participant_b FROM message_threads WHERE thread_id = ?', [threadId]);
+  if (!rows.length) return null;
+  const t = rows[0];
+  return t.participant_a === senderId ? t.participant_b : t.participant_a;
+}
+
 function envelope(eventType, traceId, actorId, entityId, payload, idempotencyKey) {
   return {
     event_type: eventType,
@@ -103,8 +110,8 @@ app.post('/messages/send', async (req, res) => {
       return res.status(400).json({ error: 'BAD_REQUEST', message: 'thread_id, sender_id, text required', trace_id: crypto.randomUUID() });
     }
     await ensureThreadsTable();
-    const [threadRows] = await db.query('SELECT * FROM message_threads WHERE thread_id = ?', [thread_id]);
-    if (!threadRows.length) {
+    const receiver_id = await resolveReceiverId(thread_id, sender_id);
+    if (!receiver_id) {
       return res.status(404).json({ error: 'NOT_FOUND', message: 'Thread not found', trace_id: crypto.randomUUID() });
     }
     const mongo = await getMongoDb();
@@ -113,6 +120,7 @@ app.post('/messages/send', async (req, res) => {
       message_id: msgId,
       thread_id,
       sender_id,
+      receiver_id,
       message_text: text,
       timestamp: new Date().toISOString()
     };
@@ -129,7 +137,7 @@ app.post('/messages/send', async (req, res) => {
       topic: 'message.events',
       messages: [{
         key: thread_id,
-        value: JSON.stringify(envelope('message.sent', traceId, sender_id, thread_id, { thread_id, message_id: msgId, text }, idem))
+        value: JSON.stringify(envelope('message.sent', traceId, sender_id, thread_id, { thread_id, message_id: msgId, sender_id, receiver_id, text }, idem))
       }]
     });
 

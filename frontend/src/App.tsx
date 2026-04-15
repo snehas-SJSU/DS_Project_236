@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { BrowserRouter, Link, Navigate, Route, Routes } from 'react-router-dom';
 import Navbar from './components/layout/Navbar';
 import JobsBoard from './pages/JobsBoard';
+import JobsSearchPage from './pages/JobsSearchPage';
 import ApplicationsPage from './pages/ApplicationsPage';
 import MessagingPage from './pages/MessagingPage';
 import NetworkPage from './pages/NetworkPage';
@@ -9,6 +10,7 @@ import NotificationsPage from './pages/NotificationsPage';
 import Profile from './pages/Profile';
 import RecruiterDashboard from './pages/RecruiterDashboard';
 import RecruiterAdminPage from './pages/RecruiterAdminPage';
+import MemberAnalyticsPage from './pages/MemberAnalyticsPage';
 import StaticPage from './pages/StaticPage';
 import { MEMBER_ID, resolveAvatarUrl } from './lib/memberProfile';
 
@@ -59,6 +61,7 @@ function AppShell({ children }: { children: React.ReactNode }) {
     headline: 'MS Student | Distributed Systems',
     photo: resolveAvatarUrl(undefined, 'Sneha Singh')
   });
+  const [memberDashboard, setMemberDashboard] = useState<any>(null);
 
   useEffect(() => {
     fetch('http://localhost:4000/api/members/get', {
@@ -76,6 +79,15 @@ function AppShell({ children }: { children: React.ReactNode }) {
         });
       })
       .catch(() => undefined);
+
+    fetch('http://localhost:4000/api/analytics/member/dashboard', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ member_id: MEMBER_ID })
+    })
+      .then((res) => res.json())
+      .then((data) => setMemberDashboard(data))
+      .catch(() => setMemberDashboard(null));
   }, []);
 
   return (
@@ -95,11 +107,20 @@ function AppShell({ children }: { children: React.ReactNode }) {
               </div>
             </div>
             <div className="li-card p-4">
-              <p className="li-section-title text-sm">Quick links</p>
-              <ul className="mt-2 space-y-1.5 text-sm text-[#666666]">
-                <li><Link to="/saved" className="hover:text-[#0a66c2]">Saved posts</Link></li>
-                <li><Link to="/applications" className="hover:text-[#0a66c2]">Application history</Link></li>
-                <li><Link to="/recruiter" className="hover:text-[#0a66c2]">Analytics snapshots</Link></li>
+              <div className="flex items-center justify-between text-sm font-semibold text-[#191919]">
+                <span>Profile viewers</span>
+                <span className="text-[#0a66c2]">{memberDashboard?.profile_views_30d ?? 0}</span>
+              </div>
+              <Link to="/analytics/member" className="mt-3 block text-base font-semibold text-[#191919] hover:text-[#0a66c2]">
+                View all analytics
+              </Link>
+            </div>
+            <div className="li-card p-4">
+              <ul className="space-y-2 text-sm font-semibold text-[#191919]">
+                <li><Link to="/saved" className="hover:text-[#0a66c2]">Saved items</Link></li>
+                <li><Link to="/network/groups" className="hover:text-[#0a66c2]">Groups</Link></li>
+                <li><Link to="/network/newsletters" className="hover:text-[#0a66c2]">Newsletters</Link></li>
+                <li><Link to="/network/events" className="hover:text-[#0a66c2]">Events</Link></li>
               </ul>
             </div>
           </div>
@@ -143,8 +164,11 @@ function App() {
           <Route path="/" element={<Navigate to="/feed" replace />} />
           <Route path="/feed" element={<AppShell><FeedPlaceholder /></AppShell>} />
           <Route path="/jobs" element={<JobsBoard />} />
+          <Route path="/jobs/search" element={<JobsSearchPage />} />
+          <Route path="/jobs/search-results" element={<JobsSearchPage />} />
           <Route path="/applications" element={<AppShell><ApplicationsPage /></AppShell>} />
           <Route path="/profile" element={<AppShell><Profile /></AppShell>} />
+          <Route path="/analytics/member" element={<AppShell><MemberAnalyticsPage /></AppShell>} />
           <Route path="/recruiter" element={<AppShell><RecruiterDashboard /></AppShell>} />
           <Route path="/recruiter/admin" element={<AppShell><RecruiterAdminPage /></AppShell>} />
           <Route path="/messaging" element={<MessagingPage />} />
@@ -166,6 +190,8 @@ function App() {
           <Route path="/notifications/jobs" element={<NotificationsPage />} />
           <Route path="/notifications/posts" element={<NotificationsPage />} />
           <Route path="/notifications/mentions" element={<NotificationsPage />} />
+          <Route path="/business" element={<AppShell><StaticPage title="For Business" description="Access business products and hiring tools." ctaLabel="Explore products" items={['Talent Solutions', 'Marketing Solutions', 'Sales Navigator']} /></AppShell>} />
+          <Route path="/premium" element={<AppShell><StaticPage title="Try Premium for $0" description="Explore premium features to boost visibility and opportunities." ctaLabel="Start free trial" items={['InMail credits', 'Applicant insights', 'Advanced profile analytics']} /></AppShell>} />
           <Route path="/settings" element={<AppShell><StaticPage title="Settings & Privacy" description="Manage account, privacy, and preference settings." ctaLabel="Save settings" items={['Profile visibility: Public', 'Job seeking preference: Open to work', 'Messaging preference: Anyone can message']} /></AppShell>} />
           <Route path="/help" element={<AppShell><StaticPage title="Help Center" description="Find support resources and frequently asked questions." ctaLabel="Contact support" items={['How to update my profile information?', 'How to apply to jobs using Easy Apply?', 'How to manage connection requests?']} /></AppShell>} />
           <Route path="/language" element={<AppShell><StaticPage title="Language Preferences" description="Select your preferred language and regional settings." ctaLabel="Update language" items={['Primary language: English (US)', 'Secondary language: Hindi', 'Region: United States']} /></AppShell>} />

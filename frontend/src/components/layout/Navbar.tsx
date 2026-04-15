@@ -1,13 +1,16 @@
-import { Bell, Briefcase, Home, MessageSquare, Network, PieChart, Search } from 'lucide-react';
+import { Bell, Briefcase, Grid3X3, Home, MessageSquare, Network, Search } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
-import { Link, NavLink } from 'react-router-dom';
+import { Link, NavLink, useNavigate } from 'react-router-dom';
 import { LOCAL_AVATAR_KEY, MEMBER_ID, resolveAvatarUrl } from '../../lib/memberProfile';
 
 export default function Navbar() {
+  const navigate = useNavigate();
   const [isMeMenuOpen, setIsMeMenuOpen] = useState(false);
+  const [searchTerm, setSearchTerm] = useState('');
   const [meProfile, setMeProfile] = useState<{ name: string; headline: string; photo?: string }>({
     name: 'Sneha Singh',
-    headline: 'MS in Applied Data Intelligence | Distributed Systems'
+    headline: 'MS in Applied Data Intelligence | Distributed Systems',
+    photo: resolveAvatarUrl(undefined, 'Sneha Singh')
   });
   const menuRef = useRef<HTMLDivElement | null>(null);
 
@@ -53,14 +56,24 @@ export default function Navbar() {
             <Link to="/feed" className="rounded bg-[#0a66c2] p-1.5 text-xl font-bold leading-none text-white">
               in
             </Link>
-            <div className="relative hidden md:block">
+            <form
+              className="relative hidden md:block"
+              onSubmit={(e) => {
+                e.preventDefault();
+                const keywords = searchTerm.trim();
+                if (!keywords) return;
+                navigate(`/jobs/search?keywords=${encodeURIComponent(keywords)}`);
+              }}
+            >
               <Search size={14} className="pointer-events-none absolute left-3 top-2.5 text-[#666666]" />
               <input
                 type="text"
                 placeholder="Search jobs, profiles..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
                 className="w-44 rounded bg-[#edf3f8] py-1.5 pl-9 pr-3 text-[13px] focus:w-64 focus:outline-none md:w-56"
               />
-            </div>
+            </form>
           </div>
 
           <div className="flex items-center gap-2 md:gap-3">
@@ -80,17 +93,24 @@ export default function Navbar() {
               <MessageSquare size={18} />
               <span className="mt-0.5 text-[12px] font-medium">Messaging</span>
             </NavLink>
-            <NavLink to="/applications" className={navItemClass}>
-              <Briefcase size={18} />
-              <span className="mt-0.5 text-[12px] font-medium">Applications</span>
-            </NavLink>
-            <NavLink to="/recruiter" className={navItemClass}>
-              <PieChart size={18} />
-              <span className="mt-0.5 text-[12px] font-medium">Analytics</span>
-            </NavLink>
             <NavLink to="/notifications" className={navItemClass}>
               <Bell size={18} />
               <span className="mt-0.5 text-[12px] font-medium">Notifications</span>
+            </NavLink>
+            <NavLink to="/business" className={navItemClass}>
+              <Grid3X3 size={18} />
+              <span className="mt-0.5 text-[12px] font-medium">For Business</span>
+            </NavLink>
+            <NavLink
+              to="/premium"
+              className={({ isActive }) =>
+                `group flex min-w-[70px] flex-col items-center border-b-2 px-1 pb-1 pt-2 transition-colors ${
+                  isActive ? 'border-[#191919] text-[#915907]' : 'border-transparent text-[#915907] hover:text-[#7c4a00]'
+                }`
+              }
+            >
+              <span className="text-[11px] font-semibold leading-tight">Try Premium</span>
+              <span className="text-[11px] leading-tight">for $0</span>
             </NavLink>
             <div className="relative border-l border-[#e0dfdc] pl-3" ref={menuRef}>
               <button
@@ -138,6 +158,7 @@ export default function Navbar() {
                   <div className="px-3 py-2">
                     <p className="mb-1 text-xs font-semibold text-[#191919]">Manage</p>
                     <ul className="space-y-1 text-xs text-[#666666]">
+                      <li><Link to="/applications" className="hover:text-[#191919]" onClick={() => setIsMeMenuOpen(false)}>My applications</Link></li>
                       <li><Link to="/profile/activity" className="hover:text-[#191919]" onClick={() => setIsMeMenuOpen(false)}>Posts &amp; Activity</Link></li>
                       <li><Link to="/recruiter" className="hover:text-[#191919]" onClick={() => setIsMeMenuOpen(false)}>Job posting account</Link></li>
                       <li><Link to="/signout" className="hover:text-[#191919]" onClick={() => setIsMeMenuOpen(false)}>Sign out</Link></li>
