@@ -4,6 +4,41 @@ Distributed LinkedIn-style project with React frontend, API gateway, Node micros
 
 ---
 
+<!-- ====================== 0.0 SYSTEM ARCHITECTURE ====================== -->
+## 0.0 System Architecture
+
+```mermaid
+graph TD
+    User((Browser)) -->|HTTP| FE[Frontend :3000]
+    FE -->|/api/*| Gateway[API Gateway :4000]
+
+    Gateway --> Member[Member Service :4001]
+    Gateway --> Job[Job Service :4002]
+    Gateway --> App[Application Service :4003]
+    Gateway --> Msg[Messaging Service :4004]
+    Gateway --> Analytics[Analytics Service :4005]
+    Gateway --> Conn[Connection Service :4006]
+    Gateway --> AI[AI Service :8001]
+
+    Member --> Kafka[(Kafka)]
+    Job --> Kafka
+    App --> Kafka
+    Msg --> Kafka
+    Conn --> Kafka
+    Analytics --> Kafka
+
+    Member --> MySQL[(MySQL)]
+    Job --> MySQL
+    App --> MySQL
+    Conn --> MySQL
+    Msg --> Mongo[(MongoDB)]
+    Analytics --> Mongo
+    Member --> Redis[(Redis)]
+    Job --> Redis
+```
+
+---
+
 <!-- ====================== 1.0 PREREQUISITES ====================== -->
 ## 1.0 Prerequisites
 
