@@ -214,19 +214,27 @@ npm run dev
 <!-- ====================== 3.0 TEAM TEST LOGIN ====================== -->
 ## 3.0 Team Test Login (No Shared DB Needed)
 
-`member-service` bootstrap auto-creates and/or resets a default admin test account on startup.  
-This means each teammate gets the same local test user even with a fresh DB.
+### 3.1 Default admin test account (local only)
+
+`member-service` bootstrap **auto-creates** a default admin account on startup and **resets the password** for that email on startup (so teammates always get the same credentials on a fresh machine).
+
+Use this to sign in at [http://localhost:3000/login/email](http://localhost:3000/login/email):
 
 1. Email: `admin@test.com`
 2. Password: `admin123`
 
-If login fails, restart member API once, or sign up with a new user.
+After login, open the feed: [http://localhost:3000/feed](http://localhost:3000/feed)
+
+### 3.2 If login fails
+
+1. Confirm **Terminal 1** still running `npm run start:all` (member API should be up on `:4001` behind gateway `:4000`).
+2. Try restart member API once:
 
 ```bash
 npm run dev:member-api
 ```
 
-New users can also sign up from `/signup`.
+3. Or create a new account at [http://localhost:3000/signup](http://localhost:3000/signup).
 
 ---
 
