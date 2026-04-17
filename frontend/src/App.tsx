@@ -25,6 +25,7 @@ import JobPreferencesPage from './pages/JobPreferencesPage';
 import JobTrackerPage from './pages/JobTrackerPage';
 import JobInsightsPage from './pages/JobInsightsPage';
 import NetworkCollectionsPage from './pages/NetworkCollectionsPage';
+import MemberSearchPage from './pages/MemberSearchPage';
 import HelpCenterPage from './pages/HelpCenterPage';
 import PremiumPage from './pages/PremiumPage';
 import LanguagePage from './pages/LanguagePage';
@@ -119,9 +120,12 @@ function AppShell({ children }: { children: React.ReactNode }) {
             <div className="li-card overflow-hidden p-0">
               <div className="h-14 bg-gradient-to-r from-[#70b5f9] to-[#a0b4f5]" />
               <div className="px-4 pb-4">
-                <div className="-mt-6 mb-2 h-12 w-12 overflow-hidden rounded-full border-2 border-white bg-slate-300">
+                <Link
+                  to={`/profile/${encodeURIComponent(MEMBER_ID)}`}
+                  className="-mt-6 mb-2 block h-12 w-12 overflow-hidden rounded-full border-2 border-white bg-slate-300"
+                >
                   <img src={member.photo} alt="Profile" className="h-full w-full object-cover" />
-                </div>
+                </Link>
                 <p className="text-lg font-semibold text-[#191919]">{member.name}</p>
                 <p className="text-sm text-[#666666]">{member.headline}</p>
               </div>
@@ -176,6 +180,41 @@ function AppShell({ children }: { children: React.ReactNode }) {
   );
 }
 
+function ProfileShell({ children }: { children: React.ReactNode }) {
+  return (
+    <>
+      <Navbar />
+      <div className="mx-auto grid w-full max-w-[1128px] grid-cols-1 gap-6 px-3 py-6 lg:grid-cols-[minmax(0,1fr)_300px]">
+        <main>{children}</main>
+        <aside className="hidden lg:block">
+          <div className="sticky top-[66px] space-y-2">
+            <div className="li-card p-4 text-sm">
+              <p className="font-semibold text-[#191919]">Profile language</p>
+              <p className="mt-1 text-[#666666]">English</p>
+              <div className="my-3 h-px bg-[#e0dfdc]" />
+              <p className="font-semibold text-[#191919]">Public profile & URL</p>
+              <p className="mt-1 text-[#666666]">linkedin-sim.local/in/{MEMBER_ID.toLowerCase()}</p>
+            </div>
+            <div className="li-card p-4">
+              <p className="li-section-title text-sm">People you may know</p>
+              <div className="mt-2 space-y-2 text-sm">
+                <div>
+                  <p className="font-semibold text-[#191919]">Nina Shah</p>
+                  <p className="text-[#666666]">Backend Engineer at Orbit</p>
+                </div>
+                <div>
+                  <p className="font-semibold text-[#191919]">Rahul Verma</p>
+                  <p className="text-[#666666]">PM at Flux</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </aside>
+      </div>
+    </>
+  );
+}
+
 function RequireAuth({ children }: { children: React.ReactNode }) {
   if (!isAuthenticated()) {
     return <Navigate to="/login/email" replace />;
@@ -204,8 +243,8 @@ function App() {
           <Route path="/jobs/search" element={<RequireAuth><JobsSearchPage /></RequireAuth>} />
           <Route path="/jobs/search-results" element={<RequireAuth><JobsSearchPage /></RequireAuth>} />
           <Route path="/applications" element={<RequireAuth><AppShell><ApplicationsPage /></AppShell></RequireAuth>} />
-          <Route path="/profile" element={<RequireAuth><AppShell><Profile /></AppShell></RequireAuth>} />
-          <Route path="/profile/:memberId" element={<RequireAuth><AppShell><MemberPublicProfilePage /></AppShell></RequireAuth>} />
+          <Route path="/profile" element={<RequireAuth><ProfileShell><Profile /></ProfileShell></RequireAuth>} />
+          <Route path="/profile/:memberId" element={<RequireAuth><ProfileShell><MemberPublicProfilePage /></ProfileShell></RequireAuth>} />
           <Route path="/analytics/member" element={<RequireAuth><AppShell><MemberAnalyticsPage /></AppShell></RequireAuth>} />
           <Route path="/recruiter" element={<RequireAuth><AppShell><RecruiterDashboard /></AppShell></RequireAuth>} />
           <Route path="/recruiter/admin" element={<RequireAuth><AppShell><RecruiterAdminPage /></AppShell></RequireAuth>} />
@@ -215,10 +254,13 @@ function App() {
           <Route path="/messaging/filter/jobs" element={<RequireAuth><MessagingPage /></RequireAuth>} />
           <Route path="/messaging/filter/unread" element={<RequireAuth><MessagingPage /></RequireAuth>} />
           <Route path="/messaging/filter/connections" element={<RequireAuth><MessagingPage /></RequireAuth>} />
+          <Route path="/messaging/filter/inmail" element={<RequireAuth><MessagingPage /></RequireAuth>} />
+          <Route path="/messaging/filter/starred" element={<RequireAuth><MessagingPage /></RequireAuth>} />
           <Route path="/network" element={<RequireAuth><NetworkPage /></RequireAuth>} />
           <Route path="/network/invitations" element={<RequireAuth><NetworkPage /></RequireAuth>} />
           <Route path="/network/suggestions" element={<RequireAuth><NetworkPage /></RequireAuth>} />
           <Route path="/network/connections" element={<RequireAuth><NetworkPage /></RequireAuth>} />
+          <Route path="/network/search" element={<RequireAuth><MemberSearchPage /></RequireAuth>} />
           <Route path="/network/following" element={<RequireAuth><AppShell><NetworkCollectionsPage /></AppShell></RequireAuth>} />
           <Route path="/network/groups" element={<RequireAuth><AppShell><NetworkCollectionsPage /></AppShell></RequireAuth>} />
           <Route path="/network/events" element={<RequireAuth><AppShell><NetworkCollectionsPage /></AppShell></RequireAuth>} />
@@ -243,7 +285,11 @@ function App() {
           <Route path="/jobs/tracker" element={<RequireAuth><AppShell><JobTrackerPage /></AppShell></RequireAuth>} />
           <Route path="/jobs/insights" element={<RequireAuth><AppShell><JobInsightsPage /></AppShell></RequireAuth>} />
           <Route path="/jobs/post" element={<RequireAuth><AppShell><JobPostPage /></AppShell></RequireAuth>} />
-          <Route path="/company/acme" element={<RequireAuth><AppShell><CompanyPage /></AppShell></RequireAuth>} />
+          <Route
+            path="/company/acme"
+            element={<Navigate to={`/company/${encodeURIComponent('Acme Company')}`} replace />}
+          />
+          <Route path="/company/:companySlug" element={<RequireAuth><AppShell><CompanyPage /></AppShell></RequireAuth>} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
         <ToastViewport />

@@ -173,7 +173,11 @@ export default function Navbar() {
                         <li><Link to="/recruiter/admin" className="font-semibold hover:text-[#0a66c2]" onClick={() => setIsBusinessMenuOpen(false)}>Admin Center</Link></li>
                       </ul>
                       <div className="mt-5 border-t border-[#e0dfdc] pt-3">
-                        <Link to="/company/acme" className="inline-flex items-center gap-2 text-sm font-semibold text-[#191919] hover:text-[#0a66c2]" onClick={() => setIsBusinessMenuOpen(false)}>
+                        <Link
+                          to={`/company/${encodeURIComponent('Acme Company')}`}
+                          className="inline-flex items-center gap-2 text-sm font-semibold text-[#191919] hover:text-[#0a66c2]"
+                          onClick={() => setIsBusinessMenuOpen(false)}
+                        >
                           <Building2 size={16} className="text-[#0a66c2]" />
                           Create a Company Page
                         </Link>

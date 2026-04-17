@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react';
-import { Briefcase, GraduationCap, MapPin, Sparkles, Building2, ChevronDown, Pencil } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { Briefcase, GraduationCap, MapPin, Pencil } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { LOCAL_AVATAR_KEY, MEMBER_ID, resolveAvatarUrl } from '../lib/memberProfile';
 
@@ -17,7 +17,6 @@ export default function Profile() {
   const [editing, setEditing] = useState(false);
   const [dashboard, setDashboard] = useState<any>(null);
   const [draft, setDraft] = useState<any>({});
-  const [profileActionStatus, setProfileActionStatus] = useState('');
 
   useEffect(() => {
     fetch('http://localhost:4000/api/members/get', {
@@ -74,18 +73,23 @@ export default function Profile() {
       .catch(() => setDashboard(null));
   }, []);
 
-  if (state.status === 'loading') return <div className="p-8 text-center">Loading profile...</div>;
+  if (state.status === 'loading') return <div className="li-card p-5 text-sm text-slate-500">Loading profile...</div>;
   if (state.status === 'error') {
     return (
-      <div className="max-w-xl mx-auto p-8 text-center text-red-600 space-y-3">
-        <p className="font-medium">Profile could not be loaded</p>
-        <p className="text-sm text-slate-700 whitespace-pre-wrap text-left bg-slate-50 border border-slate-200 rounded-lg p-4">{state.message}</p>
+      <div className="li-card p-5">
+        <p className="font-semibold text-[#b24020]">Profile could not be loaded</p>
+        <p className="mt-2 whitespace-pre-wrap rounded-lg border border-slate-200 bg-slate-50 p-4 text-sm text-slate-700">{state.message}</p>
       </div>
     );
   }
 
   const profile = state.data;
-  const avatarUrl = resolveAvatarUrl((draft.profile_photo_url || profile.profile_photo_url) as string | undefined, profile.name);
+  const displayName =
+    (profile.name && String(profile.name).trim()) ||
+    [profile.first_name, profile.last_name].filter(Boolean).join(' ').trim() ||
+    'Sneha Singh';
+  const headlineText = profile.headline || profile.title || 'Full Stack AI Engineer';
+  const avatarUrl = resolveAvatarUrl((draft.profile_photo_url || profile.profile_photo_url) as string | undefined, displayName);
   const coverClass = COVER_THEMES[draft.cover_theme || profile.cover_theme || 'blue'] || COVER_THEMES.blue;
   const onUploadImage = (file: File, key: 'profile_photo_url' | 'cover_photo_url') => {
     const reader = new FileReader();
@@ -98,18 +102,17 @@ export default function Profile() {
   };
 
   return (
-    <div className="py-2">
-      {/* Top Card: Identity */}
-      <div className="bg-white rounded-lg shadow-sm border border-slate-200 overflow-hidden mb-6 relative">
+    <div className="space-y-3">
+        <section className="li-card relative overflow-hidden p-0">
         <button
           type="button"
           onClick={() => setEditing(true)}
-          className="absolute right-4 top-3 z-30 inline-flex h-8 w-8 items-center justify-center rounded-full bg-white/95 text-slate-700 shadow hover:bg-white"
+          className="absolute right-3 top-3 z-20 inline-flex h-8 w-8 items-center justify-center rounded-full bg-white/95 text-slate-700 shadow hover:bg-white"
           title="Edit cover"
         >
           <Pencil size={15} />
         </button>
-        <div className="h-32 bg-slate-200 absolute top-0 left-0 w-full z-0 overflow-hidden">
+        <div className="h-44 bg-slate-200">
           {draft.cover_photo_url || profile.cover_photo_url ? (
             <img
               src={(draft.cover_photo_url || profile.cover_photo_url) as string}
@@ -117,47 +120,90 @@ export default function Profile() {
               className="h-full w-full object-cover"
             />
           ) : (
-            <div className={`w-full h-full bg-gradient-to-r opacity-80 ${coverClass}`} />
+            <div className={`h-full w-full bg-gradient-to-r opacity-80 ${coverClass}`} />
           )}
         </div>
-        
-        <div className="relative z-10 px-8 pt-16 pb-6">
-          <div className="flex justify-between items-end">
-            <div className="relative w-32 h-32 rounded-full border-4 border-white bg-slate-300 shadow-md flex items-center justify-center text-4xl font-bold text-white overflow-hidden">
+
+        <div className="px-5 pb-5">
+          <div className="-mt-16 flex flex-wrap items-end justify-between gap-3">
+            <div className="relative h-32 w-32 overflow-hidden rounded-full border-4 border-white bg-slate-300 shadow-sm">
               <img src={avatarUrl} alt="Avatar" className="h-full w-full object-cover" />
               <button
                 type="button"
                 onClick={() => setEditing(true)}
-                className="absolute bottom-1 right-1 inline-flex h-8 w-8 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-700 shadow hover:bg-slate-50"
+                className="absolute bottom-1 right-1 inline-flex h-8 w-8 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
                 title="Edit profile photo"
               >
                 <Pencil size={14} />
               </button>
             </div>
-            <button
-              onClick={() => setEditing((v) => !v)}
-              className="bg-blue-600 text-white px-6 py-2 rounded-full font-medium hover:bg-blue-700 transition shadow-sm mb-4"
-            >
-              {editing ? 'Cancel' : 'Edit Profile'}
-            </button>
           </div>
-          
-          <div className="mt-4">
-            <h1 className="text-3xl font-bold text-slate-900">{profile.name}</h1>
-            <h2 className="text-lg text-slate-700 mt-1">{profile.title}</h2>
-            <div className="flex items-center text-slate-500 text-sm mt-3 font-medium">
-              <MapPin size={16} className="mr-1" /> {profile.location}
-              <span className="mx-3">•</span>
-              <Link to="/network" className="text-blue-600 font-bold hover:underline">500+ Connections</Link>
+
+          <div className="mt-3">
+            <h1 className="text-2xl font-semibold text-[#191919]">{displayName}</h1>
+            <p className="mt-1 text-sm text-[#555]">{headlineText}</p>
+            <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-[#666]">
+              <span className="inline-flex items-center gap-1">
+                <MapPin size={14} /> {profile.location || 'Location not specified'}
+              </span>
+              <span className="text-slate-300">•</span>
+              <Link to="/network" className="font-semibold text-[#0a66c2] hover:underline">
+                View your network
+              </Link>
+            </div>
+            <div className="mt-3 flex flex-wrap gap-2">
+              <button
+                onClick={() => setEditing((v) => !v)}
+                className="rounded-full bg-[#0a66c2] px-4 py-1.5 text-sm font-semibold text-white hover:bg-[#004182]"
+              >
+                {editing ? 'Cancel editing' : 'Edit profile'}
+              </button>
+              <Link to="/jobs" className="rounded-full border border-slate-300 px-4 py-1.5 text-sm font-semibold text-slate-700 hover:bg-slate-50">
+                Open to work
+              </Link>
+              <button className="rounded-full border border-slate-300 px-4 py-1.5 text-sm font-semibold text-slate-700 hover:bg-slate-50">
+                Add section
+              </button>
+            </div>
+            <div className="mt-3 flex items-center gap-3 text-xs text-slate-600">
+              <span className="rounded bg-slate-100 px-2 py-0.5">Mercedes-Benz Research and Development India</span>
+              <span className="rounded bg-slate-100 px-2 py-0.5">San Jose State University</span>
             </div>
           </div>
         </div>
-      </div>
+      </section>
+
+      <section className="li-card p-5">
+        <div className="flex items-center justify-between">
+          <h3 className="text-sm font-semibold text-slate-900">Suggested for you</h3>
+          <button
+            type="button"
+            onClick={() => setEditing(true)}
+            className="inline-flex h-7 w-7 items-center justify-center rounded-full text-slate-500 hover:bg-slate-100"
+            title="Edit suggested content"
+          >
+            <Pencil size={14} />
+          </button>
+        </div>
+        <p className="text-xs text-slate-500">Private to you</p>
+        <div className="mt-3 grid gap-3 md:grid-cols-2">
+          <div className="rounded-lg border border-slate-200 p-3">
+            <p className="text-sm font-semibold text-slate-900">Stand out to employers</p>
+            <p className="mt-1 text-xs text-slate-600">Get more profile views by adding key achievements.</p>
+            <button className="mt-2 rounded-full border border-slate-300 px-3 py-1 text-xs font-semibold text-slate-700">Try Premium</button>
+          </div>
+          <div className="rounded-lg border border-slate-200 p-3">
+            <p className="text-sm font-semibold text-slate-900">Tell your network you are open to work</p>
+            <p className="mt-1 text-xs text-slate-600">Posting can help you get more profile views.</p>
+            <button className="mt-2 rounded-full border border-slate-300 px-3 py-1 text-xs font-semibold text-slate-700">Start a post</button>
+          </div>
+        </div>
+      </section>
 
       {editing && (
-        <div className="bg-white rounded-lg shadow-sm border-2 border-blue-200 p-6 mb-6 space-y-3">
+        <section className="li-card space-y-3 border border-blue-200 p-5">
           <div className="flex items-center justify-between">
-            <h3 className="font-semibold text-lg text-slate-900">Edit profile</h3>
+            <h3 className="text-lg font-semibold text-slate-900">Edit profile</h3>
             <button
               type="button"
               onClick={() => setEditing(false)}
@@ -275,76 +321,54 @@ export default function Profile() {
           >
             Save updates
           </button>
-        </div>
+        </section>
       )}
-      <div className="bg-white rounded-lg shadow-sm border border-slate-200 p-4 mb-6">
-        <div className="flex flex-wrap gap-2">
+
+      <section className="li-card p-5">
+        <div className="flex items-center justify-between">
+          <h3 className="text-lg font-semibold text-slate-900">About</h3>
           <button
-            className="rounded-full border border-slate-300 px-4 py-1.5 text-sm font-semibold text-slate-700 hover:bg-slate-50"
-            onClick={async () => {
-              const res = await fetch('http://localhost:4000/api/members/create', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                  member_id: MEMBER_ID,
-                  name: draft.name || profile.name || 'Sneha Singh',
-                  email: draft.email || profile.email || 'sneha.singh@example.com',
-                  headline: draft.headline || profile.headline || profile.title || 'Software Engineer',
-                  location: draft.location || profile.location || 'San Jose, CA',
-                  about: draft.about || profile.about || 'LinkedIn simulation profile',
-                  skills: draft.skills || profile.skills || []
-                })
-              });
-              const data = await res.json().catch(() => ({}));
-              setProfileActionStatus(res.ok ? 'Member create requested successfully.' : `Create failed: ${data.error || res.status}`);
-            }}
+            type="button"
+            onClick={() => setEditing(true)}
+            className="inline-flex h-8 w-8 items-center justify-center rounded-full text-slate-500 hover:bg-slate-100"
+            title="Edit about"
           >
-            Create profile
-          </button>
-          <button
-            className="rounded-full border border-red-300 px-4 py-1.5 text-sm font-semibold text-red-700 hover:bg-red-50"
-            onClick={async () => {
-              const res = await fetch('http://localhost:4000/api/members/delete', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ member_id: MEMBER_ID })
-              });
-              const data = await res.json().catch(() => ({}));
-              setProfileActionStatus(res.ok ? 'Member deleted (soft delete).' : `Delete failed: ${data.error || res.status}`);
-            }}
-          >
-            Delete profile
+            <Pencil size={15} />
           </button>
         </div>
-        {profileActionStatus ? <p className="mt-2 text-xs text-slate-600">{profileActionStatus}</p> : null}
-      </div>
-
-      {/* About Section */}
-      <div className="bg-white rounded-lg shadow-sm border border-slate-200 p-8 mb-6">
-        <h3 className="text-xl font-bold text-slate-900 mb-4">About</h3>
-        <p className="text-slate-700 leading-relaxed">
-          {profile.about}
-        </p>
-
-        {/* AI Suggestions Box */}
-        <div className="mt-6 border border-indigo-100 bg-indigo-50/50 rounded-lg p-5">
-           <div className="flex items-center text-indigo-700 font-semibold mb-2">
-             <Sparkles size={18} className="mr-2" /> AI Career Coach Suggestion
-           </div>
-           <p className="text-sm text-indigo-900/80 mb-3">
-             Your profile is strong, but you can increase your visibility by adding specific metrics to your "About" section. For example: "Scaled event architectures processing 1M+ messages/day."
-           </p>
-           <Link
-             to="/jobs"
-             className="inline-block text-sm bg-white border border-indigo-200 text-indigo-700 px-4 py-1.5 rounded hover:bg-indigo-50 font-medium transition"
-           >
-             Apply Suggestion
-           </Link>
+        <p className="mt-2 text-sm leading-relaxed text-slate-700">{profile.about || profile.summary || 'No about section yet.'}</p>
+      </section>
+      <section className="li-card p-5">
+        <div className="flex items-center justify-between">
+          <h3 className="text-lg font-semibold text-slate-900">Activity</h3>
+          <div className="flex items-center gap-2">
+            <button className="rounded-full border border-slate-300 px-3 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-50">Create a post</button>
+            <button
+              type="button"
+              onClick={() => setEditing(true)}
+              className="inline-flex h-8 w-8 items-center justify-center rounded-full text-slate-500 hover:bg-slate-100"
+              title="Edit activity"
+            >
+              <Pencil size={15} />
+            </button>
+          </div>
         </div>
-      </div>
+        <p className="mt-2 text-sm font-semibold text-[#0a66c2]">{displayName} posted yet</p>
+        <p className="text-xs text-slate-600">Posts you share will be displayed here.</p>
+      </section>
       {dashboard && (
-        <div className="bg-white rounded-lg shadow-sm border border-slate-200 p-6 mb-6">
-          <h3 className="text-lg font-semibold text-slate-900 mb-2">Member analytics</h3>
+        <section className="li-card p-5">
+        <div className="flex items-center justify-between">
+          <h3 className="text-lg font-semibold text-slate-900">Member analytics</h3>
+          <button
+            type="button"
+            onClick={() => setEditing(true)}
+            className="inline-flex h-8 w-8 items-center justify-center rounded-full text-slate-500 hover:bg-slate-100"
+            title="Edit analytics visibility"
+          >
+            <Pencil size={15} />
+          </button>
+        </div>
           <p className="text-sm text-slate-600">Profile views (30d): {dashboard.profile_views_30d ?? 0}</p>
           <div className="mt-2 flex flex-wrap gap-2">
             {(dashboard.applications_by_status || []).map((row: any) => (
@@ -353,65 +377,98 @@ export default function Profile() {
               </span>
             ))}
           </div>
-        </div>
+        </section>
       )}
 
-      <div className="grid grid-cols-3 gap-6">
-        {/* Left Column (Wider): Experience & Education */}
-        <div className="col-span-2 space-y-6">
-          <div className="bg-white rounded-lg shadow-sm border border-slate-200 p-8">
-            <h3 className="text-xl font-bold text-slate-900 mb-6">Experience</h3>
-            
+      <section className="li-card p-5">
+        <div className="mb-4 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Briefcase size={18} className="text-slate-500" />
+            <h3 className="text-lg font-semibold text-slate-900">Experience</h3>
+          </div>
+          <button
+            type="button"
+            onClick={() => setEditing(true)}
+            className="inline-flex h-8 w-8 items-center justify-center rounded-full text-slate-500 hover:bg-slate-100"
+            title="Edit experience"
+          >
+            <Pencil size={15} />
+          </button>
+        </div>
+        {(profile.experience || []).length === 0 ? (
+          <p className="text-sm text-slate-500">No experience added yet.</p>
+        ) : (
+          <div className="space-y-5">
             {(profile.experience || []).map((exp: any, idx: number) => (
-              <div key={idx} className="relative pl-6 border-l-2 border-slate-200 mb-8 pb-2">
-                <div className="absolute w-4 h-4 bg-blue-600 rounded-full -left-[9px] top-1 border-2 border-white shadow-sm"></div>
-                <h4 className="font-bold text-lg text-slate-900 leading-tight">{exp.role}</h4>
-                <div className="text-slate-600 font-medium mt-1">{exp.company} • Full-time</div>
-                <div className="text-slate-500 text-sm mt-1 mb-3">{exp.period}</div>
-                <p className="text-slate-700 leading-relaxed">
-                  {exp.description}
-                </p>
+              <div key={idx} className="border-b border-slate-100 pb-4 last:border-b-0 last:pb-0">
+                <h4 className="font-semibold text-slate-900">{exp.role}</h4>
+                <p className="text-sm text-slate-600">{exp.company}</p>
+                <p className="text-xs text-slate-500">{exp.period}</p>
+                {exp.description ? <p className="mt-1 text-sm text-slate-700">{exp.description}</p> : null}
               </div>
             ))}
           </div>
+        )}
+      </section>
 
-          <div className="bg-white rounded-lg shadow-sm border border-slate-200 p-8">
-            <h3 className="text-xl font-bold text-slate-900 mb-6">Education</h3>
+      <section className="li-card p-5">
+        <div className="mb-4 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <GraduationCap size={18} className="text-slate-500" />
+            <h3 className="text-lg font-semibold text-slate-900">Education</h3>
+          </div>
+          <button
+            type="button"
+            onClick={() => setEditing(true)}
+            className="inline-flex h-8 w-8 items-center justify-center rounded-full text-slate-500 hover:bg-slate-100"
+            title="Edit education"
+          >
+            <Pencil size={15} />
+          </button>
+        </div>
+        {(profile.education || []).length === 0 ? (
+          <p className="text-sm text-slate-500">No education added yet.</p>
+        ) : (
+          <div className="space-y-4">
             {(profile.education || []).map((edu: any, idx: number) => (
-              <div key={idx} className="flex items-start mb-6 last:mb-0">
-                <div className="p-3 bg-slate-100 rounded-lg mr-4">
-                  <GraduationCap size={24} className="text-slate-500" />
+              <div key={idx} className="flex items-start gap-3 border-b border-slate-100 pb-3 last:border-b-0 last:pb-0">
+                <div className="rounded-md bg-slate-100 p-2">
+                  <GraduationCap size={18} className="text-slate-500" />
                 </div>
                 <div>
-                  <h4 className="font-bold text-lg text-slate-900">{edu.school}</h4>
-                  <div className="text-slate-700 mt-1">{edu.degree}</div>
-                  <div className="text-slate-500 text-sm mt-1">{edu.period}</div>
+                  <h4 className="font-semibold text-slate-900">{edu.school}</h4>
+                  <p className="text-sm text-slate-700">{edu.degree}</p>
+                  <p className="text-xs text-slate-500">{edu.period}</p>
                 </div>
               </div>
             ))}
           </div>
+        )}
+      </section>
+      <section className="li-card p-5">
+        <div className="flex items-center justify-between">
+          <h3 className="text-base font-semibold text-slate-900">Top skills</h3>
+          <button
+            type="button"
+            onClick={() => setEditing(true)}
+            className="inline-flex h-8 w-8 items-center justify-center rounded-full text-slate-500 hover:bg-slate-100"
+            title="Edit skills"
+          >
+            <Pencil size={15} />
+          </button>
         </div>
-
-        {/* Right Column: Skills */}
-        <div className="col-span-1 space-y-6">
-          <div className="bg-white rounded-lg shadow-sm border border-slate-200 p-6">
-            <h3 className="text-lg font-bold text-slate-900 mb-4">Top Skills</h3>
-            <div className="flex flex-col gap-3">
-              {(profile.skills || []).map((skill: string, idx: number) => (
-                <div key={idx} className="pb-3 border-b border-slate-100 last:border-0 last:pb-0">
-                  <div className="font-bold text-slate-800">{skill}</div>
-                  <div className="text-sm text-slate-500 flex items-center mt-1">
-                    <Building2 size={14} className="mr-1.5" /> {Math.floor(Math.random() * 10) + 1} endorsements
-                  </div>
-                </div>
-              ))}
-            </div>
-            <Link to="/profile/activity" className="w-full mt-4 py-2 flex items-center justify-center text-slate-500 font-semibold text-sm hover:bg-slate-50 rounded transition">
-              Show all skills <ChevronDown size={16} className="ml-1" />
-            </Link>
-          </div>
+        <div className="mt-3 flex flex-wrap gap-2">
+          {(profile.skills || []).length === 0 ? (
+            <p className="text-sm text-slate-500">No skills listed.</p>
+          ) : (
+            (profile.skills || []).map((skill: string) => (
+              <span key={skill} className="rounded-full border border-slate-300 px-3 py-1 text-xs font-semibold text-slate-700">
+                {skill}
+              </span>
+            ))
+          )}
         </div>
-      </div>
+      </section>
     </div>
   );
 }

@@ -1,16 +1,26 @@
+import { Link, useNavigate } from 'react-router-dom';
 import { Job } from '../../mockData/jobs';
 import { MapPin, Briefcase, Clock, Building2 } from 'lucide-react';
+import { companyProfilePath, jobsResultsPath } from '../../lib/jobRoutes';
 
 interface JobCardProps {
   job: Job;
   isActive?: boolean;
-  onClick: () => void;
 }
 
-export default function JobCard({ job, isActive, onClick }: JobCardProps) {
+export default function JobCard({ job, isActive }: JobCardProps) {
+  const navigate = useNavigate();
   return (
-    <div 
-      onClick={onClick}
+    <div
+      role="button"
+      tabIndex={0}
+      onClick={() => navigate(jobsResultsPath(job.id))}
+      onKeyDown={(event) => {
+        if (event.key === 'Enter' || event.key === ' ') {
+          event.preventDefault();
+          navigate(jobsResultsPath(job.id));
+        }
+      }}
       className={`cursor-pointer border-b border-[#e0dfdc] p-3 transition-all hover:bg-[#f9fafb] ${
         isActive ? 'border-l-4 border-l-[#0a66c2] bg-[#eef3f8]' : 'border-l-4 border-l-transparent bg-white'
       }`}
@@ -26,7 +36,13 @@ export default function JobCard({ job, isActive, onClick }: JobCardProps) {
       
       <div className="mb-1 flex items-center text-sm font-medium text-[#444444]">
         <Building2 size={15} className="mr-1.5 text-slate-400" />
-        {job.company}
+        <Link
+          to={companyProfilePath(job.company)}
+          onClick={(e) => e.stopPropagation()}
+          className="hover:text-[#0a66c2] hover:underline"
+        >
+          {job.company}
+        </Link>
       </div>
       
       <div className="mb-2.5 flex items-center text-sm text-[#666666]">
@@ -35,7 +51,7 @@ export default function JobCard({ job, isActive, onClick }: JobCardProps) {
       </div>
       
       <div className="mb-2.5 flex flex-wrap gap-1.5">
-        {job.skills.slice(0, 3).map((skill, idx) => (
+        {(job.skills || []).slice(0, 3).map((skill, idx) => (
           <span 
             key={idx}
             className="rounded-full border border-[#d0d7de] bg-white px-2 py-0.5 text-[11px] font-medium text-[#44546a]"
@@ -43,9 +59,9 @@ export default function JobCard({ job, isActive, onClick }: JobCardProps) {
             {skill}
           </span>
         ))}
-        {job.skills.length > 3 && (
+        {(job.skills || []).length > 3 && (
           <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-medium text-slate-500">
-            +{job.skills.length - 3} more
+            +{(job.skills || []).length - 3} more
           </span>
         )}
       </div>

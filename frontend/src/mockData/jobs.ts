@@ -14,6 +14,8 @@ export interface Job {
   remote_mode?: string;
   seniority_level?: string;
   employment_type?: string;
+  recruiter_id?: string;
+  status?: string;
 }
 
 export const MOCK_JOBS: Job[] = [

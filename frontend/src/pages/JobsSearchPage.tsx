@@ -4,6 +4,9 @@ import Navbar from '../components/layout/Navbar';
 import { Job } from '../mockData/jobs';
 import { MEMBER_ID } from '../lib/memberProfile';
 import { addActivity, readJson, SAVED_JOBS_KEY, writeJson } from '../lib/localData';
+import { companyProfilePath, jobsResultsPath, jobsSearchPath } from '../lib/jobRoutes';
+import { mergeJobDetail, normalizeJobListRows } from '../lib/jobNormalize';
+import { showToast } from '../lib/toast';
 
 const chips = ['Date posted', 'Remote', 'Inside Sales', 'Outside Sales', 'Healthcare', 'Biotech', 'Easy Apply', 'Employment type', 'Company', 'Under 10 applicants', 'In my network'];
 
@@ -13,10 +16,21 @@ export default function JobsSearchPage() {
   const [activeJob, setActiveJob] = useState<Job | null>(null);
   const [loading, setLoading] = useState(true);
   const [isApplying, setIsApplying] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
 
   const keyword = useMemo(() => {
     const q = new URLSearchParams(location.search);
     return q.get('keywords') || q.get('keyword') || '';
+  }, [location.search]);
+
+  const locationParam = useMemo(() => {
+    const q = new URLSearchParams(location.search);
+    return q.get('location') || '';
+  }, [location.search]);
+
+  const selectedJobId = useMemo(() => {
+    const q = new URLSearchParams(location.search);
+    return q.get('jobId') || '';
   }, [location.search]);
 
   useEffect(() => {
@@ -24,64 +38,115 @@ export default function JobsSearchPage() {
     fetch('http://localhost:4000/api/jobs/search', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ keyword: keyword || undefined })
+      body: JSON.stringify({
+        keyword: keyword || undefined,
+        location: locationParam || undefined
+      })
     })
       .then((res) => res.json())
       .then((data) => {
-        const rows = Array.isArray(data) ? data : [];
+        const rows = normalizeJobListRows(Array.isArray(data) ? data : []);
         setJobs(rows);
-        if (rows.length) setActiveJob(rows[0]);
+        if (rows.length) {
+          const selected = selectedJobId ? rows.find((j) => j.id === selectedJobId) : null;
+          setActiveJob(selected || rows[0]);
+        } else {
+          setActiveJob(null);
+        }
         setLoading(false);
       })
       .catch(() => {
         setJobs([]);
         setLoading(false);
       });
-  }, [keyword]);
+  }, [keyword, locationParam, selectedJobId]);
 
-  const openJob = async (job: Job) => {
-    setActiveJob(job);
-    const res = await fetch('http://localhost:4000/api/jobs/get', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ job_id: job.id, member_id: MEMBER_ID })
-    });
-    const data = await res.json().catch(() => ({}));
-    if (res.ok) setActiveJob({ ...job, ...data });
-  };
-
-  const onApply = async () => {
-    if (!activeJob) return;
-    setIsApplying(true);
-    await fetch('http://localhost:4000/api/applications/submit', {
+  /** Pull live per-member flags (applied/saved) for selected job. */
+  useEffect(() => {
+    if (!activeJob?.id) return;
+    fetch('http://localhost:4000/api/jobs/get', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ job_id: activeJob.id, member_id: MEMBER_ID })
-    });
-    addActivity(`Applied to ${activeJob.title} at ${activeJob.company}`);
-    setIsApplying(false);
+    })
+      .then((res) => res.json().then((data) => ({ ok: res.ok, data })))
+      .then(({ ok, data }) => {
+        if (!ok) return;
+        setActiveJob((prev) => (prev && prev.id === activeJob.id ? mergeJobDetail(prev, data) : prev));
+      })
+      .catch(() => undefined);
+  }, [activeJob?.id]);
+
+  const onApply = async () => {
+    if (!activeJob) return;
+    if ((activeJob as any).applied) {
+      showToast('You already applied to this job.', 'info');
+      return;
+    }
+    setIsApplying(true);
+    try {
+      const res = await fetch('http://localhost:4000/api/applications/submit', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ job_id: activeJob.id, member_id: MEMBER_ID })
+      });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok) {
+        setActiveJob((prev) => (prev ? ({ ...prev, applied: true } as any) : prev));
+        addActivity(`Applied to ${activeJob.title} at ${activeJob.company}`);
+        showToast('Application submitted.', 'success');
+      } else {
+        const msg = data.error === 'DUPLICATE_APPLICATION'
+          ? 'You already applied to this job.'
+          : data.error === 'JOB_CLOSED'
+            ? 'This job is closed.'
+            : data.message || 'Unable to apply right now.';
+        showToast(msg, 'error');
+      }
+    } catch {
+      showToast('Unable to apply right now.', 'error');
+    } finally {
+      setIsApplying(false);
+    }
   };
 
   const onSave = async () => {
     if (!activeJob) return;
-    await fetch('http://localhost:4000/api/jobs/save', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ job_id: activeJob.id, member_id: MEMBER_ID })
-    });
-    const existing = readJson<any[]>(SAVED_JOBS_KEY, []);
-    const next = [
-      {
-        id: activeJob.id,
-        title: activeJob.title,
-        company: activeJob.company,
-        location: activeJob.location,
-        savedAt: new Date().toLocaleDateString()
-      },
-      ...existing.filter((item) => item.id !== activeJob.id)
-    ];
-    writeJson(SAVED_JOBS_KEY, next.slice(0, 100));
-    addActivity(`Saved job ${activeJob.title} at ${activeJob.company}`);
+    if ((activeJob as any).saved) {
+      showToast('Job already saved.', 'info');
+      return;
+    }
+    setIsSaving(true);
+    try {
+      const res = await fetch('http://localhost:4000/api/jobs/save', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ job_id: activeJob.id, member_id: MEMBER_ID })
+      });
+      if (!res.ok) {
+        showToast('Unable to save right now.', 'error');
+        return;
+      }
+      const existing = readJson<any[]>(SAVED_JOBS_KEY, []);
+      const next = [
+        {
+          id: activeJob.id,
+          title: activeJob.title,
+          company: activeJob.company,
+          location: activeJob.location,
+          savedAt: new Date().toLocaleDateString()
+        },
+        ...existing.filter((item) => item.id !== activeJob.id)
+      ];
+      writeJson(SAVED_JOBS_KEY, next.slice(0, 100));
+      setActiveJob((prev) => (prev ? ({ ...prev, saved: true } as any) : prev));
+      addActivity(`Saved job ${activeJob.title} at ${activeJob.company}`);
+      showToast('Job saved.', 'success');
+    } catch {
+      showToast('Unable to save right now.', 'error');
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   return (
@@ -103,18 +168,18 @@ export default function JobsSearchPage() {
           <div className="border-b border-[#e0dfdc] px-4 py-2 text-sm text-[#444]">
             {loading ? 'Loading...' : `${jobs.length} results`} {keyword ? `for ${keyword}` : ''}
           </div>
-          <div className="max-h-[calc(100vh-12rem)] overflow-y-auto">
+          <div>
             {jobs.map((job) => (
-              <button
+              <Link
                 key={job.id}
-                onClick={() => openJob(job)}
-                className={`w-full border-b border-[#e0dfdc] px-4 py-2.5 text-left ${activeJob?.id === job.id ? 'bg-[#edf3f8]' : 'hover:bg-[#f9fafb]'}`}
+                to={jobsResultsPath(job.id)}
+                className={`block w-full border-b border-[#e0dfdc] px-4 py-2.5 text-left ${activeJob?.id === job.id ? 'bg-[#edf3f8]' : 'hover:bg-[#f9fafb]'}`}
               >
                 <p className="text-[22px] leading-tight font-semibold text-[#0a66c2]">{job.title}</p>
                 <p className="text-sm text-[#444]">{job.company}</p>
                 <p className="text-sm text-[#666]">{job.location}</p>
                 <p className="mt-1 text-xs text-[#666]">{job.postedAt} · {job.type}</p>
-              </button>
+              </Link>
             ))}
           </div>
         </section>
@@ -122,14 +187,34 @@ export default function JobsSearchPage() {
           {activeJob ? (
             <div className="p-6">
               <h1 className="text-[44px] leading-[1.05] font-semibold text-[#191919]">{activeJob.title}</h1>
-              <p className="mt-2 text-lg text-[#444]">{activeJob.company} · {activeJob.location}</p>
+              <p className="mt-2 text-lg text-[#444]">
+                <Link to={companyProfilePath(activeJob.company)} className="hover:text-[#0a66c2] hover:underline">
+                  {activeJob.company}
+                </Link>
+                {' '}
+                ·{' '}
+                <Link
+                  to={jobsSearchPath({ location: activeJob.location })}
+                  className="hover:text-[#0a66c2] hover:underline"
+                >
+                  {activeJob.location}
+                </Link>
+              </p>
               <p className="mt-2 text-sm text-[#666]">{activeJob.postedAt} · {activeJob.applicants ?? 0} applicants</p>
               <div className="mt-4 flex gap-2">
-                <button onClick={onApply} className="rounded-full bg-[#0a66c2] px-5 py-2 text-sm font-semibold text-white hover:bg-[#004182]">
-                  {isApplying ? 'Applying...' : 'Apply'}
+                <button
+                  onClick={onApply}
+                  disabled={isApplying || Boolean((activeJob as any).applied)}
+                  className="rounded-full bg-[#0a66c2] px-5 py-2 text-sm font-semibold text-white hover:bg-[#004182] disabled:cursor-not-allowed disabled:bg-[#9ec6e5]"
+                >
+                  {(activeJob as any).applied ? 'Applied' : isApplying ? 'Applying...' : 'Apply'}
                 </button>
-                <button onClick={onSave} className="rounded-full border border-[#0a66c2] px-5 py-2 text-sm font-semibold text-[#0a66c2] hover:bg-[#edf3f8]">
-                  Save
+                <button
+                  onClick={onSave}
+                  disabled={isSaving || Boolean((activeJob as any).saved)}
+                  className="rounded-full border border-[#0a66c2] px-5 py-2 text-sm font-semibold text-[#0a66c2] hover:bg-[#edf3f8] disabled:cursor-not-allowed disabled:border-[#9ec6e5] disabled:text-[#9ec6e5]"
+                >
+                  {(activeJob as any).saved ? 'Saved' : isSaving ? 'Saving...' : 'Save'}
                 </button>
               </div>
               <div className="mt-6">

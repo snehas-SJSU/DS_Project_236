@@ -17,6 +17,6 @@
     "dev:msg-worker": "cd services/messaging-service && npm run start:worker",
     "dev:analytics-api": "cd services/analytics-service && npm run start:api",
     "dev:analytics-worker": "cd services/analytics-service && npm run start:worker",
-    "start:all": "npx concurrently \"npm:dev:*\""
+    "start:all": "npx concurrently \"npm run dev:gateway\" \"npm run dev:member-api\" \"npm run dev:member-worker\" \"npm run dev:connection-api\" \"npm run dev:job-api\" \"npm run dev:job-worker\" \"npm run dev:app-api\" \"npm run dev:app-worker\" \"npm run dev:msg-api\" \"npm run dev:msg-worker\" \"npm run dev:analytics-api\" \"npm run dev:analytics-worker\""
   }
 }

@@ -1,6 +1,6 @@
 # Project Status (Single Source)
 
-Last updated: functionality stabilization pass (Phase 1.3+).
+Last updated: profile parity and interaction refinement pass.
 
 ## Scope status
 
@@ -19,6 +19,7 @@ Last updated: functionality stabilization pass (Phase 1.3+).
 - Analytics module: ingest/jobs top/funnel/geo/member dashboard + day/week trend charts.
 - Frontend routing/link wiring completed across major pages.
 - UX consistency updates: toast-based feedback, functional Premium/Language/Job Post/Company pages, and notification read-state persistence.
+- Profile UX updates: LinkedIn-style profile/public-profile routing, dynamic profile navigation from avatars/names, improved jobs link behavior, and section-level edit controls.
 - Reliability handling: duplicate email, duplicate application, closed-job apply checks, message retry, Kafka idempotency guards.
 - Auth: email/password signup/login/logout implemented with JWT bearer tokens.
 - Backend stabilization: job-service schema compatibility migration for legacy MySQL (`industry`, `remote_mode`, `seniority_level`, `employment_type`, counts columns) to keep workers healthy across fresh and old DB states.
@@ -30,6 +31,7 @@ Last updated: functionality stabilization pass (Phase 1.3+).
 - Duplicate apply returns `DUPLICATE_APPLICATION`.
 - Apply-to-closed-job returns `JOB_CLOSED`.
 - Premium navigation hardened with alias redirects to `/premium` (`/try-premium`, `/premium/free-trial`, `/premium/trial`).
+- Manual profile smoke checks passed for `/profile` and `/profile/:memberId` route rendering plus connection-action API behavior.
 
 ## Pending note (auth)
 
@@ -44,4 +46,4 @@ Last updated: functionality stabilization pass (Phase 1.3+).
 
 ## Final note
 
-Non-AI implementation is complete and demo-ready. Remaining work is the intentionally excluded items (AI, JMeter, AWS), Google OAuth completion, and final submission packaging/screenshots.
+Non-AI implementation is complete and demo-ready. Remaining work is the intentionally excluded items (AI, JMeter, AWS), Google OAuth completion, and final submission packaging/screenshots/polish.

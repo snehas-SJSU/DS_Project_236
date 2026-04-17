@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { MapPin } from 'lucide-react';
 import { Link, Navigate, useParams } from 'react-router-dom';
 import { MEMBER_ID, resolveAvatarUrl } from '../lib/memberProfile';
 import { addActivity } from '../lib/localData';
@@ -130,75 +131,75 @@ export default function MemberPublicProfilePage() {
 
   return (
     <div className="space-y-3">
-      <section className="li-card overflow-hidden p-0">
-        <div className="h-32 bg-gradient-to-r from-[#bfd7ff] to-[#d6ecff]" />
-        <div className="p-5">
-          <div className="-mt-16 h-28 w-28 overflow-hidden rounded-full border-4 border-white bg-slate-200">
-            <img src={photo} alt={member.name} className="h-full w-full object-cover" />
-          </div>
-          <h1 className="mt-3 text-2xl font-semibold text-[#191919]">{member.name}</h1>
-          <p className="text-sm text-[#555]">{member.headline || member.title || 'LinkedIn member'}</p>
-          <p className="mt-1 text-sm text-[#666]">{member.location || 'Location not specified'}</p>
-          <div className="mt-3 flex flex-wrap gap-2">
-            {relation === 'connect' ? (
-              <button
-                className="rounded-full border border-[#0a66c2] px-4 py-1.5 text-sm font-semibold text-[#0a66c2] hover:bg-[#edf3f8]"
-                onClick={async () => {
-                  const response = await fetch('http://localhost:4000/api/connections/request', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ requester_id: viewerId, receiver_id: memberId })
-                  });
-                  if (response.ok || response.status === 409) {
-                    addActivity(`Sent connection request to ${member.name}`);
-                    showToast(`Request sent to ${member.name}.`, 'success');
-                    setSent((prev) => [...prev, { receiver_id: memberId, status: 'pending' }]);
-                  } else {
-                    showToast('Unable to send request right now.', 'error');
-                  }
-                }}
-              >
-                Connect
-              </button>
-            ) : relation === 'pending' ? (
-              <button disabled className="rounded-full border border-slate-300 px-4 py-1.5 text-sm font-semibold text-slate-500">
-                Pending
-              </button>
-            ) : relation === 'incoming' ? (
-              <Link to="/network" className="rounded-full border border-[#0a66c2] px-4 py-1.5 text-sm font-semibold text-[#0a66c2] hover:bg-[#edf3f8]">
-                Respond in Network
+        <section className="li-card overflow-hidden p-0">
+          <div className="h-44 bg-gradient-to-r from-[#bfd7ff] to-[#d6ecff]" />
+          <div className="px-5 pb-5">
+            <div className="-mt-16 h-32 w-32 overflow-hidden rounded-full border-4 border-white bg-slate-200 shadow-sm">
+              <img src={photo} alt={member.name} className="h-full w-full object-cover" />
+            </div>
+            <h1 className="mt-3 text-2xl font-semibold text-[#191919]">{member.name}</h1>
+            <p className="mt-1 text-sm text-[#555]">{member.headline || member.title || 'LinkedIn member'}</p>
+            <p className="mt-1 inline-flex items-center gap-1 text-sm text-[#666]">
+              <MapPin size={14} /> {member.location || 'Location not specified'}
+            </p>
+            <div className="mt-3 flex flex-wrap gap-2">
+              {relation === 'connect' ? (
+                <button
+                  className="rounded-full border border-[#0a66c2] px-4 py-1.5 text-sm font-semibold text-[#0a66c2] hover:bg-[#edf3f8]"
+                  onClick={async () => {
+                    const response = await fetch('http://localhost:4000/api/connections/request', {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ requester_id: viewerId, receiver_id: memberId })
+                    });
+                    if (response.ok || response.status === 409) {
+                      addActivity(`Sent connection request to ${member.name}`);
+                      showToast(`Request sent to ${member.name}.`, 'success');
+                      setSent((prev) => [...prev, { receiver_id: memberId, status: 'pending' }]);
+                    } else {
+                      showToast('Unable to send request right now.', 'error');
+                    }
+                  }}
+                >
+                  Connect
+                </button>
+              ) : relation === 'pending' ? (
+                <button disabled className="rounded-full border border-slate-300 px-4 py-1.5 text-sm font-semibold text-slate-500">
+                  Pending
+                </button>
+              ) : relation === 'incoming' ? (
+                <Link to="/network" className="rounded-full border border-[#0a66c2] px-4 py-1.5 text-sm font-semibold text-[#0a66c2] hover:bg-[#edf3f8]">
+                  Respond in Network
+                </Link>
+              ) : (
+                <Link to="/messaging" className="rounded-full border border-[#057642] px-4 py-1.5 text-sm font-semibold text-[#057642] hover:bg-[#eef7f1]">
+                  Message
+                </Link>
+              )}
+              <Link to="/network" className="rounded-full border border-slate-300 px-4 py-1.5 text-sm font-semibold text-slate-700 hover:bg-slate-50">
+                Back to Network
               </Link>
+            </div>
+          </div>
+        </section>
+        <section className="li-card p-5">
+          <h2 className="text-lg font-semibold text-slate-900">About</h2>
+          <p className="mt-2 text-sm leading-relaxed text-slate-700">{member.about || member.summary || 'No about section yet.'}</p>
+        </section>
+        <section className="li-card p-5">
+          <h2 className="text-base font-semibold text-slate-900">Skills</h2>
+          <div className="mt-2 flex flex-wrap gap-2">
+            {(member.skills || []).length === 0 ? (
+              <p className="text-sm text-slate-500">No skills listed.</p>
             ) : (
-              <Link to="/messaging" className="rounded-full border border-[#057642] px-4 py-1.5 text-sm font-semibold text-[#057642] hover:bg-[#eef7f1]">
-                Message
-              </Link>
+              (member.skills || []).map((skill) => (
+                <span key={skill} className="rounded-full border border-slate-300 px-3 py-1 text-xs font-semibold text-slate-700">
+                  {skill}
+                </span>
+              ))
             )}
-            <Link to="/network" className="rounded-full border border-slate-300 px-4 py-1.5 text-sm font-semibold text-slate-700 hover:bg-slate-50">
-              Back to Network
-            </Link>
           </div>
-        </div>
-      </section>
-      <section className="li-card p-5">
-        <h2 className="text-lg font-semibold text-slate-900">About</h2>
-        <p className="mt-2 text-sm leading-relaxed text-slate-700">
-          {member.about || member.summary || 'No about section yet.'}
-        </p>
-      </section>
-      <section className="li-card p-5">
-        <h2 className="text-lg font-semibold text-slate-900">Skills</h2>
-        <div className="mt-2 flex flex-wrap gap-2">
-          {(member.skills || []).length === 0 ? (
-            <p className="text-sm text-slate-500">No skills listed.</p>
-          ) : (
-            (member.skills || []).map((skill) => (
-              <span key={skill} className="rounded-full border border-slate-300 px-3 py-1 text-xs font-semibold text-slate-700">
-                {skill}
-              </span>
-            ))
-          )}
-        </div>
-      </section>
+        </section>
     </div>
   );
 }

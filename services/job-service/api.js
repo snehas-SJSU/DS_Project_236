@@ -102,9 +102,13 @@ app.post('/jobs/create', async (req, res) => {
 app.post('/jobs/search', async (req, res) => {
   try {
     await ensureJobsSchema();
-    const { keyword, location, type, industry, remote } = req.body;
+    const { keyword, location, type, industry, remote, company } = req.body;
     let sql = "SELECT * FROM jobs WHERE status = 'open'";
     const params = [];
+    if (company) {
+      sql += ' AND company = ?';
+      params.push(String(company).trim());
+    }
     if (keyword) {
       sql += ' AND (title LIKE ? OR description LIKE ? OR company LIKE ?)';
       const k = `%${keyword}%`;

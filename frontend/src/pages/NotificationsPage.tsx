@@ -94,9 +94,12 @@ export default function NotificationsPage() {
             <section className="li-card overflow-hidden p-0">
               <div className="h-10 bg-gradient-to-r from-[#bfd7ff] to-[#d6ecff]" />
               <div className="px-4 pb-4">
-                <div className="-mt-4 h-16 w-16 overflow-hidden rounded-full border-2 border-white">
+                <Link
+                  to={`/profile/${encodeURIComponent(MEMBER_ID)}`}
+                  className="-mt-4 block h-16 w-16 overflow-hidden rounded-full border-2 border-white"
+                >
                   <img src={member.photo} alt="Profile" className="h-full w-full object-cover" />
-                </div>
+                </Link>
                 <Link to="/profile" className="mt-2 block text-2xl font-semibold text-[#191919] hover:text-[#0a66c2]">
                   {member.name}
                 </Link>

@@ -1,14 +1,17 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Job } from '../mockData/jobs';
 import JobCard from '../components/shared/JobCard';
 import Navbar from '../components/layout/Navbar';
 import { Sparkles, FileText, CheckCircle2 } from 'lucide-react';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { MEMBER_ID, resolveAvatarUrl } from '../lib/memberProfile';
 import { addActivity, readJson, SAVED_JOBS_KEY, writeJson } from '../lib/localData';
 import { showToast } from '../lib/toast';
+import { companyProfilePath, jobsResultsPath, jobsSearchPath } from '../lib/jobRoutes';
+import { jobFromGetPayload, mergeJobDetail, normalizeJobListRows } from '../lib/jobNormalize';
 
 export default function JobsBoard() {
+  const [searchParams, setSearchParams] = useSearchParams();
   const [jobs, setJobs] = useState<Job[]>([]);
   const [activeJob, setActiveJob] = useState<Job | null>(null);
   const [isApplying, setIsApplying] = useState(false);
@@ -37,8 +40,9 @@ export default function JobsBoard() {
       .then(res => res.json())
       .then(data => {
         if (Array.isArray(data)) {
-          setJobs(data);
-          if (data.length > 0) setActiveJob(data[0]);
+          setJobs(normalizeJobListRows(data));
+        } else {
+          setJobs([]);
         }
         setLoading(false);
       })
@@ -68,7 +72,7 @@ export default function JobsBoard() {
       .catch(() => undefined);
   }, []);
 
-  const handleOpenJob = async (job: Job) => {
+  const handleOpenJob = useCallback(async (job: Job) => {
     setActiveJob(job);
     try {
       const response = await fetch('http://localhost:4000/api/jobs/get', {
@@ -77,11 +81,58 @@ export default function JobsBoard() {
         body: JSON.stringify({ job_id: job.id, member_id: MEMBER_ID })
       });
       const detail = await response.json();
-      if (response.ok) setActiveJob({ ...job, ...detail });
+      if (response.ok) setActiveJob(mergeJobDetail(job, detail));
     } catch (error) {
       console.error('Failed to load job detail', error);
     }
-  };
+  }, []);
+
+  /** Load a job by id when it is not in the current search results (deep link). */
+  const openJobByIdOnly = useCallback(
+    async (jobId: string) => {
+      try {
+        const response = await fetch('http://localhost:4000/api/jobs/get', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ job_id: jobId, member_id: MEMBER_ID })
+        });
+        const detail = await response.json();
+        if (!response.ok) {
+          showToast('Could not load that job. It may be closed or removed.', 'error');
+          setSearchParams({}, { replace: true });
+          return;
+        }
+        const normalized = jobFromGetPayload(detail);
+        if (normalized) setActiveJob(mergeJobDetail(normalized, detail));
+      } catch (error) {
+        console.error('Failed to load job by id', error);
+        showToast('Could not load that job.', 'error');
+        setSearchParams({}, { replace: true });
+      }
+    },
+    [setSearchParams]
+  );
+
+  /**
+   * Sync selection with ?jobId=.
+   * If the id is missing from the current list (filters), fetch GET /jobs/get so the detail panel still opens.
+   */
+  useEffect(() => {
+    if (loading) return;
+    const jid = searchParams.get('jobId');
+    if (jid) {
+      const match = jobs.find((j) => j.id === jid);
+      if (match) {
+        if (activeJob?.id !== jid) void handleOpenJob(match);
+        return;
+      }
+      if (activeJob?.id !== jid) void openJobByIdOnly(jid);
+      return;
+    }
+    if (jobs.length > 0 && (!activeJob || !jobs.some((j) => j.id === activeJob.id))) {
+      void handleOpenJob(jobs[0]);
+    }
+  }, [loading, jobs, searchParams, activeJob?.id, handleOpenJob, openJobByIdOnly]);
 
   const handleApply = async () => {
     if (!activeJob) return;
@@ -152,9 +203,12 @@ export default function JobsBoard() {
           <div className="li-card overflow-hidden p-0">
             <div className="h-14 bg-gradient-to-r from-[#9ec6e5] to-[#c9def0]" />
             <div className="px-4 pb-4">
-              <div className="-mt-6 mb-2 h-12 w-12 overflow-hidden rounded-full border-2 border-white bg-slate-300">
+              <Link
+                to={`/profile/${encodeURIComponent(MEMBER_ID)}`}
+                className="-mt-6 mb-2 block h-12 w-12 overflow-hidden rounded-full border-2 border-white bg-slate-300"
+              >
                 <img src={member.photo} alt="Profile" className="h-full w-full object-cover" />
-              </div>
+              </Link>
               <p className="text-lg font-semibold text-[#191919]">{member.name}</p>
               <p className="text-xs text-[#666666]">{member.location}</p>
               <p className="mt-0.5 text-xs text-[#666666]">{member.headline}</p>
@@ -221,7 +275,7 @@ export default function JobsBoard() {
             <div className="border-b border-[#e0dfdc] px-4 py-2">
               <h3 className="text-lg font-semibold text-[#191919]">Top picks for you</h3>
             </div>
-            <div className="max-h-[260px] overflow-y-auto">
+            <div>
             {loading ? (
               <div className="p-8 text-center text-slate-500">Loading live jobs...</div>
             ) : jobs.length === 0 ? (
@@ -232,7 +286,6 @@ export default function JobsBoard() {
                   key={job.id} 
                   job={job} 
                   isActive={activeJob?.id === job.id} 
-                  onClick={() => handleOpenJob(job)} 
                 />
               ))
             )}
@@ -243,17 +296,17 @@ export default function JobsBoard() {
               <h3 className="text-lg font-semibold text-[#191919]">Jobs based on your activity</h3>
               <p className="text-xs text-[#666]">Including applies, searches and saves</p>
             </div>
-            <div className="max-h-[220px] overflow-y-auto">
+            <div>
               {jobs.slice(0, 3).map((job) => (
-                <button
+                <Link
                   key={`activity-${job.id}`}
-                  onClick={() => handleOpenJob(job)}
-                  className="w-full border-b border-[#f0f0f0] px-4 py-3 text-left hover:bg-[#f9fafb]"
+                  to={jobsResultsPath(job.id)}
+                  className="block w-full border-b border-[#f0f0f0] px-4 py-3 text-left hover:bg-[#f9fafb]"
                 >
                   <p className="text-base font-semibold text-[#0a66c2]">{job.title}</p>
                   <p className="text-sm text-[#444]">{job.company} • {job.location}</p>
                   <p className="text-xs text-[#666] mt-1">{job.type} • {job.salary}</p>
-                </button>
+                </Link>
               ))}
             </div>
           </section>
@@ -264,8 +317,16 @@ export default function JobsBoard() {
                   <div>
                     <h1 className="text-3xl font-semibold text-slate-900 mb-2">{activeJob.title}</h1>
                     <div className="text-lg text-slate-700">
-                      <Link to="/company/acme" className="hover:text-[#0a66c2] hover:underline">{activeJob.company}</Link> •{' '}
-                      <Link to="/jobs/preferences" className="hover:text-[#0a66c2] hover:underline">{activeJob.location}</Link>
+                      <Link to={companyProfilePath(activeJob.company)} className="hover:text-[#0a66c2] hover:underline">
+                        {activeJob.company}
+                      </Link>
+                      {' '}•{' '}
+                      <Link
+                        to={jobsSearchPath({ location: activeJob.location })}
+                        className="hover:text-[#0a66c2] hover:underline"
+                      >
+                        {activeJob.location}
+                      </Link>
                     </div>
                     <div className="text-sm text-slate-500 mt-2 font-medium">
                       {activeJob.type} • {activeJob.salary} • {activeJob.postedAt}
@@ -326,7 +387,7 @@ export default function JobsBoard() {
             </div>
 
             <div className="flex gap-3">
-              <Link to="/profile" className="flex items-center gap-2 text-sm font-medium text-indigo-600 bg-white border border-indigo-200 px-4 py-2 rounded-full hover:bg-indigo-50 transition">
+              <Link to={`/profile/${encodeURIComponent(MEMBER_ID)}`} className="flex items-center gap-2 text-sm font-medium text-indigo-600 bg-white border border-indigo-200 px-4 py-2 rounded-full hover:bg-indigo-50 transition">
                 <FileText size={16} /> Look at my resume
               </Link>
               <Link to="/messaging" className="flex items-center gap-2 text-sm font-medium text-slate-600 bg-white border border-slate-200 px-4 py-2 rounded-full hover:bg-slate-50 transition">

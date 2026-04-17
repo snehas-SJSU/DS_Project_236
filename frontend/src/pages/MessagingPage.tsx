@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { MoreHorizontal, SendHorizonal, SquarePen } from 'lucide-react';
+import { ChevronDown, Crown, MoreHorizontal, Search, SendHorizonal, SquarePen, Star } from 'lucide-react';
 import { MEMBER_ID, resolveAvatarUrl } from '../lib/memberProfile';
 import Navbar from '../components/layout/Navbar';
 import { Link, useLocation } from 'react-router-dom';
@@ -11,7 +11,25 @@ type Thread = {
   title: string;
   preview: string;
   participants: string[];
+  /** ISO timestamp from API `last_activity` */
+  lastActivity?: string;
 };
+
+/** LinkedIn-style time in list: time today, else "Mar 5" / full date. */
+function formatThreadListTime(iso?: string): string {
+  if (!iso) return '';
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return '';
+  const now = new Date();
+  const sameDay = d.toDateString() === now.toDateString();
+  if (sameDay) {
+    return d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+  }
+  if (d.getFullYear() === now.getFullYear()) {
+    return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  }
+  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+}
 
 type Message = {
   message_id: string;
@@ -31,6 +49,106 @@ const fallbackPeople: Person[] = [
   { id: 'M-DEMO-02', name: 'Rahul Verma', headline: 'Product Manager at Flux' }
 ];
 
+const MESSAGE_FILTER_CHIPS: { label: string; slug: string }[] = [
+  { label: 'Focused', slug: 'focused' },
+  { label: 'Jobs', slug: 'jobs' },
+  { label: 'Unread', slug: 'unread' },
+  { label: 'Connections', slug: 'connections' },
+  { label: 'InMail', slug: 'inmail' },
+  { label: 'Starred', slug: 'starred' }
+];
+
+function MessagingFooterLinks() {
+  return (
+    <div className="text-center text-[11px] leading-snug text-[#666666]">
+      <div className="flex flex-wrap items-center justify-center gap-x-3 gap-y-1.5">
+        <Link to="/help" className="hover:text-[#0a66c2] hover:underline">
+          About
+        </Link>
+        <Link to="/help" className="hover:text-[#0a66c2] hover:underline">
+          Accessibility
+        </Link>
+        <Link to="/help" className="hover:text-[#0a66c2] hover:underline">
+          Help Center
+        </Link>
+      </div>
+      <div className="mt-1.5 flex flex-wrap items-center justify-center gap-x-3 gap-y-1.5">
+        <button
+          type="button"
+          className="inline-flex items-center gap-0.5 hover:text-[#0a66c2] hover:underline"
+          onClick={() => showToast('Privacy & Terms (demo).', 'info')}
+        >
+          Privacy & Terms <ChevronDown size={12} className="opacity-70" />
+        </button>
+        <Link to="/business" className="hover:text-[#0a66c2] hover:underline">
+          Ad Choices
+        </Link>
+      </div>
+      <div className="mt-1.5 flex flex-wrap items-center justify-center gap-x-3 gap-y-1.5">
+        <Link to="/settings" className="hover:text-[#0a66c2] hover:underline">
+          Advertising
+        </Link>
+        <button
+          type="button"
+          className="inline-flex items-center gap-0.5 hover:text-[#0a66c2] hover:underline"
+          onClick={() => showToast('Business Services (demo).', 'info')}
+        >
+          Business Services <ChevronDown size={12} className="opacity-70" />
+        </button>
+      </div>
+      <div className="mt-1.5 flex flex-wrap items-center justify-center gap-x-3 gap-y-1.5">
+        <Link to="/language" className="hover:text-[#0a66c2] hover:underline">
+          Get the LinkedIn app
+        </Link>
+        <button type="button" className="hover:text-[#0a66c2] hover:underline" onClick={() => showToast('More options coming soon.', 'info')}>
+          More
+        </button>
+      </div>
+      <div className="mt-3 flex items-center justify-center gap-1.5 text-[10px] text-[#777777]">
+        <span className="inline-flex h-4 w-4 items-center justify-center rounded-[2px] bg-[#0a66c2] text-[9px] font-bold leading-none text-white">in</span>
+        <span>LinkedIn Corporation © 2026</span>
+      </div>
+    </div>
+  );
+}
+
+function MessagingRightRail({ memberName, memberPhoto }: { memberName: string; memberPhoto: string }) {
+  const firstName = memberName.trim().split(/\s+/)[0] || 'You';
+  return (
+    <>
+      <section className="li-card relative overflow-hidden p-0">
+        <div className="absolute right-2 top-2 z-10 flex items-center gap-1 text-[11px] text-[#666]">
+          <span className="rounded bg-[#f3f2ef] px-1.5 py-0.5 font-semibold">Ad</span>
+          <button type="button" className="rounded p-1 hover:bg-black/5" aria-label="Ad options" onClick={() => showToast('Ad options coming soon.', 'info')}>
+            <MoreHorizontal size={16} />
+          </button>
+        </div>
+        <div className="bg-gradient-to-b from-[#f3f2ef] to-white px-4 pb-5 pt-10 text-center">
+          <p className="text-sm font-semibold leading-snug text-[#191919]">Premium subscribers are 2.7x more likely to get hired</p>
+          <Link to={`/profile/${encodeURIComponent(MEMBER_ID)}`} className="relative mx-auto mt-4 block h-[72px] w-[72px]">
+            <img src={memberPhoto} alt="" className="h-full w-full rounded-full border-2 border-white object-cover shadow-md" />
+            <span className="absolute -bottom-0.5 left-1/2 flex -translate-x-1/2 items-center gap-0.5 rounded-full bg-[#c9a227] px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white shadow">
+              <Crown size={12} className="shrink-0" /> Premium
+            </span>
+          </Link>
+          <p className="mt-4 text-sm leading-tight text-[#191919]">
+            <span className="font-semibold">{firstName}</span>, boost your job search with Premium
+          </p>
+          <Link
+            to="/premium"
+            className="mt-4 inline-flex rounded-full border-2 border-[#0a66c2] px-5 py-2 text-sm font-semibold text-[#0a66c2] hover:bg-[#edf3f8]"
+          >
+            Try for free
+          </Link>
+        </div>
+      </section>
+      <section className="px-1 pt-1">
+        <MessagingFooterLinks />
+      </section>
+    </>
+  );
+}
+
 export default function MessagingPage() {
   const location = useLocation();
   const [threads, setThreads] = useState<Thread[]>([]);
@@ -39,12 +157,16 @@ export default function MessagingPage() {
   const [loading, setLoading] = useState(true);
   const [draft, setDraft] = useState('');
   const [memberPhoto, setMemberPhoto] = useState<string>(resolveAvatarUrl(undefined, 'Me'));
+  const [memberName, setMemberName] = useState('Sneha Singh');
   const [search, setSearch] = useState('');
   const [people, setPeople] = useState<Person[]>([]);
   const [personNameMap, setPersonNameMap] = useState<Record<string, string>>({});
   const [personHeadlineMap, setPersonHeadlineMap] = useState<Record<string, string>>({});
   const [composeQuery, setComposeQuery] = useState('');
   const [composeToId, setComposeToId] = useState('');
+  const [sending, setSending] = useState(false);
+  const [failedSend, setFailedSend] = useState<{ threadId: string; text: string } | null>(null);
+  const [threadStarred, setThreadStarred] = useState<Record<string, boolean>>({});
   const memberId = MEMBER_ID;
 
   const displayNameFor = (idOrName: string) => personNameMap[idOrName] || idOrName;
@@ -57,22 +179,31 @@ export default function MessagingPage() {
       body: JSON.stringify({ user_id: memberId })
     });
     const data = await res.json().catch(() => []);
-    const mapped = (Array.isArray(data) ? data : []).map((thread: any) => {
+    const mapped: Thread[] = (Array.isArray(data) ? data : []).map((thread: any) => {
       const peerId = thread.participant_a === memberId ? thread.participant_b : thread.participant_a;
       return {
         id: thread.thread_id,
         title: peerId,
         preview: personHeadlineMap[peerId] || 'Message conversation',
-        participants: [thread.participant_a, thread.participant_b]
+        participants: [thread.participant_a, thread.participant_b],
+        lastActivity: thread.last_activity
       };
     });
-    const dedupedByPeer: Thread[] = [];
-    const seen = new Set<string>();
-    for (const thread of mapped) {
-      if (seen.has(thread.title)) continue;
-      seen.add(thread.title);
-      dedupedByPeer.push(thread);
+    const byPeer = new Map<string, Thread>();
+    for (const t of mapped) {
+      const prev = byPeer.get(t.title);
+      if (!prev) {
+        byPeer.set(t.title, t);
+      } else {
+        const ts = (x: Thread) => (x.lastActivity ? new Date(x.lastActivity).getTime() : 0);
+        if (ts(t) >= ts(prev)) byPeer.set(t.title, t);
+      }
     }
+    const dedupedByPeer = Array.from(byPeer.values()).sort(
+      (a, b) =>
+        (b.lastActivity ? new Date(b.lastActivity).getTime() : 0) -
+        (a.lastActivity ? new Date(a.lastActivity).getTime() : 0)
+    );
     setThreads(dedupedByPeer);
     if (dedupedByPeer.length && !activeThreadId) {
       setActiveThreadId(dedupedByPeer[0].id);
@@ -131,6 +262,7 @@ export default function MessagingPage() {
       .then((data) => {
         if (!data || data.error) return;
         setMemberPhoto(resolveAvatarUrl(data.profile_photo_url, data.name));
+        setMemberName(data.name || 'Sneha Singh');
       })
       .catch(() => undefined);
   }, []);
@@ -165,6 +297,8 @@ export default function MessagingPage() {
     if (location.pathname.endsWith('/jobs')) return 'jobs';
     if (location.pathname.endsWith('/unread')) return 'unread';
     if (location.pathname.endsWith('/connections')) return 'connections';
+    if (location.pathname.endsWith('/inmail')) return 'inmail';
+    if (location.pathname.endsWith('/starred')) return 'starred';
     return 'focused';
   }, [location.pathname]);
   const filteredThreads = useMemo(() => {
@@ -172,6 +306,8 @@ export default function MessagingPage() {
       if (activeFilter === 'jobs') return /recruit|job|hiring/i.test(thread.title);
       if (activeFilter === 'connections') return true;
       if (activeFilter === 'unread') return thread.preview.toLowerCase().includes('open');
+      if (activeFilter === 'inmail') return true;
+      if (activeFilter === 'starred') return true;
       return true;
     });
     const q = search.trim().toLowerCase();
@@ -215,32 +351,64 @@ export default function MessagingPage() {
     showToast(`Conversation started with ${receiverName || displayNameFor(receiverId)}.`, 'success');
   }
 
+  async function sendMessage(threadId: string, text: string) {
+    setSending(true);
+    const sendRes = await fetch('http://localhost:4000/api/messages/send', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        thread_id: threadId,
+        sender_id: memberId,
+        text
+      })
+    });
+    if (!sendRes.ok) {
+      setFailedSend({ threadId, text });
+      setSending(false);
+      showToast('Message send failed. Retry once server is back.', 'error');
+      return false;
+    }
+    setFailedSend(null);
+    const refreshed = await fetch('http://localhost:4000/api/messages/list', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ thread_id: threadId, limit: 100 })
+    });
+    const refreshedData = await refreshed.json().catch(() => []);
+    setMessages(Array.isArray(refreshedData) ? refreshedData : []);
+    addActivity(`Sent a message to ${displayNameFor(activeThread?.title || composeToId || 'connection')}`);
+    showToast('Message sent.', 'success');
+    setSending(false);
+    return true;
+  }
+
   return (
     <div className="min-h-screen bg-[#f3f2ef]">
       <Navbar />
-      <div className="mx-auto max-w-[1128px] px-3 py-4">
-        <div className="grid grid-cols-1 gap-4 lg:grid-cols-12">
-          <section className="li-card overflow-hidden p-0 lg:col-span-8">
-            <div className="grid h-[calc(100vh-8rem)] grid-cols-1 md:grid-cols-12">
-              <section className="border-b border-slate-200 md:col-span-5 md:border-b-0 md:border-r">
-                <div className="border-b border-slate-200 px-4 py-3">
+      <div className="mx-auto max-w-[1320px] px-3 pb-8 pt-2">
+        <div className="grid grid-cols-1 items-start gap-4 md:grid-cols-12">
+          <section className="li-card overflow-hidden bg-white p-0 md:col-span-8">
+            <div className="grid h-[calc(100vh-7rem)] min-h-[420px] grid-cols-1 md:grid-cols-12">
+              <section className="border-b border-[#e0dfdc] bg-white md:col-span-4 md:border-b-0 md:border-r md:border-[#e0dfdc]">
+                <div className="border-b border-[#e0dfdc] bg-white px-4 py-3">
                   <div className="mb-2 flex items-center justify-between">
-                    <h2 className="font-semibold text-slate-900">Messaging</h2>
-                    <div className="flex items-center gap-1">
+                    <h2 className="text-xl font-semibold text-[#191919]">Messaging</h2>
+                    <div className="flex items-center gap-0.5">
                       <button
                         type="button"
                         title="More actions"
-                        className="rounded p-1 text-slate-500 hover:bg-slate-100 hover:text-slate-700"
+                        className="rounded-full p-2 text-[#666666] hover:bg-[#f3f2ef]"
+                        onClick={() => showToast('Folder settings coming soon.', 'info')}
                       >
-                        <MoreHorizontal size={16} />
+                        <MoreHorizontal size={20} />
                       </button>
                       <Link
                         to="/messaging/compose"
                         title="Compose message"
-                        className="inline-flex items-center gap-1 rounded p-1 text-slate-600 hover:bg-slate-100 hover:text-slate-900"
+                        className="inline-flex items-center rounded-full p-2 text-[#666666] hover:bg-[#f3f2ef]"
                       >
-                        <SquarePen size={16} />
-                        <span className="text-xs font-semibold">Compose</span>
+                        <SquarePen size={20} />
+                        <span className="sr-only">Compose message</span>
                       </Link>
                     </div>
                   </div>
@@ -284,23 +452,34 @@ export default function MessagingPage() {
                       </Link>
                     </div>
                   ) : null}
-                  <input
-                    type="text"
-                    placeholder="Search messages"
-                    value={search}
-                    onChange={(e) => setSearch(e.target.value)}
-                    className="w-full rounded bg-[#edf3f8] px-3 py-1.5 text-sm focus:outline-none"
-                  />
+                  <div className="relative">
+                    <Search size={16} className="pointer-events-none absolute left-3 top-2 text-[#666666]" />
+                    <input
+                      type="text"
+                      placeholder="Search messages"
+                      value={search}
+                      onChange={(e) => setSearch(e.target.value)}
+                      className="w-full rounded border border-transparent bg-[#edf3f8] py-2 pl-9 pr-3 text-sm placeholder:text-[#666] focus:border-[#0a66c2] focus:outline-none"
+                    />
+                  </div>
                   <div className="mt-2 flex flex-wrap gap-2 text-xs">
-                    {['Focused', 'Jobs', 'Unread', 'Connections'].map((chip) => (
-                      <Link
-                        key={chip}
-                        to={`/messaging/filter/${chip.toLowerCase()}`}
-                        className="rounded-full border border-slate-300 px-2.5 py-1 font-semibold text-slate-700 hover:bg-slate-100"
-                      >
-                        {chip}
-                      </Link>
-                    ))}
+                    {MESSAGE_FILTER_CHIPS.map(({ label, slug }) => {
+                      const isActive = activeFilter === slug;
+                      return (
+                        <Link
+                          key={slug}
+                          to={`/messaging/filter/${slug}`}
+                          className={`inline-flex items-center gap-0.5 rounded-full border px-2.5 py-1.5 font-semibold transition ${
+                            isActive
+                              ? 'border-[#057642] bg-[#057642] text-white shadow-sm'
+                              : 'border-[#191919] bg-white text-[#191919] hover:bg-[#f3f2ef]'
+                          }`}
+                        >
+                          {label}
+                          {slug === 'focused' ? <ChevronDown size={14} strokeWidth={2.5} className="opacity-90" /> : null}
+                        </Link>
+                      );
+                    })}
                   </div>
                 </div>
                 <div className="overflow-y-auto">
@@ -342,35 +521,83 @@ export default function MessagingPage() {
                   ) : filteredThreads.map((thread) => (
                     <button
                       key={thread.id}
-                      className={`w-full border-b px-4 py-3 text-left transition ${
-                        activeThreadId === thread.id ? 'bg-blue-50 border-blue-100' : 'border-slate-100 hover:bg-slate-50'
+                      type="button"
+                      className={`w-full border-b border-[#e0dfdc] px-4 py-3 text-left transition ${
+                        activeThreadId === thread.id ? 'bg-[#eef3f8]' : 'border-[#e0dfdc] hover:bg-[#f9fafb]'
                       }`}
                       onClick={() => setActiveThreadId(thread.id)}
                     >
-                      <div className="flex items-center gap-3">
-                        <div className="h-10 w-10 overflow-hidden rounded-full border border-slate-200 bg-slate-200">
-                          <img src={peerAvatar(thread.title)} alt={thread.title} className="h-full w-full object-cover" />
+                      <div className="flex items-start gap-3">
+                        <div className="h-12 w-12 shrink-0 overflow-hidden rounded-full border border-[#e0dfdc] bg-[#f3f2ef]">
+                          <img src={peerAvatar(thread.title)} alt="" className="h-full w-full object-cover" />
                         </div>
-                        <div className="min-w-0">
-                          <p className="font-medium text-slate-900">{displayNameFor(thread.title)}</p>
-                          <p className="truncate text-sm text-slate-600">{thread.preview}</p>
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-start justify-between gap-2">
+                            <p className="text-[15px] font-semibold leading-tight text-[#191919]">{displayNameFor(thread.title)}</p>
+                            <time className="shrink-0 text-xs text-[#666666]" dateTime={thread.lastActivity}>
+                              {formatThreadListTime(thread.lastActivity)}
+                            </time>
+                          </div>
+                          <p className="mt-0.5 line-clamp-2 text-sm leading-snug text-[#666666]">{thread.preview}</p>
                         </div>
                       </div>
                     </button>
                   ))}
                 </div>
               </section>
-              <section className="md:col-span-7">
-                <div className="border-b border-slate-200 px-4 py-3">
-                  <p className="font-semibold text-slate-900">{activeThread ? displayNameFor(activeThread.title) : 'Select a conversation'}</p>
+              <section className="flex min-h-0 flex-col bg-white md:col-span-8">
+                <div className="flex shrink-0 items-start justify-between gap-2 border-b border-[#e0dfdc] px-4 py-3">
+                  <div className="min-w-0">
+                    {activeThread ? (
+                      <>
+                        <Link
+                          to={`/profile/${encodeURIComponent(activeThread.title)}`}
+                          className="text-lg font-semibold text-[#191919] hover:text-[#0a66c2] hover:underline"
+                        >
+                          {displayNameFor(activeThread.title)}
+                        </Link>
+                        <p className="mt-0.5 text-sm text-[#666666]">
+                          {personHeadlineMap[activeThread.title] || 'LinkedIn member'}
+                        </p>
+                      </>
+                    ) : (
+                      <p className="text-lg font-semibold text-[#191919]">Select a conversation</p>
+                    )}
+                  </div>
                   {activeThread ? (
-                    <p className="text-xs text-slate-500">
-                      {personHeadlineMap[activeThread.title] || '1st degree connection'}
-                    </p>
+                    <div className="flex shrink-0 items-center gap-1">
+                      <button
+                        type="button"
+                        title={threadStarred[activeThread.id] ? 'Unstar conversation' : 'Star conversation'}
+                        className="rounded-full p-2 text-[#666666] hover:bg-[#f3f2ef]"
+                        onClick={() =>
+                          setThreadStarred((prev) => ({
+                            ...prev,
+                            [activeThread.id]: !prev[activeThread.id]
+                          }))
+                        }
+                      >
+                        <Star
+                          size={20}
+                          className={
+                            threadStarred[activeThread.id] ? 'fill-[#c37d16] text-[#c37d16]' : 'text-[#666666]'
+                          }
+                          strokeWidth={threadStarred[activeThread.id] ? 0 : 1.75}
+                        />
+                      </button>
+                      <button
+                        type="button"
+                        title="Conversation options"
+                        className="rounded-full p-2 text-[#666666] hover:bg-[#f3f2ef]"
+                        onClick={() => showToast('Conversation options coming soon.', 'info')}
+                      >
+                        <MoreHorizontal size={20} />
+                      </button>
+                    </div>
                   ) : null}
                 </div>
-                <div className="h-[calc(100%-3.5rem)] p-4">
-                  <div className="h-[calc(100%-3.5rem)] space-y-3 overflow-y-auto rounded-lg bg-slate-50 p-4 text-sm text-slate-600">
+                <div className="flex min-h-0 flex-1 flex-col p-0 md:p-4">
+                  <div className="min-h-0 flex-1 space-y-3 overflow-y-auto bg-[#f3f2ef] p-4 text-sm text-[#191919] md:rounded-md">
                     {messages.length === 0 ? (
                       <p>No messages yet.</p>
                     ) : messages.map((msg) => (
@@ -381,22 +608,40 @@ export default function MessagingPage() {
                           </div>
                         )}
                         <div
-                          className={`max-w-[80%] rounded-xl px-3 py-2 ${
-                            msg.sender_id === memberId ? 'ml-auto bg-blue-600 text-white' : 'bg-white text-slate-800'
+                          className={`max-w-[80%] rounded-xl px-3 py-2 shadow-sm ${
+                            msg.sender_id === memberId ? 'ml-auto bg-[#0a66c2] text-white' : 'bg-white text-[#191919]'
                           }`}
                         >
                           <p>{msg.message_text}</p>
                         </div>
                         {msg.sender_id === memberId && (
-                          <div className="h-7 w-7 overflow-hidden rounded-full border border-slate-200 bg-white">
+                          <Link
+                            to={`/profile/${encodeURIComponent(memberId)}`}
+                            className="h-7 w-7 overflow-hidden rounded-full border border-slate-200 bg-white"
+                          >
                             <img src={memberPhoto} alt="Me" className="h-full w-full object-cover" />
-                          </div>
+                          </Link>
                         )}
                       </div>
                     ))}
                   </div>
+                  {failedSend ? (
+                    <div className="mt-2 flex items-center justify-between rounded-md border border-[#f2c3c3] bg-[#fff4f4] px-3 py-2 text-xs text-[#9f2d2d]">
+                      <span>Last message failed to send.</span>
+                      <button
+                        type="button"
+                        className="font-semibold text-[#0a66c2] hover:underline"
+                        onClick={async () => {
+                          const ok = await sendMessage(failedSend.threadId, failedSend.text);
+                          if (ok) showToast('Message retry succeeded.', 'success');
+                        }}
+                      >
+                        Retry
+                      </button>
+                    </div>
+                  ) : null}
                   <form
-                    className="mt-3 flex gap-2"
+                    className="mt-0 flex gap-2 border-t border-[#e0dfdc] bg-white px-4 py-3"
                     onSubmit={async (event) => {
                       event.preventDefault();
                       if (!draft.trim()) return;
@@ -430,30 +675,10 @@ export default function MessagingPage() {
                         showToast('Select a conversation or use Compose.', 'info');
                         return;
                       }
-
-                      const sendRes = await fetch('http://localhost:4000/api/messages/send', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({
-                          thread_id: threadId,
-                          sender_id: memberId,
-                          text: draft.trim()
-                        })
-                      });
-                      if (!sendRes.ok) {
-                        showToast('Message could not be sent right now.', 'error');
-                        return;
-                      }
+                      const text = draft.trim();
+                      const sentOk = await sendMessage(threadId, text);
+                      if (!sentOk) return;
                       setDraft('');
-                      const refreshed = await fetch('http://localhost:4000/api/messages/list', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ thread_id: threadId, limit: 100 })
-                      });
-                      const refreshedData = await refreshed.json().catch(() => []);
-                      setMessages(Array.isArray(refreshedData) ? refreshedData : []);
-                      addActivity(`Sent a message to ${displayNameFor(activeThread?.title || composeToId || 'connection')}`);
-                      showToast('Message sent.', 'success');
                     }}
                   >
                     <input
@@ -464,37 +689,25 @@ export default function MessagingPage() {
                     />
                     <button
                       type="submit"
-                      className="inline-flex items-center gap-1 rounded-full bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700"
+                      disabled={sending}
+                      className="inline-flex items-center gap-1 rounded-full bg-[#0a66c2] px-4 py-2 text-sm font-semibold text-white hover:bg-[#004182] disabled:cursor-not-allowed disabled:bg-blue-300"
                     >
                       <SendHorizonal size={16} />
-                      Send
+                      {sending ? 'Sending...' : 'Send'}
                     </button>
                   </form>
                 </div>
               </section>
             </div>
           </section>
-          <aside className="space-y-3 lg:col-span-4">
-            <section className="li-card p-0 overflow-hidden">
-              <div className="h-28 bg-gradient-to-r from-[#f8c44f] to-[#d9920b]" />
-              <div className="p-4">
-                <p className="text-sm font-semibold text-[#191919]">Level up your profile visibility</p>
-                <p className="mt-1 text-xs text-[#666]">Grow your network and get recruiter responses faster.</p>
-                <Link to="/profile" className="mt-3 inline-block rounded-full border border-[#0a66c2] px-3 py-1.5 text-sm font-semibold text-[#0a66c2] hover:bg-[#edf3f8]">
-                  View profile
-                </Link>
-              </div>
-            </section>
-            <section className="li-card p-4 text-xs text-[#666]">
-              <p className="font-semibold text-[#191919] mb-2">Quick links</p>
-              <div className="flex flex-wrap gap-x-3 gap-y-1">
-                <Link to="/help" className="hover:text-[#191919]">Help Center</Link>
-                <Link to="/settings" className="hover:text-[#191919]">Privacy</Link>
-                <Link to="/saved" className="hover:text-[#191919]">Saved</Link>
-                <Link to="/network" className="hover:text-[#191919]">My Network</Link>
-              </div>
-            </section>
+          <aside className="hidden min-w-0 md:col-span-4 md:block">
+            <div className="sticky top-[56px] space-y-3">
+              <MessagingRightRail memberName={memberName} memberPhoto={memberPhoto} />
+            </div>
           </aside>
+        </div>
+        <div className="mt-6 border-t border-[#e0dfdc] pt-4 md:hidden">
+          <MessagingFooterLinks />
         </div>
       </div>
     </div>
