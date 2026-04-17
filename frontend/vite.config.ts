@@ -6,9 +6,11 @@ export default defineConfig({
   plugins: [react()],
   server: {
     port: 3000,
+    // Allow Cloudflare quick tunnels (*.trycloudflare.com) during demos.
+    allowedHosts: ['.trycloudflare.com'],
     proxy: {
       '/api': {
-        target: 'http://localhost:8000', // Proxy to Gateway
+        target: 'http://localhost:4000', // Proxy to API Gateway
         changeOrigin: true
       }
     }
