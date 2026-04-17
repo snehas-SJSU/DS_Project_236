@@ -152,7 +152,7 @@ npm run dev
 1. Terminal 1 (repo root) - install + infrastructure + backend:
 
 ```bash
-cd "/Users/snehasingh/Desktop/LinkedIn Simulation"
+cd "<repo-root>"
 npm run bootstrap
 pip install -r requirements.txt
 docker compose up -d
@@ -162,16 +162,52 @@ npm run start:all
 2. Terminal 2 - frontend:
 
 ```bash
-cd "/Users/snehasingh/Desktop/LinkedIn Simulation/frontend"
+cd "<repo-root>/frontend"
 npm run dev
 ```
 
 3. Terminal 3 (optional) - restart member API if auth/login issues:
 
 ```bash
-cd "/Users/snehasingh/Desktop/LinkedIn Simulation"
+cd "<repo-root>"
 npm run dev:member-api
 ```
+
+### 2.7 Quick start (same flow, shorter)
+
+Replace `<repo-root>` with your cloned project folder (the directory that contains `package.json` and `frontend/`).
+
+**Terminal 1** (first time) — install deps, start Docker infra, start all backend processes:
+
+```bash
+cd <repo-root>
+npm run bootstrap
+pip install -r requirements.txt
+docker compose up -d
+npm run start:all
+```
+
+**Terminal 1** (daily)
+
+```bash
+cd <repo-root>
+docker compose up -d
+npm run start:all
+```
+
+**Terminal 2** — start the React UI
+
+```bash
+cd <repo-root>/frontend
+npm run dev
+```
+
+### 2.8 Open and test
+
+1. Browser: [http://localhost:3000](http://localhost:3000) — sign in at `/login/email`, then open `/feed`.
+2. API docs: [http://localhost:4000/docs](http://localhost:4000/docs).
+
+`docker compose up -d` starts Zookeeper, Kafka, MySQL, MongoDB, Redis (see **§6.0** for ports).
 
 ---
 
@@ -184,7 +220,7 @@ This means each teammate gets the same local test user even with a fresh DB.
 1. Email: `admin@test.com`
 2. Password: `admin123`
 
-If login fails, restart member API once: or you can signup with new user
+If login fails, restart member API once, or sign up with a new user.
 
 ```bash
 npm run dev:member-api
@@ -275,6 +311,12 @@ chmod +x scripts/smoke-test.sh
    - `npm run dev:app-api`
    - `npm run dev:app-worker`
 7. Premium page aliases supported: `/premium`, `/try-premium`, `/premium/free-trial`, `/premium/trial`.
+
+### 9.1 Additional port/startup diagnostics
+
+```bash
+lsof -nP -iTCP -sTCP:LISTEN | grep -E '400[0-6]'
+```
 
 ---
 
