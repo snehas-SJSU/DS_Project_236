@@ -67,7 +67,9 @@ export default function NetworkCollectionsPage() {
           {data.items.map((item) => (
             <div key={item.name} className="flex items-center justify-between rounded-lg border border-slate-200 p-3">
               <div>
-                <p className="font-semibold text-slate-900">{item.name}</p>
+                <Link to={item.to} className="font-semibold text-slate-900 hover:text-[#0a66c2] hover:underline">
+                  {item.name}
+                </Link>
                 <p className="text-sm text-slate-600">{item.meta}</p>
               </div>
               <Link to={item.to} className="rounded-full border border-[#0a66c2] px-3 py-1 text-sm font-semibold text-[#0a66c2] hover:bg-[#edf3f8]">

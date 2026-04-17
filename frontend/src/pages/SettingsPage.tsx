@@ -5,12 +5,14 @@ type Settings = {
   profileVisibility: boolean;
   openToWork: boolean;
   allowMessages: boolean;
+  inAppNotificationsEnabled: boolean;
 };
 
 const defaults: Settings = {
   profileVisibility: true,
   openToWork: true,
-  allowMessages: true
+  allowMessages: true,
+  inAppNotificationsEnabled: true
 };
 
 export default function SettingsPage() {
@@ -39,6 +41,14 @@ export default function SettingsPage() {
         <label className="flex items-center justify-between rounded-lg border border-slate-200 p-3 text-sm">
           <span>Allow messages from anyone</span>
           <input type="checkbox" checked={settings.allowMessages} onChange={(e) => setSettings({ ...settings, allowMessages: e.target.checked })} />
+        </label>
+        <label className="flex items-center justify-between rounded-lg border border-slate-200 p-3 text-sm">
+          <span>In-app notifications enabled</span>
+          <input
+            type="checkbox"
+            checked={settings.inAppNotificationsEnabled}
+            onChange={(e) => setSettings({ ...settings, inAppNotificationsEnabled: e.target.checked })}
+          />
         </label>
       </div>
 

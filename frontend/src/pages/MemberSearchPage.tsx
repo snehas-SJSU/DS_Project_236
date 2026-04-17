@@ -76,6 +76,10 @@ export default function MemberSearchPage() {
   useEffect(() => {
     runSearch().catch(() => undefined);
     refreshConnectionState().catch(() => undefined);
+    const timer = window.setInterval(() => {
+      refreshConnectionState().catch(() => undefined);
+    }, 4000);
+    return () => window.clearInterval(timer);
   }, []);
 
   const buttonStateFor = useMemo(

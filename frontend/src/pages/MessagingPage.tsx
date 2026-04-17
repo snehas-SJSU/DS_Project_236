@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { ChevronDown, Crown, MoreHorizontal, Search, SendHorizonal, SquarePen, Star } from 'lucide-react';
 import { MEMBER_ID, resolveAvatarUrl } from '../lib/memberProfile';
 import Navbar from '../components/layout/Navbar';
-import { Link, useLocation } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { addActivity } from '../lib/localData';
 import { showToast } from '../lib/toast';
 
@@ -45,8 +45,8 @@ type Person = {
 };
 
 const fallbackPeople: Person[] = [
-  { id: 'M-DEMO-01', name: 'Nina Shah', headline: 'Backend Engineer at Orbit' },
-  { id: 'M-DEMO-02', name: 'Rahul Verma', headline: 'Product Manager at Flux' }
+  { id: 'M-DEMO-01', name: 'Alex Chen', headline: 'Senior Engineer at Acme' },
+  { id: 'M-DEMO-02', name: 'Priya Kapoor', headline: 'Recruiter at Nova Labs' }
 ];
 
 const MESSAGE_FILTER_CHIPS: { label: string; slug: string }[] = [
@@ -151,6 +151,7 @@ function MessagingRightRail({ memberName, memberPhoto }: { memberName: string; m
 
 export default function MessagingPage() {
   const location = useLocation();
+  const navigate = useNavigate();
   const [threads, setThreads] = useState<Thread[]>([]);
   const [activeThreadId, setActiveThreadId] = useState<string>('');
   const [messages, setMessages] = useState<Message[]>([]);
@@ -245,12 +246,12 @@ export default function MessagingPage() {
       .catch(() => {
         setPeople(fallbackPeople);
         setPersonNameMap({
-          'M-DEMO-01': 'Nina Shah',
-          'M-DEMO-02': 'Rahul Verma'
+          'M-DEMO-01': 'Alex Chen',
+          'M-DEMO-02': 'Priya Kapoor'
         });
         setPersonHeadlineMap({
-          'M-DEMO-01': 'Backend Engineer at Orbit',
-          'M-DEMO-02': 'Product Manager at Flux'
+          'M-DEMO-01': 'Senior Engineer at Acme',
+          'M-DEMO-02': 'Recruiter at Nova Labs'
         });
       });
     fetch('http://localhost:4000/api/members/get', {
@@ -265,6 +266,10 @@ export default function MessagingPage() {
         setMemberName(data.name || 'Sneha Singh');
       })
       .catch(() => undefined);
+    const timer = window.setInterval(() => {
+      loadThreads().catch(() => undefined);
+    }, 4000);
+    return () => window.clearInterval(timer);
   }, []);
 
   useEffect(() => {
@@ -278,14 +283,19 @@ export default function MessagingPage() {
 
   useEffect(() => {
     if (!activeThreadId) return;
-    fetch('http://localhost:4000/api/messages/list', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ thread_id: activeThreadId, limit: 100 })
-    })
-      .then((res) => res.json())
-      .then((data) => setMessages(Array.isArray(data) ? data : []))
-      .catch(() => setMessages([]));
+    const loadActiveMessages = () =>
+      fetch('http://localhost:4000/api/messages/list', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ thread_id: activeThreadId, limit: 100 })
+      })
+        .then((res) => res.json())
+        .then((data) => setMessages(Array.isArray(data) ? data : []))
+        .catch(() => setMessages([]));
+
+    loadActiveMessages();
+    const timer = window.setInterval(loadActiveMessages, 3000);
+    return () => window.clearInterval(timer);
   }, [activeThreadId]);
 
   const activeThread = useMemo(
@@ -440,7 +450,16 @@ export default function MessagingPage() {
                                 <img src={peerAvatar(p.name)} alt={p.name} className="h-full w-full object-cover" />
                               </div>
                               <div className="min-w-0">
-                                <p className="truncate text-xs font-semibold text-slate-900">{p.name}</p>
+                                <button
+                                  type="button"
+                                  className="truncate text-left text-xs font-semibold text-slate-900 hover:text-[#0a66c2] hover:underline"
+                                  onClick={(event) => {
+                                    event.stopPropagation();
+                                    navigate(`/profile/${encodeURIComponent(p.id)}`);
+                                  }}
+                                >
+                                  {p.name}
+                                </button>
                                 <p className="truncate text-[11px] text-slate-500">{p.headline || p.id}</p>
                               </div>
                             </button>
@@ -510,7 +529,16 @@ export default function MessagingPage() {
                                   <img src={peerAvatar(p.name)} alt={p.name} className="h-full w-full object-cover" />
                                 </div>
                                 <div className="min-w-0">
-                                  <p className="truncate text-xs font-semibold text-slate-900">{p.name}</p>
+                                  <button
+                                    type="button"
+                                    className="truncate text-left text-xs font-semibold text-slate-900 hover:text-[#0a66c2] hover:underline"
+                                    onClick={(event) => {
+                                      event.stopPropagation();
+                                      navigate(`/profile/${encodeURIComponent(p.id)}`);
+                                    }}
+                                  >
+                                    {p.name}
+                                  </button>
                                   <p className="truncate text-[11px] text-slate-500">{p.headline || p.id}</p>
                                 </div>
                               </button>
@@ -533,7 +561,16 @@ export default function MessagingPage() {
                         </div>
                         <div className="min-w-0 flex-1">
                           <div className="flex items-start justify-between gap-2">
-                            <p className="text-[15px] font-semibold leading-tight text-[#191919]">{displayNameFor(thread.title)}</p>
+                            <button
+                              type="button"
+                              className="text-left text-[15px] font-semibold leading-tight text-[#191919] hover:text-[#0a66c2] hover:underline"
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                navigate(`/profile/${encodeURIComponent(thread.title)}`);
+                              }}
+                            >
+                              {displayNameFor(thread.title)}
+                            </button>
                             <time className="shrink-0 text-xs text-[#666666]" dateTime={thread.lastActivity}>
                               {formatThreadListTime(thread.lastActivity)}
                             </time>

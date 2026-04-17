@@ -1,6 +1,6 @@
 # Project Status (Single Source)
 
-Last updated: profile parity and interaction refinement pass.
+Last updated: dynamic in-app realtime-style behavior and UI parity pass.
 
 ## Scope status
 
@@ -20,6 +20,10 @@ Last updated: profile parity and interaction refinement pass.
 - Frontend routing/link wiring completed across major pages.
 - UX consistency updates: toast-based feedback, functional Premium/Language/Job Post/Company pages, and notification read-state persistence.
 - Profile UX updates: LinkedIn-style profile/public-profile routing, dynamic profile navigation from avatars/names, improved jobs link behavior, and section-level edit controls.
+- Feed and posting updates: interactive post composer modal (start post, media attach, schedule/audience options, AI rewrite demo) with immediate in-app feed visibility.
+- Notifications and messaging updates: API-driven in-app notifications + polling refresh, connection/request list auto-refresh, and messaging threads/messages auto-refresh.
+- Permission hardening: profile language/public URL edit controls visible only on own profile; hidden for other profiles.
+- Frontend runtime hardening: centralized API base URL adaptation via frontend fetch bootstrap (`VITE_API_BASE_URL` support).
 - Reliability handling: duplicate email, duplicate application, closed-job apply checks, message retry, Kafka idempotency guards.
 - Auth: email/password signup/login/logout implemented with JWT bearer tokens.
 - Backend stabilization: job-service schema compatibility migration for legacy MySQL (`industry`, `remote_mode`, `seniority_level`, `employment_type`, counts columns) to keep workers healthy across fresh and old DB states.
@@ -32,6 +36,7 @@ Last updated: profile parity and interaction refinement pass.
 - Apply-to-closed-job returns `JOB_CLOSED`.
 - Premium navigation hardened with alias redirects to `/premium` (`/try-premium`, `/premium/free-trial`, `/premium/trial`).
 - Manual profile smoke checks passed for `/profile` and `/profile/:memberId` route rendering plus connection-action API behavior.
+- Dynamic flow checks passed for profile update persistence, job posting/search visibility, and connect→accept lifecycle validation.
 
 ## Pending note (auth)
 

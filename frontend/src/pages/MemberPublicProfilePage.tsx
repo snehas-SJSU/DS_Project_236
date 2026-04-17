@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { MapPin } from 'lucide-react';
+import { Briefcase, GraduationCap, MapPin } from 'lucide-react';
 import { Link, Navigate, useParams } from 'react-router-dom';
 import { MEMBER_ID, resolveAvatarUrl } from '../lib/memberProfile';
 import { addActivity } from '../lib/localData';
@@ -15,24 +15,30 @@ type ProfileData = {
   summary?: string;
   profile_photo_url?: string;
   skills?: string[];
+  experience?: Array<{ role?: string; company?: string; period?: string; description?: string }>;
+  education?: Array<{ school?: string; degree?: string; period?: string }>;
 };
 
 const fallbackProfiles: Record<string, ProfileData> = {
   'M-DEMO-01': {
     member_id: 'M-DEMO-01',
-    name: 'Nina Shah',
-    headline: 'Backend Engineer at Orbit',
+    name: 'Alex Chen',
+    headline: 'Senior Engineer at Acme',
     location: 'San Jose, CA',
     about: 'Distributed systems engineer focused on Kafka and reliability.',
-    skills: ['Node.js', 'Kafka', 'MySQL']
+    skills: ['Node.js', 'Kafka', 'MySQL'],
+    experience: [{ role: 'Senior Engineer', company: 'Acme', period: '2021 - Present', description: 'Building scalable backend systems and Kafka-based workflows.' }],
+    education: [{ school: 'San Jose State University', degree: 'MS, Software Engineering', period: '2019 - 2021' }]
   },
   'M-DEMO-02': {
     member_id: 'M-DEMO-02',
-    name: 'Rahul Verma',
-    headline: 'Product Manager at Flux',
+    name: 'Priya Kapoor',
+    headline: 'Recruiter at Nova Labs',
     location: 'San Francisco, CA',
-    about: 'Product leader for B2B collaboration tools.',
-    skills: ['Roadmapping', 'Analytics', 'Go-to-market']
+    about: 'Recruiter focused on backend and distributed systems talent.',
+    skills: ['Recruiting', 'Hiring', 'Talent strategy'],
+    experience: [{ role: 'Lead Recruiter', company: 'Nova Labs', period: '2022 - Present', description: 'Hiring for backend and distributed systems roles.' }],
+    education: [{ school: 'University of California', degree: 'BA, Communication', period: '2015 - 2019' }]
   }
 };
 
@@ -84,7 +90,9 @@ export default function MemberPublicProfilePage() {
                   about: memberData.about || memberData.summary || '',
                   summary: memberData.summary || '',
                   profile_photo_url: memberData.profile_photo_url,
-                  skills: Array.isArray(memberData.skills) ? memberData.skills : []
+                  skills: Array.isArray(memberData.skills) ? memberData.skills : [],
+                  experience: Array.isArray(memberData.experience) ? memberData.experience : [],
+                  education: Array.isArray(memberData.education) ? memberData.education : []
                 }
               : fallbackProfiles[memberId] || null;
           setMember(profile);
@@ -97,8 +105,12 @@ export default function MemberPublicProfilePage() {
       }
     }
     if (memberId) load();
+    const timer = window.setInterval(() => {
+      if (memberId) load();
+    }, 4000);
     return () => {
       cancelled = true;
+      window.clearInterval(timer);
     };
   }, [memberId, viewerId]);
 
@@ -183,8 +195,66 @@ export default function MemberPublicProfilePage() {
           </div>
         </section>
         <section className="li-card p-5">
+          <h2 className="text-sm font-semibold text-slate-900">Suggested for you</h2>
+          <p className="text-xs text-slate-500">Based on this profile</p>
+          <div className="mt-3 grid gap-3 md:grid-cols-2">
+            <div className="rounded-lg border border-slate-200 p-3">
+              <p className="text-sm font-semibold text-slate-900">Shared connections</p>
+              <p className="mt-1 text-xs text-slate-600">Check mutual connections in Network.</p>
+            </div>
+            <div className="rounded-lg border border-slate-200 p-3">
+              <p className="text-sm font-semibold text-slate-900">Message this member</p>
+              <p className="mt-1 text-xs text-slate-600">Reach out directly from Messaging.</p>
+            </div>
+          </div>
+        </section>
+        <section className="li-card p-5">
           <h2 className="text-lg font-semibold text-slate-900">About</h2>
           <p className="mt-2 text-sm leading-relaxed text-slate-700">{member.about || member.summary || 'No about section yet.'}</p>
+        </section>
+        <section className="li-card p-5">
+          <h2 className="text-lg font-semibold text-slate-900">Activity</h2>
+          <p className="mt-2 text-sm font-semibold text-[#0a66c2]">{member.name} posted recently</p>
+          <p className="text-xs text-slate-600">Public posts and interactions appear here.</p>
+        </section>
+        <section className="li-card p-5">
+          <div className="mb-4 flex items-center gap-2">
+            <Briefcase size={18} className="text-slate-500" />
+            <h2 className="text-lg font-semibold text-slate-900">Experience</h2>
+          </div>
+          {(member.experience || []).length === 0 ? (
+            <p className="text-sm text-slate-500">No experience added yet.</p>
+          ) : (
+            <div className="space-y-4">
+              {(member.experience || []).map((exp, idx) => (
+                <div key={`${exp.company}-${idx}`} className="border-b border-slate-100 pb-3 last:border-b-0 last:pb-0">
+                  <p className="font-semibold text-slate-900">{exp.role || 'Role'}</p>
+                  <p className="text-sm text-slate-600">{exp.company || 'Company'}</p>
+                  <p className="text-xs text-slate-500">{exp.period || ''}</p>
+                  {exp.description ? <p className="mt-1 text-sm text-slate-700">{exp.description}</p> : null}
+                </div>
+              ))}
+            </div>
+          )}
+        </section>
+        <section className="li-card p-5">
+          <div className="mb-4 flex items-center gap-2">
+            <GraduationCap size={18} className="text-slate-500" />
+            <h2 className="text-lg font-semibold text-slate-900">Education</h2>
+          </div>
+          {(member.education || []).length === 0 ? (
+            <p className="text-sm text-slate-500">No education added yet.</p>
+          ) : (
+            <div className="space-y-4">
+              {(member.education || []).map((edu, idx) => (
+                <div key={`${edu.school}-${idx}`} className="border-b border-slate-100 pb-3 last:border-b-0 last:pb-0">
+                  <p className="font-semibold text-slate-900">{edu.school || 'School'}</p>
+                  <p className="text-sm text-slate-700">{edu.degree || ''}</p>
+                  <p className="text-xs text-slate-500">{edu.period || ''}</p>
+                </div>
+              ))}
+            </div>
+          )}
         </section>
         <section className="li-card p-5">
           <h2 className="text-base font-semibold text-slate-900">Skills</h2>

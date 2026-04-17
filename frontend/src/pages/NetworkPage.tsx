@@ -233,6 +233,10 @@ export default function NetworkPage() {
         setMemberPhoto(resolveAvatarUrl(data.profile_photo_url, data.name));
       })
       .catch(() => undefined);
+    const timer = window.setInterval(() => {
+      refreshAll().catch(() => undefined);
+    }, 4000);
+    return () => window.clearInterval(timer);
   }, []);
 
   const buttonStateFor = (suggestionId: string): 'connected' | 'pending' | 'incoming' | 'connect' => {

@@ -1,20 +1,13 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect } from 'react';
 import { Job } from '../mockData/jobs';
 import JobCard from '../components/shared/JobCard';
 import Navbar from '../components/layout/Navbar';
-import { Sparkles, FileText, CheckCircle2 } from 'lucide-react';
-import { Link, useSearchParams } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import { MEMBER_ID, resolveAvatarUrl } from '../lib/memberProfile';
-import { addActivity, readJson, SAVED_JOBS_KEY, writeJson } from '../lib/localData';
-import { showToast } from '../lib/toast';
-import { companyProfilePath, jobsResultsPath, jobsSearchPath } from '../lib/jobRoutes';
-import { jobFromGetPayload, mergeJobDetail, normalizeJobListRows } from '../lib/jobNormalize';
+import { normalizeJobListRows } from '../lib/jobNormalize';
 
 export default function JobsBoard() {
-  const [searchParams, setSearchParams] = useSearchParams();
   const [jobs, setJobs] = useState<Job[]>([]);
-  const [activeJob, setActiveJob] = useState<Job | null>(null);
-  const [isApplying, setIsApplying] = useState(false);
   const [loading, setLoading] = useState(true);
   const [keyword, setKeyword] = useState('');
   const [locationFilter, setLocationFilter] = useState('');
@@ -72,128 +65,6 @@ export default function JobsBoard() {
       .catch(() => undefined);
   }, []);
 
-  const handleOpenJob = useCallback(async (job: Job) => {
-    setActiveJob(job);
-    try {
-      const response = await fetch('http://localhost:4000/api/jobs/get', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ job_id: job.id, member_id: MEMBER_ID })
-      });
-      const detail = await response.json();
-      if (response.ok) setActiveJob(mergeJobDetail(job, detail));
-    } catch (error) {
-      console.error('Failed to load job detail', error);
-    }
-  }, []);
-
-  /** Load a job by id when it is not in the current search results (deep link). */
-  const openJobByIdOnly = useCallback(
-    async (jobId: string) => {
-      try {
-        const response = await fetch('http://localhost:4000/api/jobs/get', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ job_id: jobId, member_id: MEMBER_ID })
-        });
-        const detail = await response.json();
-        if (!response.ok) {
-          showToast('Could not load that job. It may be closed or removed.', 'error');
-          setSearchParams({}, { replace: true });
-          return;
-        }
-        const normalized = jobFromGetPayload(detail);
-        if (normalized) setActiveJob(mergeJobDetail(normalized, detail));
-      } catch (error) {
-        console.error('Failed to load job by id', error);
-        showToast('Could not load that job.', 'error');
-        setSearchParams({}, { replace: true });
-      }
-    },
-    [setSearchParams]
-  );
-
-  /**
-   * Sync selection with ?jobId=.
-   * If the id is missing from the current list (filters), fetch GET /jobs/get so the detail panel still opens.
-   */
-  useEffect(() => {
-    if (loading) return;
-    const jid = searchParams.get('jobId');
-    if (jid) {
-      const match = jobs.find((j) => j.id === jid);
-      if (match) {
-        if (activeJob?.id !== jid) void handleOpenJob(match);
-        return;
-      }
-      if (activeJob?.id !== jid) void openJobByIdOnly(jid);
-      return;
-    }
-    if (jobs.length > 0 && (!activeJob || !jobs.some((j) => j.id === activeJob.id))) {
-      void handleOpenJob(jobs[0]);
-    }
-  }, [loading, jobs, searchParams, activeJob?.id, handleOpenJob, openJobByIdOnly]);
-
-  const handleApply = async () => {
-    if (!activeJob) return;
-    setIsApplying(true);
-    try {
-      const response = await fetch('http://localhost:4000/api/applications/submit', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          job_id: activeJob.id,
-          member_id: MEMBER_ID
-        })
-      });
-      
-      const data = await response.json().catch(() => ({}));
-      if (response.ok) {
-        addActivity(`Applied to ${activeJob.title} at ${activeJob.company}`);
-        showToast('Application submitted successfully!', 'success');
-      } else {
-        const msg = data.error === 'JOB_CLOSED'
-          ? 'This job is closed — applications are not accepted.'
-          : data.error === 'DUPLICATE_APPLICATION'
-            ? 'You have already applied to this job.'
-            : data.message || 'Failed to submit application.';
-        showToast(msg, 'error');
-      }
-    } catch (error) {
-      console.error('Apply error:', error);
-      showToast('Error connecting to the application service.', 'error');
-    } finally {
-      setIsApplying(false);
-    }
-  };
-
-  const handleSave = async () => {
-    if (!activeJob) return;
-    try {
-      await fetch('http://localhost:4000/api/jobs/save', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ job_id: activeJob.id, member_id: MEMBER_ID })
-      });
-      const existing = readJson<any[]>(SAVED_JOBS_KEY, []);
-      const next = [
-        {
-          id: activeJob.id,
-          title: activeJob.title,
-          company: activeJob.company,
-          location: activeJob.location,
-          savedAt: new Date().toLocaleDateString()
-        },
-        ...existing.filter((item) => item.id !== activeJob.id)
-      ];
-      writeJson(SAVED_JOBS_KEY, next.slice(0, 100));
-      addActivity(`Saved job ${activeJob.title} at ${activeJob.company}`);
-      showToast('Job saved.', 'success');
-    } catch {
-      showToast('Unable to save job right now.', 'error');
-    }
-  };
-
   return (
     <div className="min-h-screen bg-[#f3f2ef]">
       <Navbar />
@@ -209,7 +80,9 @@ export default function JobsBoard() {
               >
                 <img src={member.photo} alt="Profile" className="h-full w-full object-cover" />
               </Link>
-              <p className="text-lg font-semibold text-[#191919]">{member.name}</p>
+              <Link to={`/profile/${encodeURIComponent(MEMBER_ID)}`} className="text-lg font-semibold text-[#191919] hover:text-[#0a66c2] hover:underline">
+                {member.name}
+              </Link>
               <p className="text-xs text-[#666666]">{member.location}</p>
               <p className="mt-0.5 text-xs text-[#666666]">{member.headline}</p>
             </div>
@@ -223,15 +96,6 @@ export default function JobsBoard() {
             <div className="mt-4 border-t border-[#e0dfdc] pt-3">
               <Link to="/jobs/post" className="text-sm font-semibold text-[#0a66c2] hover:underline">Post a free job</Link>
             </div>
-          </div>
-          <div className="li-card p-4">
-            <div className="flex items-center justify-between text-sm font-semibold text-[#191919]">
-              <span>Profile viewers</span>
-              <span className="text-[#0a66c2]">14</span>
-            </div>
-            <Link to="/analytics/member" className="mt-3 block text-base font-semibold text-[#191919] hover:text-[#0a66c2]">
-              View all analytics
-            </Link>
           </div>
         </aside>
           <main className="space-y-3 lg:col-span-9">
@@ -281,15 +145,21 @@ export default function JobsBoard() {
             ) : jobs.length === 0 ? (
               <div className="p-8 text-center text-slate-500">No jobs in the database yet. Post one via Swagger!</div>
             ) : (
-              jobs.map((job) => (
+              jobs.slice(0, 6).map((job) => (
                 <JobCard 
                   key={job.id} 
-                  job={job} 
-                  isActive={activeJob?.id === job.id} 
+                  job={job}
                 />
               ))
             )}
             </div>
+            {jobs.length > 6 ? (
+              <div className="border-t border-[#e0dfdc] px-4 py-2 text-center">
+                <Link to="/jobs/search-results" className="text-sm font-semibold text-[#444] hover:text-[#0a66c2]">
+                  Show all →
+                </Link>
+              </div>
+            ) : null}
           </section>
           <section className="li-card overflow-hidden">
             <div className="border-b border-[#e0dfdc] px-4 py-2">
@@ -297,104 +167,18 @@ export default function JobsBoard() {
               <p className="text-xs text-[#666]">Including applies, searches and saves</p>
             </div>
             <div>
-              {jobs.slice(0, 3).map((job) => (
-                <Link
-                  key={`activity-${job.id}`}
-                  to={jobsResultsPath(job.id)}
-                  className="block w-full border-b border-[#f0f0f0] px-4 py-3 text-left hover:bg-[#f9fafb]"
-                >
-                  <p className="text-base font-semibold text-[#0a66c2]">{job.title}</p>
-                  <p className="text-sm text-[#444]">{job.company} • {job.location}</p>
-                  <p className="text-xs text-[#666] mt-1">{job.type} • {job.salary}</p>
-                </Link>
+              {jobs.slice(6, 12).map((job) => (
+                <JobCard key={`activity-${job.id}`} job={job} />
               ))}
             </div>
-          </section>
-          <div className="li-card p-6">
-            {activeJob ? (
-              <>
-                <div className="flex justify-between items-start mb-6">
-                  <div>
-                    <h1 className="text-3xl font-semibold text-slate-900 mb-2">{activeJob.title}</h1>
-                    <div className="text-lg text-slate-700">
-                      <Link to={companyProfilePath(activeJob.company)} className="hover:text-[#0a66c2] hover:underline">
-                        {activeJob.company}
-                      </Link>
-                      {' '}•{' '}
-                      <Link
-                        to={jobsSearchPath({ location: activeJob.location })}
-                        className="hover:text-[#0a66c2] hover:underline"
-                      >
-                        {activeJob.location}
-                      </Link>
-                    </div>
-                    <div className="text-sm text-slate-500 mt-2 font-medium">
-                      {activeJob.type} • {activeJob.salary} • {activeJob.postedAt}
-                    </div>
-                    <div className="mt-2 text-xs text-slate-500">
-                      Applicants: {activeJob.applicants ?? 0} • Industry: {activeJob.industry || 'Technology'}
-                    </div>
-                  </div>
-                  <div className="flex gap-2">
-                    <button 
-                      onClick={handleApply}
-                      disabled={isApplying}
-                      className="bg-blue-600 text-white px-8 py-2.5 rounded-full font-semibold hover:bg-blue-700 transition shadow-sm disabled:opacity-70 flex items-center justify-center min-w-[120px]"
-                    >
-                      {isApplying ? 'Sending...' : 'Easy Apply'}
-                    </button>
-                    <button
-                      onClick={handleSave}
-                      className="rounded-full border border-blue-600 px-6 py-2.5 font-semibold text-blue-700 hover:bg-blue-50"
-                    >
-                      Save
-                    </button>
-                  </div>
-                </div>
-
-                <hr className="border-slate-100 mb-6" />
-                
-                <h3 className="font-semibold text-lg mb-3">About the role</h3>
-                <p className="text-slate-700 leading-relaxed max-w-3xl">
-                  {activeJob.description}
-                </p>
-                <div className="mt-4">
-                  <h4 className="text-sm font-semibold text-slate-900 mb-2">Top skills for this job</h4>
-                  <div className="flex flex-wrap gap-2">
-                    {activeJob.skills?.map((skill) => (
-                      <span key={skill} className="rounded-full border border-[#d0d7de] bg-white px-3 py-1 text-xs font-semibold text-[#44546a]">
-                        {skill}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-              </>
-            ) : (
-              <div className="flex items-center justify-center text-slate-400">Select a job to view details</div>
-            )}
-          </div>
-          <div className="bg-gradient-to-br from-indigo-50 to-blue-50 rounded-lg shadow-sm border border-indigo-100 p-6 mb-8">
-            <div className="flex items-center gap-2 mb-4">
-              <div className="p-1.5 bg-indigo-600 rounded-md shadow-sm">
-                <Sparkles size={18} className="text-white" />
+            {jobs.length > 12 ? (
+              <div className="border-t border-[#e0dfdc] px-4 py-2 text-center">
+                <Link to="/jobs/search-results" className="text-sm font-semibold text-[#444] hover:text-[#0a66c2]">
+                  Show all →
+                </Link>
               </div>
-              <h3 className="font-semibold text-indigo-900">Career Coach AI</h3>
-            </div>
-            
-            <div className="bg-white rounded-md p-4 border border-indigo-50 shadow-sm text-sm text-slate-700 leading-relaxed mb-4">
-              <span className="font-semibold text-indigo-700 mr-2">Quick analysis:</span>
-              Based on your profile, you have an <strong className="text-green-600">85% match</strong> for this position. Your experiences with <span className="bg-slate-100 px-1 rounded">React</span> and <span className="bg-slate-100 px-1 rounded">FastAPI</span> align perfectly. However, you might want to highlight your <span className="bg-slate-100 px-1 rounded">Kafka</span> experience more prominently in your headline before applying.
-            </div>
-
-            <div className="flex gap-3">
-              <Link to={`/profile/${encodeURIComponent(MEMBER_ID)}`} className="flex items-center gap-2 text-sm font-medium text-indigo-600 bg-white border border-indigo-200 px-4 py-2 rounded-full hover:bg-indigo-50 transition">
-                <FileText size={16} /> Look at my resume
-              </Link>
-              <Link to="/messaging" className="flex items-center gap-2 text-sm font-medium text-slate-600 bg-white border border-slate-200 px-4 py-2 rounded-full hover:bg-slate-50 transition">
-                <CheckCircle2 size={16} /> Help me draft an outreach message
-              </Link>
-            </div>
-          </div>
+            ) : null}
+          </section>
           </main>
         </div>
       </div>
