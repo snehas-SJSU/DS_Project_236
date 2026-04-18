@@ -1,6 +1,6 @@
 # Project Status (Single Source)
 
-Last updated: dynamic in-app realtime-style behavior and UI parity pass.
+Last updated: Apr 18, 2026 (connections + feed/share UX verification).
 
 ## Scope status
 
@@ -27,10 +27,15 @@ Last updated: dynamic in-app realtime-style behavior and UI parity pass.
 - Reliability handling: duplicate email, duplicate application, closed-job apply checks, message retry, Kafka idempotency guards.
 - Auth: email/password signup/login/logout implemented with JWT bearer tokens.
 - Backend stabilization: job-service schema compatibility migration for legacy MySQL (`industry`, `remote_mode`, `seniority_level`, `employment_type`, counts columns) to keep workers healthy across fresh and old DB states.
+- **Connections consistency:** `requestsByUser` hides pending sent/incoming when a `connections` row already exists for that member (avoids “pending” + “connected” mismatch after seed or manual DB drift). `seed-demo-connections` marks matching `connection_requests` as accepted when present.
+- **Post service and feed sharing:** `post-service` with gateway `/api/posts` proxy; `POST /posts/get` for single-post fetches (e.g. message share previews). Feed share messages append a `[[post_share:…]]` marker; messaging renders a share card, linkifies `http(s)` URLs, and `/feed#P-…` scrolls to the post (`article id` + hash handler).
+- **Demo seed:** `npm run seed:connections` upserts demo members and edges for `M-123` plus request cleanup (see `scripts/seed-demo-connections.js`).
 
 ## Latest verification snapshot
 
-- Smoke test passes (`scripts/smoke-test.sh`).
+- Non-AI completion checklist (`NON_AI_COMPLETION_REPORT.pdf`, scope excluding AI / JMeter execution / AWS deploy) remains accurate: tiered architecture, entity coverage, required APIs, analytics graphs, and failure modes still reflected in codebase; excluded scope unchanged.
+- Smoke test passes (`scripts/smoke-test.sh`), including posts create/list/like/comment/repost/send paths. After deploying `post-service` with `POST /posts/get`, manually verify share previews in messaging against `http://localhost:4000/api/posts/get`.
+- Frontend `npm run build` passes.
 - Duplicate signup returns `DUPLICATE_EMAIL`.
 - Duplicate apply returns `DUPLICATE_APPLICATION`.
 - Apply-to-closed-job returns `JOB_CLOSED`.

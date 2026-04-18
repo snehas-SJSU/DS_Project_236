@@ -6,7 +6,9 @@ const db = require('../../shared/mysql');
 const redisModule = require('../../shared/redis');
 
 const app = express();
-app.use(express.json());
+// Default 100kb breaks base64 avatars and large profile payloads (413 Payload Too Large).
+// Whole JSON body must hold base64 data URLs (~4/3 size of raw image) + JSON overhead.
+app.use(express.json({ limit: '20mb' }));
 const producer = kafka.producer();
 
 const CACHE_PREFIX = 'member:';
@@ -424,6 +426,23 @@ app.post('/members/search', async (req, res) => {
   }
 });
 
+/** Base64 data URLs can exceed MEDIUMTEXT (~16MB); widen existing DBs. */
+async function widenPhotoUrlColumnsToLongtext() {
+  for (const col of ['profile_photo_url', 'cover_photo_url']) {
+    try {
+      const [rows] = await db.query('SHOW COLUMNS FROM members LIKE ?', [col]);
+      if (!rows.length) continue;
+      const t = String(rows[0].Type || '').toLowerCase();
+      if (t.includes('mediumtext')) {
+        await db.query(`ALTER TABLE members MODIFY COLUMN ${col} LONGTEXT NULL`);
+        console.log(`members.${col} widened to LONGTEXT`);
+      }
+    } catch (e) {
+      console.warn(`widenPhotoUrlColumnsToLongtext ${col}:`, e.message);
+    }
+  }
+}
+
 async function ensureSchema() {
   const ensureColumn = async (columnName, ddl) => {
     const [rows] = await db.query('SHOW COLUMNS FROM members LIKE ?', [columnName]);
@@ -449,8 +468,8 @@ async function ensureSchema() {
       skills JSON,
       experience JSON,
       education JSON,
-      profile_photo_url MEDIUMTEXT,
-      cover_photo_url MEDIUMTEXT,
+      profile_photo_url LONGTEXT,
+      cover_photo_url LONGTEXT,
       cover_theme VARCHAR(30) DEFAULT 'blue',
       resume_url TEXT,
       resume_text MEDIUMTEXT,
@@ -492,8 +511,9 @@ async function ensureSchema() {
   await ensureColumn('country', 'country VARCHAR(100)');
   await ensureColumn('phone', 'phone VARCHAR(30)');
   await ensureColumn('summary', 'summary TEXT');
-  await ensureColumn('profile_photo_url', 'profile_photo_url MEDIUMTEXT');
-  await ensureColumn('cover_photo_url', 'cover_photo_url MEDIUMTEXT');
+  await ensureColumn('profile_photo_url', 'profile_photo_url LONGTEXT');
+  await ensureColumn('cover_photo_url', 'cover_photo_url LONGTEXT');
+  await widenPhotoUrlColumnsToLongtext();
   await ensureColumn('cover_theme', 'cover_theme VARCHAR(30) DEFAULT "blue"');
   await ensureColumn('resume_url', 'resume_url TEXT');
   await ensureColumn('resume_text', 'resume_text MEDIUMTEXT');

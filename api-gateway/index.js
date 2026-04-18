@@ -42,6 +42,26 @@ app.use('/api/threads', proxy(4004));
 app.use('/api/messages', proxy(4004));
 app.use('/api/events', proxy(4005));
 app.use('/api/analytics', proxy(4005));
+// Mounted at /api/posts: Express strips the mount prefix, so the proxy often sees /list not /api/posts/list.
+// Generic pathRewrite '^/api' -> '' then never matches → upstream gets /repost (404). Map explicitly to /posts/*.
+app.use(
+  '/api/posts',
+  createProxyMiddleware({
+    target: local(4007),
+    changeOrigin: true,
+    pathRewrite: (path) => {
+      if (path.startsWith('/api/posts')) return path.replace(/^\/api\/posts/, '/posts');
+      return '/posts' + (path.startsWith('/') ? path : `/${path}`);
+    },
+    proxyTimeout: 60_000,
+    timeout: 60_000,
+    onError(err, req, res) {
+      console.error('[gateway proxy posts]', req.method, req.url, err.message);
+      if (!res.headersSent) res.writeHead(502, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: 'BAD_GATEWAY', message: err.message }));
+    }
+  })
+);
 
 const aiWsProxy = createProxyMiddleware({
   target: local(8001),

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { Fragment, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { ChevronDown, Crown, MoreHorizontal, Search, SendHorizonal, SquarePen, Star } from 'lucide-react';
 import { MEMBER_ID, resolveAvatarUrl } from '../lib/memberProfile';
 import Navbar from '../components/layout/Navbar';
@@ -37,6 +37,79 @@ type Message = {
   message_text: string;
   timestamp: string;
 };
+
+type SharedPostCard = {
+  post_id: string;
+  author_name?: string | null;
+  author_headline?: string | null;
+  body: string;
+  image_data?: string | null;
+};
+
+/** New shares append `[[post_share:P-…]]`; older messages match `/feed#P-…` in the share text. */
+function extractPostShareId(raw: string): string | null {
+  const tag = raw.match(/\[\[post_share:(P-[a-zA-Z0-9-]+)\]\]/i);
+  if (tag) return tag[1];
+  const looksLikeShare = /shared a post from/i.test(raw) || /\/feed#P-/i.test(raw);
+  if (!looksLikeShare) return null;
+  const hash = raw.match(/#(P-[a-zA-Z0-9-]+)/i);
+  return hash ? hash[1] : null;
+}
+
+function stripPostShareMarker(raw: string): string {
+  return raw.replace(/\n\[\[post_share:P-[a-zA-Z0-9-]+\]\]\s*$/i, '').trim();
+}
+
+/** Turn raw http(s) URLs in plain text into clickable links (same-origin → React Router). */
+function linkifyMessageText(text: string, tone: 'sent' | 'received'): ReactNode {
+  const linkClass =
+    tone === 'sent'
+      ? 'break-all font-medium text-white underline decoration-white/90 underline-offset-2 hover:decoration-white'
+      : 'break-all font-medium text-[#0a66c2] underline underline-offset-2 hover:text-[#004182]';
+
+  const re = /(https?:\/\/[^\s<]+[^\s<.,:;"')\]]*)/gi;
+  const nodes: ReactNode[] = [];
+  let last = 0;
+  let m: RegExpExecArray | null;
+  let n = 0;
+  while ((m = re.exec(text)) !== null) {
+    if (m.index > last) nodes.push(text.slice(last, m.index));
+    let url = m[0].replace(/[),.;]+$/g, '');
+    const key = `u-${n++}-${m.index}`;
+    const origin = typeof window !== 'undefined' ? window.location.origin : '';
+    try {
+      const u = new URL(url);
+      if (origin && u.origin === origin) {
+        const to = `${u.pathname}${u.search}${u.hash}`;
+        nodes.push(
+          <Link key={key} to={to} className={linkClass}>
+            {url}
+          </Link>
+        );
+      } else {
+        nodes.push(
+          <a key={key} href={url} target="_blank" rel="noopener noreferrer" className={linkClass}>
+            {url}
+          </a>
+        );
+      }
+    } catch {
+      nodes.push(
+        <a key={key} href={url} target="_blank" rel="noopener noreferrer" className={linkClass}>
+          {url}
+        </a>
+      );
+    }
+    last = m.index + m[0].length;
+  }
+  if (last < text.length) nodes.push(text.slice(last));
+  if (nodes.length === 0) return text;
+  return (
+    <Fragment>
+           {nodes.map((node, i) => (typeof node === 'string' ? <span key={`t-${i}`}>{node}</span> : node))}
+    </Fragment>
+  );
+}
 
 type Person = {
   id: string;
@@ -168,6 +241,8 @@ export default function MessagingPage() {
   const [sending, setSending] = useState(false);
   const [failedSend, setFailedSend] = useState<{ threadId: string; text: string } | null>(null);
   const [threadStarred, setThreadStarred] = useState<Record<string, boolean>>({});
+  const [postShareCache, setPostShareCache] = useState<Record<string, SharedPostCard | null>>({});
+  const postShareInflightRef = useRef<Set<string>>(new Set());
   const memberId = MEMBER_ID;
 
   const displayNameFor = (idOrName: string) => personNameMap[idOrName] || idOrName;
@@ -297,6 +372,39 @@ export default function MessagingPage() {
     const timer = window.setInterval(loadActiveMessages, 3000);
     return () => window.clearInterval(timer);
   }, [activeThreadId]);
+
+  useEffect(() => {
+    for (const msg of messages) {
+      const postId = extractPostShareId(msg.message_text);
+      if (!postId || postShareCache[postId] !== undefined) continue;
+      if (postShareInflightRef.current.has(postId)) continue;
+      postShareInflightRef.current.add(postId);
+      void fetch('http://localhost:4000/api/posts/get', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ post_id: postId, viewer_member_id: memberId })
+      })
+        .finally(() => postShareInflightRef.current.delete(postId))
+        .then((r) => (r.ok ? r.json() : null))
+        .then((data) => {
+          if (!data?.post_id) {
+            setPostShareCache((prev) => ({ ...prev, [postId]: null }));
+            return;
+          }
+          setPostShareCache((prev) => ({
+            ...prev,
+            [postId]: {
+              post_id: data.post_id,
+              author_name: data.author_name,
+              author_headline: data.author_headline,
+              body: data.body,
+              image_data: data.image_data
+            }
+          }));
+        })
+        .catch(() => setPostShareCache((prev) => ({ ...prev, [postId]: null })));
+    }
+  }, [messages, memberId, postShareCache]);
 
   const activeThread = useMemo(
     () => threads.find((thread) => thread.id === activeThreadId),
@@ -437,32 +545,39 @@ export default function MessagingPage() {
                       {filteredPeople.length > 0 ? (
                         <div className="max-h-36 overflow-y-auto rounded-md border border-slate-200 bg-white">
                           {filteredPeople.map((p) => (
-                            <button
+                            <div
                               key={p.id}
-                              type="button"
+                              role="button"
+                              tabIndex={0}
                               onClick={() => {
                                 setComposeToId(p.id);
                                 setComposeQuery(p.name);
                               }}
-                              className={`flex w-full items-start gap-2 border-b border-slate-100 px-3 py-2 text-left last:border-b-0 hover:bg-slate-50 ${composeToId === p.id ? 'bg-blue-50' : ''}`}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter' || e.key === ' ') {
+                                  e.preventDefault();
+                                  setComposeToId(p.id);
+                                  setComposeQuery(p.name);
+                                }
+                              }}
+                              className={`flex w-full cursor-pointer items-start gap-2 border-b border-slate-100 px-3 py-2 text-left last:border-b-0 hover:bg-slate-50 ${composeToId === p.id ? 'bg-blue-50' : ''}`}
                             >
                               <div className="h-7 w-7 overflow-hidden rounded-full border border-slate-200">
                                 <img src={peerAvatar(p.name)} alt={p.name} className="h-full w-full object-cover" />
                               </div>
                               <div className="min-w-0">
-                                <button
-                                  type="button"
-                                  className="truncate text-left text-xs font-semibold text-slate-900 hover:text-[#0a66c2] hover:underline"
+                                <span
+                                  className="block truncate text-left text-xs font-semibold text-slate-900 hover:text-[#0a66c2] hover:underline"
                                   onClick={(event) => {
                                     event.stopPropagation();
                                     navigate(`/profile/${encodeURIComponent(p.id)}`);
                                   }}
                                 >
                                   {p.name}
-                                </button>
+                                </span>
                                 <p className="truncate text-[11px] text-slate-500">{p.headline || p.id}</p>
                               </div>
-                            </button>
+                            </div>
                           ))}
                         </div>
                       ) : null}
@@ -516,44 +631,58 @@ export default function MessagingPage() {
                             .filter((p) => p.name.toLowerCase().includes(search.trim().toLowerCase()))
                             .slice(0, 5)
                             .map((p) => (
-                              <button
+                              <div
                                 key={p.id}
-                                type="button"
+                                role="button"
+                                tabIndex={0}
                                 onClick={async () => {
                                   await startOrOpenConversation(p.id, p.name);
                                   setSearch('');
                                 }}
-                                className="flex w-full items-start gap-2 border-b border-slate-100 px-3 py-2 text-left last:border-b-0 hover:bg-slate-50"
+                                onKeyDown={async (e) => {
+                                  if (e.key === 'Enter' || e.key === ' ') {
+                                    e.preventDefault();
+                                    await startOrOpenConversation(p.id, p.name);
+                                    setSearch('');
+                                  }
+                                }}
+                                className="flex w-full cursor-pointer items-start gap-2 border-b border-slate-100 px-3 py-2 text-left last:border-b-0 hover:bg-slate-50"
                               >
                                 <div className="h-7 w-7 overflow-hidden rounded-full border border-slate-200">
                                   <img src={peerAvatar(p.name)} alt={p.name} className="h-full w-full object-cover" />
                                 </div>
                                 <div className="min-w-0">
-                                  <button
-                                    type="button"
-                                    className="truncate text-left text-xs font-semibold text-slate-900 hover:text-[#0a66c2] hover:underline"
+                                  <span
+                                    className="block truncate text-left text-xs font-semibold text-slate-900 hover:text-[#0a66c2] hover:underline"
                                     onClick={(event) => {
                                       event.stopPropagation();
                                       navigate(`/profile/${encodeURIComponent(p.id)}`);
                                     }}
                                   >
                                     {p.name}
-                                  </button>
+                                  </span>
                                   <p className="truncate text-[11px] text-slate-500">{p.headline || p.id}</p>
                                 </div>
-                              </button>
+                              </div>
                             ))}
                         </div>
                       ) : null}
                     </div>
                   ) : filteredThreads.map((thread) => (
-                    <button
+                    <div
                       key={thread.id}
-                      type="button"
-                      className={`w-full border-b border-[#e0dfdc] px-4 py-3 text-left transition ${
+                      role="button"
+                      tabIndex={0}
+                      className={`w-full cursor-pointer border-b border-[#e0dfdc] px-4 py-3 text-left transition ${
                         activeThreadId === thread.id ? 'bg-[#eef3f8]' : 'border-[#e0dfdc] hover:bg-[#f9fafb]'
                       }`}
                       onClick={() => setActiveThreadId(thread.id)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          e.preventDefault();
+                          setActiveThreadId(thread.id);
+                        }
+                      }}
                     >
                       <div className="flex items-start gap-3">
                         <div className="h-12 w-12 shrink-0 overflow-hidden rounded-full border border-[#e0dfdc] bg-[#f3f2ef]">
@@ -561,16 +690,23 @@ export default function MessagingPage() {
                         </div>
                         <div className="min-w-0 flex-1">
                           <div className="flex items-start justify-between gap-2">
-                            <button
-                              type="button"
-                              className="text-left text-[15px] font-semibold leading-tight text-[#191919] hover:text-[#0a66c2] hover:underline"
+                            <span
+                              role="link"
+                              tabIndex={0}
+                              className="cursor-pointer text-left text-[15px] font-semibold leading-tight text-[#191919] hover:text-[#0a66c2] hover:underline"
                               onClick={(event) => {
                                 event.stopPropagation();
                                 navigate(`/profile/${encodeURIComponent(thread.title)}`);
                               }}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter') {
+                                  e.stopPropagation();
+                                  navigate(`/profile/${encodeURIComponent(thread.title)}`);
+                                }
+                              }}
                             >
                               {displayNameFor(thread.title)}
-                            </button>
+                            </span>
                             <time className="shrink-0 text-xs text-[#666666]" dateTime={thread.lastActivity}>
                               {formatThreadListTime(thread.lastActivity)}
                             </time>
@@ -578,7 +714,7 @@ export default function MessagingPage() {
                           <p className="mt-0.5 line-clamp-2 text-sm leading-snug text-[#666666]">{thread.preview}</p>
                         </div>
                       </div>
-                    </button>
+                    </div>
                   ))}
                 </div>
               </section>
@@ -645,11 +781,73 @@ export default function MessagingPage() {
                           </div>
                         )}
                         <div
-                          className={`max-w-[80%] rounded-xl px-3 py-2 shadow-sm ${
+                          className={`max-w-[85%] rounded-xl px-3 py-2 shadow-sm ${
                             msg.sender_id === memberId ? 'ml-auto bg-[#0a66c2] text-white' : 'bg-white text-[#191919]'
                           }`}
                         >
-                          <p>{msg.message_text}</p>
+                          {(() => {
+                            const postId = extractPostShareId(msg.message_text);
+                            const preview = postId ? postShareCache[postId] : undefined;
+                            const plain = stripPostShareMarker(msg.message_text);
+                            if (!postId) {
+                              return (
+                                <p className="whitespace-pre-wrap break-words">
+                                  {linkifyMessageText(msg.message_text, msg.sender_id === memberId ? 'sent' : 'received')}
+                                </p>
+                              );
+                            }
+                            if (preview === null) {
+                              return (
+                                <p className="whitespace-pre-wrap break-words">
+                                  {linkifyMessageText(plain, msg.sender_id === memberId ? 'sent' : 'received')}
+                                </p>
+                              );
+                            }
+                            if (!preview) {
+                              return (
+                                <p className={`text-sm ${msg.sender_id === memberId ? 'text-white/85' : 'text-slate-500'}`}>
+                                  Loading shared post…
+                                </p>
+                              );
+                            }
+                            const snippet =
+                              preview.body.length > 220 ? `${preview.body.slice(0, 217).trim()}…` : preview.body;
+                            return (
+                              <div className="space-y-2">
+                                <p
+                                  className={`text-[11px] font-semibold uppercase tracking-wide ${
+                                    msg.sender_id === memberId ? 'text-blue-100' : 'text-[#666]'
+                                  }`}
+                                >
+                                  Shared a post
+                                </p>
+                                <Link
+                                  to={`/feed#${encodeURIComponent(preview.post_id)}`}
+                                  className={`block overflow-hidden rounded-lg border text-left no-underline transition-opacity hover:opacity-95 ${
+                                    msg.sender_id === memberId
+                                      ? 'border-white/35 bg-white text-[#191919]'
+                                      : 'border-[#e0dfdc] bg-[#f9fafb] text-[#191919]'
+                                  }`}
+                                >
+                                  <div className="border-b border-[#e8e8e8] px-3 py-2">
+                                    <p className="text-sm font-semibold text-[#191919]">
+                                      {preview.author_name || 'Member'}
+                                    </p>
+                                    {preview.author_headline ? (
+                                      <p className="mt-0.5 line-clamp-1 text-xs text-[#666]">{preview.author_headline}</p>
+                                    ) : null}
+                                  </div>
+                                  {preview.image_data ? (
+                                    <div className="aspect-[1.85/1] max-h-36 w-full overflow-hidden bg-[#eef3f8]">
+                                      <img src={preview.image_data} alt="" className="h-full w-full object-cover" />
+                                    </div>
+                                  ) : null}
+                                  <p className="line-clamp-3 px-3 py-2 text-sm leading-snug text-[#333]">{snippet}</p>
+                                  <p className="px-3 pb-2 text-xs font-semibold text-[#0a66c2]">View post →</p>
+                                </Link>
+                              </div>
+                            );
+                          })()}
                         </div>
                         {msg.sender_id === memberId && (
                           <Link

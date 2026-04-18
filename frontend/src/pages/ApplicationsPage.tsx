@@ -49,6 +49,9 @@ export default function ApplicationsPage() {
             <div key={app.app_id} className="rounded-md border border-[#e0dfdc] p-3">
               <Link to="/jobs" className="font-medium text-[#0a66c2] hover:underline">{app.job_id}</Link>
               <p className="text-sm text-slate-600">Status: {normalizeStatus(app.status)}</p>
+              {app.resume_url ? (
+                <p className="text-xs text-slate-600">Resume URL: <a href={app.resume_url} target="_blank" rel="noreferrer" className="text-[#0a66c2] hover:underline">{app.resume_url}</a></p>
+              ) : null}
             </div>
           ))}
         </div>
@@ -89,6 +92,12 @@ export default function ApplicationsPage() {
               <p className="text-sm font-medium text-slate-900">
                 <Link to="/profile" className="text-[#0a66c2] hover:underline">{app.member_id}</Link> - {normalizeStatus(app.status)}
               </p>
+              {app.resume_url ? (
+                <p className="mt-1 text-xs text-slate-600">Resume URL: <a href={app.resume_url} target="_blank" rel="noreferrer" className="text-[#0a66c2] hover:underline">{app.resume_url}</a></p>
+              ) : null}
+              {app.resume_text ? (
+                <p className="mt-1 text-xs text-slate-600">Resume summary: {String(app.resume_text).slice(0, 180)}</p>
+              ) : null}
               <div className="mt-2 flex flex-wrap gap-2">
                 {['reviewing', 'interview', 'offer', 'rejected'].map((status) => (
                   <button

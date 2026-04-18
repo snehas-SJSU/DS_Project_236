@@ -11,6 +11,8 @@ async function initDB() {
       job_id VARCHAR(50),
       member_id VARCHAR(50),
       status VARCHAR(50) DEFAULT 'submitted',
+      resume_url TEXT,
+      resume_text TEXT,
       cover_letter TEXT,
       answers JSON,
       recruiter_note TEXT,
@@ -25,6 +27,8 @@ async function initDB() {
     if (!rows.length) await db.query(`ALTER TABLE applications ADD COLUMN ${ddl}`);
   };
   await ensureColumn('answers', 'answers JSON');
+  await ensureColumn('resume_url', 'resume_url TEXT');
+  await ensureColumn('resume_text', 'resume_text TEXT');
   console.log('MySQL Applications table ensured');
 }
 
@@ -44,13 +48,13 @@ async function runWorker() {
         }
 
         if (event.event_type === 'application.submitted') {
-          const { job_id, member_id, status, cover_letter, answers } = event.payload;
+          const { job_id, member_id, status, resume_url, resume_text, cover_letter, answers } = event.payload;
           const appId = event.entity.entity_id;
 
           try {
             await db.query(
-              'INSERT INTO applications (app_id, job_id, member_id, status, cover_letter, answers) VALUES (?, ?, ?, ?, ?, ?)',
-              [appId, job_id, member_id, status || 'submitted', cover_letter || null, answers ? JSON.stringify(answers) : null]
+              'INSERT INTO applications (app_id, job_id, member_id, status, resume_url, resume_text, cover_letter, answers) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+              [appId, job_id, member_id, status || 'submitted', resume_url || null, resume_text || null, cover_letter || null, answers ? JSON.stringify(answers) : null]
             );
             await db.query('UPDATE jobs SET applicants_count = COALESCE(applicants_count, 0) + 1 WHERE job_id = ?', [job_id]);
           } catch (e) {

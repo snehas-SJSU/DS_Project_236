@@ -1,7 +1,8 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Briefcase, GraduationCap, MapPin, Pencil } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { LOCAL_AVATAR_KEY, MEMBER_ID, resolveAvatarUrl } from '../lib/memberProfile';
+import { showToast } from '../lib/toast';
 
 type LoadState = { status: 'loading' } | { status: 'ok'; data: any } | { status: 'error'; message: string };
 const AVATAR_OPTIONS = ['Avery', 'Morgan', 'Noah', 'Sophia', 'Liam', 'Maya'];
@@ -17,6 +18,8 @@ export default function Profile() {
   const [editing, setEditing] = useState(false);
   const [dashboard, setDashboard] = useState<any>(null);
   const [draft, setDraft] = useState<any>({});
+  const coverFileInputRef = useRef<HTMLInputElement | null>(null);
+  const avatarFileInputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
     fetch('http://localhost:4000/api/members/get', {
@@ -101,18 +104,82 @@ export default function Profile() {
     reader.readAsDataURL(file);
   };
 
+  const persistImageUpload = (file: File, key: 'profile_photo_url' | 'cover_photo_url') => {
+    if (!file.type.startsWith('image/')) {
+      showToast('Choose an image file.', 'error');
+      return;
+    }
+    // Raw file limit: base64 grows ~4/3; keep under gateway JSON body limit (~20MB).
+    const maxBytes = 8 * 1024 * 1024;
+    if (file.size > maxBytes) {
+      showToast('Image too large — max 8MB file (JPEG/PNG).', 'error');
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = async () => {
+      const dataUrl = typeof reader.result === 'string' ? reader.result : '';
+      if (!dataUrl) return;
+      setDraft((prev: any) => ({ ...prev, [key]: dataUrl }));
+      try {
+        const res = await fetch('http://localhost:4000/api/members/update', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ member_id: MEMBER_ID, [key]: dataUrl })
+        });
+        if (res.ok) {
+          if (key === 'profile_photo_url') {
+            localStorage.setItem(LOCAL_AVATAR_KEY, dataUrl);
+          }
+          setState((s) => {
+            if (s.status !== 'ok') return s;
+            return { status: 'ok', data: { ...s.data, [key]: dataUrl } };
+          });
+          showToast(key === 'profile_photo_url' ? 'Profile photo saved.' : 'Cover photo saved.', 'success');
+        } else {
+          const errBody = await res.json().catch(() => ({}));
+          const msg =
+            (errBody && (errBody.message || errBody.error)) ||
+            (res.status === 413
+              ? 'Payload too large — use a smaller image (max 8MB file).'
+              : 'Could not save image. Try a smaller file.');
+          showToast(String(msg), 'error');
+        }
+      } catch {
+        showToast('Could not save image.', 'error');
+      }
+    };
+    reader.readAsDataURL(file);
+  };
+
   return (
     <div className="space-y-3">
         <section className="li-card relative overflow-hidden p-0">
-        <button
-          type="button"
-          onClick={() => setEditing(true)}
-          className="absolute right-3 top-3 z-20 inline-flex h-8 w-8 items-center justify-center rounded-full bg-white/95 text-slate-700 shadow hover:bg-white"
-          title="Edit cover"
-        >
-          <Pencil size={15} />
-        </button>
-        <div className="h-44 bg-slate-200">
+        <input
+          ref={coverFileInputRef}
+          type="file"
+          accept="image/*"
+          className="hidden"
+          aria-hidden
+          onChange={(e) => {
+            const f = e.target.files?.[0];
+            e.target.value = '';
+            if (f) persistImageUpload(f, 'cover_photo_url');
+          }}
+        />
+        <input
+          ref={avatarFileInputRef}
+          type="file"
+          accept="image/*"
+          className="hidden"
+          aria-hidden
+          onChange={(e) => {
+            const f = e.target.files?.[0];
+            e.target.value = '';
+            if (f) persistImageUpload(f, 'profile_photo_url');
+          }}
+        />
+        {/* Cover first; pencil after in DOM so it stacks above and receives clicks */}
+        <div className="relative z-0 h-44 bg-slate-200">
           {draft.cover_photo_url || profile.cover_photo_url ? (
             <img
               src={(draft.cover_photo_url || profile.cover_photo_url) as string}
@@ -123,6 +190,18 @@ export default function Profile() {
             <div className={`h-full w-full bg-gradient-to-r opacity-80 ${coverClass}`} />
           )}
         </div>
+        <button
+          type="button"
+          onClick={(ev) => {
+            ev.preventDefault();
+            ev.stopPropagation();
+            coverFileInputRef.current?.click();
+          }}
+          className="absolute right-3 top-3 z-30 inline-flex h-8 w-8 items-center justify-center rounded-full bg-white/95 text-slate-700 shadow hover:bg-white"
+          title="Upload cover photo"
+        >
+          <Pencil size={15} />
+        </button>
 
         <div className="px-5 pb-5">
           <div className="-mt-16 flex flex-wrap items-end justify-between gap-3">
@@ -130,9 +209,13 @@ export default function Profile() {
               <img src={avatarUrl} alt="Avatar" className="h-full w-full object-cover" />
               <button
                 type="button"
-                onClick={() => setEditing(true)}
+                onClick={(ev) => {
+                  ev.preventDefault();
+                  ev.stopPropagation();
+                  avatarFileInputRef.current?.click();
+                }}
                 className="absolute bottom-1 right-1 inline-flex h-8 w-8 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
-                title="Edit profile photo"
+                title="Upload profile photo"
               >
                 <Pencil size={14} />
               </button>

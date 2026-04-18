@@ -83,12 +83,24 @@ export default function JobsSearchPage() {
       showToast('You already applied to this job.', 'info');
       return;
     }
+    const resumeUrl = window.prompt('Resume URL (optional, e.g. Drive/S3 link):', '')?.trim() || '';
+    const resumeText = window.prompt('Resume text summary (optional):', '')?.trim() || '';
+    const coverLetter = window.prompt('Cover letter (optional):', '')?.trim() || '';
+    if (!resumeUrl && !resumeText) {
+      showToast('Tip: add resume URL or resume text for recruiter visibility.', 'info');
+    }
     setIsApplying(true);
     try {
       const res = await fetch('http://localhost:4000/api/applications/submit', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ job_id: activeJob.id, member_id: MEMBER_ID })
+        body: JSON.stringify({
+          job_id: activeJob.id,
+          member_id: MEMBER_ID,
+          resume_url: resumeUrl || undefined,
+          resume_text: resumeText || undefined,
+          cover_letter: coverLetter || undefined
+        })
       });
       const data = await res.json().catch(() => ({}));
       if (res.ok) {

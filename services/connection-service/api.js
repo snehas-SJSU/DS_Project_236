@@ -146,14 +146,24 @@ app.post('/connections/requestsByUser', async (req, res) => {
     if (!user_id) {
       return res.status(400).json({ error: 'BAD_REQUEST', message: 'user_id required', trace_id: crypto.randomUUID() });
     }
-    const [incoming] = await db.query(
+    const [neighborRows] = await db.query(
+      `SELECT CASE WHEN user_a = ? THEN user_b ELSE user_a END AS cid
+       FROM connections WHERE user_a = ? OR user_b = ?`,
+      [user_id, user_id, user_id]
+    );
+    const connectedIds = new Set(neighborRows.map((r) => r.cid));
+
+    const [incomingRaw] = await db.query(
       'SELECT * FROM connection_requests WHERE receiver_id = ? AND status = ? ORDER BY created_at DESC',
       [user_id, 'pending']
     );
-    const [sent] = await db.query(
+    const [sentRaw] = await db.query(
       'SELECT * FROM connection_requests WHERE requester_id = ? ORDER BY created_at DESC',
       [user_id]
     );
+    const incoming = incomingRaw.filter((row) => !connectedIds.has(row.requester_id));
+    // Once a connection exists, hide sent rows for that person (pending, accepted, etc.) so UI matches "friends" state.
+    const sent = sentRaw.filter((row) => !connectedIds.has(row.receiver_id));
     res.status(200).json({ incoming, sent });
   } catch (err) {
     res.status(500).json({ error: 'INTERNAL_ERROR', message: err.message, trace_id: crypto.randomUUID() });

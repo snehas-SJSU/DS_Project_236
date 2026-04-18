@@ -4,7 +4,7 @@ const kafka = require('../../shared/kafka-client');
 const db = require('../../shared/mysql');
 
 const app = express();
-app.use(express.json());
+app.use(express.json({ limit: '15mb' }));
 const producer = kafka.producer();
 
 async function ensureApplicationsTable() {
@@ -14,6 +14,8 @@ async function ensureApplicationsTable() {
       job_id VARCHAR(50),
       member_id VARCHAR(50),
       status VARCHAR(50) DEFAULT 'submitted',
+      resume_url TEXT,
+      resume_text TEXT,
       cover_letter TEXT,
       answers JSON,
       recruiter_note TEXT,
@@ -28,6 +30,8 @@ async function ensureApplicationsTable() {
     if (!rows.length) await db.query(`ALTER TABLE applications ADD COLUMN ${ddl}`);
   };
   await ensureColumn('answers', 'answers JSON');
+  await ensureColumn('resume_url', 'resume_url TEXT');
+  await ensureColumn('resume_text', 'resume_text TEXT');
 }
 
 function envelope(eventType, traceId, actorId, entityId, payload, idempotencyKey) {
@@ -45,7 +49,7 @@ function envelope(eventType, traceId, actorId, entityId, payload, idempotencyKey
 async function submitHandler(req, res) {
   try {
     await ensureApplicationsTable();
-    const { job_id, member_id, cover_letter, answers } = req.body;
+    const { job_id, member_id, resume_url, resume_text, cover_letter, answers } = req.body;
 
     if (!job_id || !member_id) {
       return res.status(400).json({ error: 'BAD_REQUEST', message: 'job_id and member_id required', trace_id: crypto.randomUUID() });
@@ -75,6 +79,8 @@ async function submitHandler(req, res) {
       job_id,
       member_id,
       status: 'submitted',
+      resume_url: resume_url || null,
+      resume_text: resume_text || null,
       cover_letter: cover_letter || null,
       answers: answers || null
     }, idempotencyKey);
