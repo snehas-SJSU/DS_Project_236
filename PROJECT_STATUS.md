@@ -1,6 +1,6 @@
 # Project Status (Single Source)
 
-Last updated: Apr 18, 2026 (connections + feed/share UX verification).
+Last updated: Apr 2026 (connections, feed/share UX, smoke hardening, same-origin dev URLs, README sync).
 
 ## Scope status
 
@@ -23,18 +23,19 @@ Last updated: Apr 18, 2026 (connections + feed/share UX verification).
 - Feed and posting updates: interactive post composer modal (start post, media attach, schedule/audience options, AI rewrite demo) with immediate in-app feed visibility.
 - Notifications and messaging updates: API-driven in-app notifications + polling refresh, connection/request list auto-refresh, and messaging threads/messages auto-refresh.
 - Permission hardening: profile language/public URL edit controls visible only on own profile; hidden for other profiles.
-- Frontend runtime hardening: centralized API base URL adaptation via frontend fetch bootstrap (`VITE_API_BASE_URL` support).
+- Frontend runtime hardening: centralized API base URL adaptation via frontend fetch bootstrap (`VITE_API_BASE_URL` support); local dev uses **same-origin** `fetch('/api/...')` with Vite proxying **`/api`** and **`/docs`** to the gateway so demos can stick to **`http://localhost:3000`** (Swagger also at **`http://localhost:3000/docs`**).
 - Reliability handling: duplicate email, duplicate application, closed-job apply checks, message retry, Kafka idempotency guards.
 - Auth: email/password signup/login/logout implemented with JWT bearer tokens.
 - Backend stabilization: job-service schema compatibility migration for legacy MySQL (`industry`, `remote_mode`, `seniority_level`, `employment_type`, counts columns) to keep workers healthy across fresh and old DB states.
 - **Connections consistency:** `requestsByUser` hides pending sent/incoming when a `connections` row already exists for that member (avoids “pending” + “connected” mismatch after seed or manual DB drift). `seed-demo-connections` marks matching `connection_requests` as accepted when present.
 - **Post service and feed sharing:** `post-service` with gateway `/api/posts` proxy; `POST /posts/get` for single-post fetches (e.g. message share previews). Feed share messages append a `[[post_share:…]]` marker; messaging renders a share card, linkifies `http(s)` URLs, and `/feed#P-…` scrolls to the post (`article id` + hash handler).
 - **Demo seed:** `npm run seed:connections` upserts demo members and edges for `M-123` plus request cleanup (see `scripts/seed-demo-connections.js`).
+- **Profile images:** `members` photo URL columns widened to **`LONGTEXT`** when legacy types were `TEXT`/`VARCHAR`/`MEDIUMTEXT`; member-service JSON limit raised; optional MySQL `max_allowed_packet` in `docker-compose.yml` — supports multi‑MB cover/profile uploads without silent failures.
 
 ## Latest verification snapshot
 
 - Non-AI completion checklist (`NON_AI_COMPLETION_REPORT.pdf`, scope excluding AI / JMeter execution / AWS deploy) remains accurate: tiered architecture, entity coverage, required APIs, analytics graphs, and failure modes still reflected in codebase; excluded scope unchanged.
-- Smoke test passes (`scripts/smoke-test.sh`), including posts create/list/like/comment/repost/send paths. After deploying `post-service` with `POST /posts/get`, manually verify share previews in messaging against `http://localhost:4000/api/posts/get`.
+- Smoke test passes (`scripts/smoke-test.sh`): reachability without downloading multi‑MB `/members/get` bodies, **polls until Kafka workers persist jobs/applications** (avoids race flakes), `POST /posts/get`, `connections/requestsByUser`, analytics top, `events/ingest`, and **threads/messages** round-trip. **Restart `post-service` after pulling** so `/posts/get` exists (otherwise smoke fails with `Cannot POST /posts/get`).
 - Frontend `npm run build` passes.
 - Duplicate signup returns `DUPLICATE_EMAIL`.
 - Duplicate apply returns `DUPLICATE_APPLICATION`.
@@ -42,6 +43,7 @@ Last updated: Apr 18, 2026 (connections + feed/share UX verification).
 - Premium navigation hardened with alias redirects to `/premium` (`/try-premium`, `/premium/free-trial`, `/premium/trial`).
 - Manual profile smoke checks passed for `/profile` and `/profile/:memberId` route rendering plus connection-action API behavior.
 - Dynamic flow checks passed for profile update persistence, job posting/search visibility, and connect→accept lifecycle validation.
+- **`README.md`** is the operator-facing runbook: ports (**`:3000`** app, **`:4000`** gateway/Swagger direct), proxied Swagger on **`:3000/docs`**, smoke defaults to **`http://localhost:4000/api`**, and copy/paste startup commands.
 
 ## Pending note (auth)
 
@@ -50,9 +52,13 @@ Last updated: Apr 18, 2026 (connections + feed/share UX verification).
 ## Runbook
 
 1. `docker compose up -d`
-2. `npm run start:all`
-3. In another terminal: `cd frontend && npm run dev`
+2. `npm run start:all` (API gateway on **:4000** — used internally; demos can ignore this port.)
+3. In another terminal: `cd frontend && npm run dev` — open **`http://localhost:3000`** only; the dev server proxies `/api` and `/docs` to the gateway.
 4. Optional seed: `npm run seed:member`
+
+For split-origin deploys, set `VITE_API_BASE_URL` to the public API origin (see `frontend/src/main.tsx`).
+
+**Swagger:** canonical URL is **`http://localhost:4000/docs`** (gateway). With **`npm run dev`**, use **`http://localhost:3000/docs`** (proxy). **`npm run preview`** in `frontend/` uses the same proxy config.
 
 ## Final note
 

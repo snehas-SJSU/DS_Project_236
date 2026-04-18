@@ -31,6 +31,7 @@ async function ensureTables() {
     }
   };
   await ensurePostCol('author_headline', 'author_headline VARCHAR(255) NULL');
+  await ensurePostCol('quoted_post_id', 'quoted_post_id VARCHAR(50) NULL');
   await db.query(`
     CREATE TABLE IF NOT EXISTS post_likes (
       post_id VARCHAR(50) NOT NULL,
@@ -145,18 +146,38 @@ function newId(prefix) {
   return `${prefix}-${crypto.randomUUID().substring(0, 8)}`;
 }
 
+function quotedPayloadFromRow(r) {
+  if (!r.quoted_post_id || !r.qp_post_id) return null;
+  return {
+    post_id: r.qp_post_id,
+    member_id: r.qp_member_id,
+    author_name: r.qp_author_name,
+    author_headline: r.qp_author_headline,
+    body: r.qp_body,
+    image_data: r.qp_image_data,
+    author_profile_photo_url: r.qp_author_profile_photo_url || null
+  };
+}
+
 /** POST /posts/create */
 app.post('/posts/create', async (req, res) => {
   try {
     await ensureTables();
-    const { member_id, author_name, body, image_data, author_headline } = req.body || {};
+    const { member_id, author_name, body, image_data, author_headline, quoted_post_id } = req.body || {};
     if (!member_id || !String(body || '').trim()) {
       return res.status(400).json({ error: 'BAD_REQUEST', message: 'member_id and body required' });
     }
+    let qid = quoted_post_id && String(quoted_post_id).trim() ? String(quoted_post_id).trim() : null;
+    if (qid) {
+      const [qrows] = await db.query('SELECT post_id FROM posts WHERE post_id = ? LIMIT 1', [qid]);
+      if (!qrows.length) {
+        return res.status(400).json({ error: 'BAD_REQUEST', message: 'quoted_post_id not found' });
+      }
+    }
     const postId = newId('P');
     await db.query(
-      'INSERT INTO posts (post_id, member_id, author_name, author_headline, body, image_data) VALUES (?, ?, ?, ?, ?, ?)',
-      [postId, member_id, author_name || null, author_headline || null, String(body).trim(), image_data || null]
+      'INSERT INTO posts (post_id, member_id, author_name, author_headline, body, image_data, quoted_post_id) VALUES (?, ?, ?, ?, ?, ?, ?)',
+      [postId, member_id, author_name || null, author_headline || null, String(body).trim(), image_data || null, qid]
     );
     res.status(201).json({ post_id: postId, message: 'Post created' });
   } catch (e) {
@@ -172,12 +193,23 @@ app.post('/posts/list', async (req, res) => {
     const limit = Math.min(Number(req.body?.limit) || 50, 100);
     const viewerId = req.body?.viewer_member_id || null;
     const [rows] = await db.query(
-      `SELECT p.post_id, p.member_id, p.author_name, p.author_headline, p.body, p.image_data, p.created_at,
+      `SELECT p.post_id, p.member_id, p.author_name, p.author_headline, p.body, p.image_data, p.created_at, p.quoted_post_id,
+        m.profile_photo_url AS author_profile_photo_url,
+        qp.post_id AS qp_post_id,
+        qp.member_id AS qp_member_id,
+        qp.author_name AS qp_author_name,
+        qp.author_headline AS qp_author_headline,
+        qp.body AS qp_body,
+        qp.image_data AS qp_image_data,
+        qm.profile_photo_url AS qp_author_profile_photo_url,
         (SELECT COUNT(*) FROM post_likes l WHERE l.post_id = p.post_id) AS like_count,
         (SELECT COUNT(*) FROM post_comments c WHERE c.post_id = p.post_id) AS comment_count,
         (SELECT COUNT(*) FROM post_reposts r WHERE r.post_id = p.post_id) AS repost_count,
         (SELECT COUNT(*) FROM post_sends s WHERE s.post_id = p.post_id) AS send_count
        FROM posts p
+       LEFT JOIN members m ON m.member_id = p.member_id AND COALESCE(m.status, '') != 'deleted'
+       LEFT JOIN posts qp ON qp.post_id = p.quoted_post_id
+       LEFT JOIN members qm ON qm.member_id = qp.member_id AND COALESCE(qm.status, '') != 'deleted'
        ORDER BY p.created_at DESC
        LIMIT ?`,
       [limit]
@@ -204,13 +236,17 @@ app.post('/posts/list', async (req, res) => {
         ]);
         sent = S.length > 0;
       }
+      const quoted = quotedPayloadFromRow(r);
       out.push({
         post_id: r.post_id,
         member_id: r.member_id,
         author_name: r.author_name,
         author_headline: r.author_headline,
+        author_profile_photo_url: r.author_profile_photo_url || null,
         body: r.body,
         image_data: r.image_data,
+        quoted_post_id: r.quoted_post_id || null,
+        quoted,
         created_at: r.created_at,
         like_count: Number(r.like_count) || 0,
         comment_count: Number(r.comment_count) || 0,
@@ -238,12 +274,24 @@ app.post('/posts/get', async (req, res) => {
     }
     const viewerId = req.body?.viewer_member_id || null;
     const [rows] = await db.query(
-      `SELECT p.post_id, p.member_id, p.author_name, p.author_headline, p.body, p.image_data, p.created_at,
+      `SELECT p.post_id, p.member_id, p.author_name, p.author_headline, p.body, p.image_data, p.created_at, p.quoted_post_id,
+        m.profile_photo_url AS author_profile_photo_url,
+        qp.post_id AS qp_post_id,
+        qp.member_id AS qp_member_id,
+        qp.author_name AS qp_author_name,
+        qp.author_headline AS qp_author_headline,
+        qp.body AS qp_body,
+        qp.image_data AS qp_image_data,
+        qm.profile_photo_url AS qp_author_profile_photo_url,
         (SELECT COUNT(*) FROM post_likes l WHERE l.post_id = p.post_id) AS like_count,
         (SELECT COUNT(*) FROM post_comments c WHERE c.post_id = p.post_id) AS comment_count,
         (SELECT COUNT(*) FROM post_reposts r WHERE r.post_id = p.post_id) AS repost_count,
         (SELECT COUNT(*) FROM post_sends s WHERE s.post_id = p.post_id) AS send_count
-       FROM posts p WHERE p.post_id = ?`,
+       FROM posts p
+       LEFT JOIN members m ON m.member_id = p.member_id AND COALESCE(m.status, '') != 'deleted'
+       LEFT JOIN posts qp ON qp.post_id = p.quoted_post_id
+       LEFT JOIN members qm ON qm.member_id = qp.member_id AND COALESCE(qm.status, '') != 'deleted'
+       WHERE p.post_id = ?`,
       [post_id]
     );
     if (!rows.length) {
@@ -270,13 +318,17 @@ app.post('/posts/get', async (req, res) => {
       ]);
       sent = S.length > 0;
     }
+    const quoted = quotedPayloadFromRow(r);
     res.json({
       post_id: r.post_id,
       member_id: r.member_id,
       author_name: r.author_name,
       author_headline: r.author_headline,
+      author_profile_photo_url: r.author_profile_photo_url || null,
       body: r.body,
       image_data: r.image_data,
+      quoted_post_id: r.quoted_post_id || null,
+      quoted,
       created_at: r.created_at,
       like_count: Number(r.like_count) || 0,
       comment_count: Number(r.comment_count) || 0,

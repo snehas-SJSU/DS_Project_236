@@ -3,7 +3,7 @@ import { Job } from '../mockData/jobs';
 import JobCard from '../components/shared/JobCard';
 import Navbar from '../components/layout/Navbar';
 import { Link } from 'react-router-dom';
-import { MEMBER_ID, resolveAvatarUrl } from '../lib/memberProfile';
+import { MEMBER_ID, resolveViewerAvatarUrl } from '../lib/memberProfile';
 import { normalizeJobListRows } from '../lib/jobNormalize';
 
 export default function JobsBoard() {
@@ -16,12 +16,12 @@ export default function JobsBoard() {
     name: 'Sneha Singh',
     location: 'San Jose, California',
     headline: 'MS Student | Distributed Systems',
-    photo: resolveAvatarUrl(undefined, 'Sneha Singh')
+    photo: resolveViewerAvatarUrl(undefined, 'Sneha Singh')
   });
 
   const fetchJobs = () => {
     setLoading(true);
-    fetch('http://localhost:4000/api/jobs/search', {
+    fetch('/api/jobs/search', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -47,7 +47,7 @@ export default function JobsBoard() {
 
   useEffect(() => {
     fetchJobs();
-    fetch('http://localhost:4000/api/members/get', {
+    fetch('/api/members/get', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ member_id: MEMBER_ID })
@@ -59,7 +59,7 @@ export default function JobsBoard() {
           name: data.name || 'Sneha Singh',
           location: data.location || 'San Jose, California',
           headline: data.headline || data.title || 'MS Student | Distributed Systems',
-          photo: resolveAvatarUrl(data.profile_photo_url, data.name)
+          photo: resolveViewerAvatarUrl(data.profile_photo_url, data.name)
         });
       })
       .catch(() => undefined);

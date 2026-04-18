@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { MEMBER_ID, resolveAvatarUrl } from '../lib/memberProfile';
+import { MEMBER_ID, resolveAvatarUrl, resolveViewerAvatarUrl } from '../lib/memberProfile';
 import Navbar from '../components/layout/Navbar';
 import { CalendarDays, FileText, MessageCircle, MoreHorizontal, Rss, ThumbsUp, UserRoundPlus, Users, UsersRound } from 'lucide-react';
 import { Link } from 'react-router-dom';
@@ -103,7 +103,7 @@ export default function NetworkPage() {
   const [catchUpFilter, setCatchUpFilter] = useState<
     'All' | 'Job changes' | 'Birthdays' | 'Work anniversaries' | 'Education'
   >('All');
-  const [memberPhoto, setMemberPhoto] = useState<string>(resolveAvatarUrl(undefined, 'Me'));
+  const [memberPhoto, setMemberPhoto] = useState<string>(resolveViewerAvatarUrl(undefined, 'Me'));
   const [catchUpRows, setCatchUpRows] = useState<CatchUpRow[]>([]);
   const memberId = MEMBER_ID;
   const avatarFor = (seed: string) => `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(seed)}`;
@@ -115,7 +115,7 @@ export default function NetworkPage() {
   }, [catchUpRows, catchUpFilter]);
 
   async function refreshAll() {
-    const reqRes = await fetch('http://localhost:4000/api/connections/requestsByUser', {
+    const reqRes = await fetch('/api/connections/requestsByUser', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ user_id: memberId })
@@ -124,7 +124,7 @@ export default function NetworkPage() {
     setIncoming(reqData.incoming || []);
     setSent(reqData.sent || []);
 
-    const listRes = await fetch('http://localhost:4000/api/connections/list', {
+    const listRes = await fetch('/api/connections/list', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ user_id: memberId })
@@ -132,7 +132,7 @@ export default function NetworkPage() {
     const listData = await listRes.json().catch(() => []);
     setConnections(Array.isArray(listData) ? listData : []);
 
-    const membersRes = await fetch('http://localhost:4000/api/members/search', {
+    const membersRes = await fetch('/api/members/search', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ keyword: '' })
@@ -175,7 +175,7 @@ export default function NetworkPage() {
       setSuggestions(normalizedSuggestions);
       const entries = await Promise.all(
         normalizedSuggestions.map(async (s) => {
-          const mutualRes = await fetch('http://localhost:4000/api/connections/mutual', {
+          const mutualRes = await fetch('/api/connections/mutual', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ user_id: memberId, other_id: s.id })
@@ -202,7 +202,7 @@ export default function NetworkPage() {
     setSuggestions(fallback);
     const entries = await Promise.all(
       fallback.map(async (s) => {
-        const mutualRes = await fetch('http://localhost:4000/api/connections/mutual', {
+        const mutualRes = await fetch('/api/connections/mutual', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ user_id: memberId, other_id: s.id })
@@ -222,7 +222,7 @@ export default function NetworkPage() {
 
   useEffect(() => {
     refreshAll().catch(() => undefined);
-    fetch('http://localhost:4000/api/members/get', {
+    fetch('/api/members/get', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ member_id: memberId })
@@ -230,7 +230,7 @@ export default function NetworkPage() {
       .then((res) => res.json())
       .then((data) => {
         if (!data || data.error) return;
-        setMemberPhoto(resolveAvatarUrl(data.profile_photo_url, data.name));
+        setMemberPhoto(resolveViewerAvatarUrl(data.profile_photo_url, data.name));
       })
       .catch(() => undefined);
     const timer = window.setInterval(() => {
@@ -437,7 +437,7 @@ export default function NetworkPage() {
                       <button
                         className="rounded-full px-4 py-1.5 text-sm font-semibold text-[#444] hover:bg-slate-100"
                         onClick={async () => {
-                          await fetch('http://localhost:4000/api/connections/reject', {
+                          await fetch('/api/connections/reject', {
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json' },
                             body: JSON.stringify({ request_id: request.request_id })
@@ -451,7 +451,7 @@ export default function NetworkPage() {
                       <button
                         className="rounded-full border border-[1.5px] border-[#0a66c2] px-4 py-1.5 text-sm font-semibold text-[#0a66c2] hover:bg-[#edf3f8]"
                         onClick={async () => {
-                          await fetch('http://localhost:4000/api/connections/accept', {
+                          await fetch('/api/connections/accept', {
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json' },
                             body: JSON.stringify({ request_id: request.request_id })
@@ -502,7 +502,7 @@ export default function NetworkPage() {
                         <button
                           className="mt-3 w-full rounded-full border border-[#0a66c2] px-3 py-1.5 text-sm font-semibold text-[#0a66c2] hover:bg-[#edf3f8]"
                           onClick={async () => {
-                            const response = await fetch('http://localhost:4000/api/connections/request', {
+                            const response = await fetch('/api/connections/request', {
                               method: 'POST',
                               headers: { 'Content-Type': 'application/json' },
                               body: JSON.stringify({ requester_id: memberId, receiver_id: suggestion.id })
@@ -601,7 +601,7 @@ export default function NetworkPage() {
                           <button
                             className="rounded-full px-3 py-1 text-xs font-semibold text-[#444] hover:bg-slate-100"
                             onClick={async () => {
-                              await fetch('http://localhost:4000/api/connections/reject', {
+                              await fetch('/api/connections/reject', {
                                 method: 'POST',
                                 headers: { 'Content-Type': 'application/json' },
                                 body: JSON.stringify({ request_id: request.request_id })
@@ -614,7 +614,7 @@ export default function NetworkPage() {
                           <button
                             className="rounded-full border border-[#0a66c2] px-3 py-1 text-xs font-semibold text-[#0a66c2] hover:bg-[#edf3f8]"
                             onClick={async () => {
-                              await fetch('http://localhost:4000/api/connections/accept', {
+                              await fetch('/api/connections/accept', {
                                 method: 'POST',
                                 headers: { 'Content-Type': 'application/json' },
                                 body: JSON.stringify({ request_id: request.request_id })

@@ -8,7 +8,7 @@ const redisModule = require('../../shared/redis');
 const app = express();
 // Default 100kb breaks base64 avatars and large profile payloads (413 Payload Too Large).
 // Whole JSON body must hold base64 data URLs (~4/3 size of raw image) + JSON overhead.
-app.use(express.json({ limit: '20mb' }));
+app.use(express.json({ limit: '50mb' }));
 const producer = kafka.producer();
 
 const CACHE_PREFIX = 'member:';
@@ -426,16 +426,24 @@ app.post('/members/search', async (req, res) => {
   }
 });
 
-/** Base64 data URLs can exceed MEDIUMTEXT (~16MB); widen existing DBs. */
+/** Base64 data URLs exceed TEXT (~64KB) and can exceed MEDIUMTEXT (~16MB); widen legacy DBs. */
 async function widenPhotoUrlColumnsToLongtext() {
   for (const col of ['profile_photo_url', 'cover_photo_url']) {
     try {
       const [rows] = await db.query('SHOW COLUMNS FROM members LIKE ?', [col]);
       if (!rows.length) continue;
       const t = String(rows[0].Type || '').toLowerCase();
-      if (t.includes('mediumtext')) {
+      const isLongtext = t.includes('longtext');
+      if (isLongtext) continue;
+      const needsWiden =
+        t.includes('text') ||
+        t.includes('varchar') ||
+        t.includes('char') ||
+        t.includes('mediumtext') ||
+        t.includes('tinytext');
+      if (needsWiden) {
         await db.query(`ALTER TABLE members MODIFY COLUMN ${col} LONGTEXT NULL`);
-        console.log(`members.${col} widened to LONGTEXT`);
+        console.log(`members.${col} widened to LONGTEXT (was ${rows[0].Type})`);
       }
     } catch (e) {
       console.warn(`widenPhotoUrlColumnsToLongtext ${col}:`, e.message);

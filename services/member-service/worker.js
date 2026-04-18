@@ -29,8 +29,8 @@ async function initDB() {
       skills JSON,
       experience JSON,
       education JSON,
-      profile_photo_url MEDIUMTEXT,
-      cover_photo_url MEDIUMTEXT,
+      profile_photo_url LONGTEXT,
+      cover_photo_url LONGTEXT,
       cover_theme VARCHAR(30) DEFAULT 'blue',
       resume_url TEXT,
       resume_text MEDIUMTEXT,
@@ -49,13 +49,33 @@ async function initDB() {
   await ensureColumn('country', 'country VARCHAR(100)');
   await ensureColumn('phone', 'phone VARCHAR(30)');
   await ensureColumn('summary', 'summary TEXT');
-  await ensureColumn('profile_photo_url', 'profile_photo_url MEDIUMTEXT');
-  await ensureColumn('cover_photo_url', 'cover_photo_url MEDIUMTEXT');
+  await ensureColumn('profile_photo_url', 'profile_photo_url LONGTEXT');
+  await ensureColumn('cover_photo_url', 'cover_photo_url LONGTEXT');
   await ensureColumn('cover_theme', 'cover_theme VARCHAR(30) DEFAULT "blue"');
   await ensureColumn('resume_url', 'resume_url TEXT');
   await ensureColumn('resume_text', 'resume_text MEDIUMTEXT');
   await ensureColumn('connections_count', 'connections_count INT DEFAULT 0');
   await ensureColumn('profile_views', 'profile_views INT DEFAULT 0');
+  for (const col of ['profile_photo_url', 'cover_photo_url']) {
+    try {
+      const [rows] = await db.query('SHOW COLUMNS FROM members LIKE ?', [col]);
+      if (!rows.length) continue;
+      const t = String(rows[0].Type || '').toLowerCase();
+      if (t.includes('longtext')) continue;
+      if (
+        t.includes('text') ||
+        t.includes('varchar') ||
+        t.includes('char') ||
+        t.includes('mediumtext') ||
+        t.includes('tinytext')
+      ) {
+        await db.query(`ALTER TABLE members MODIFY COLUMN ${col} LONGTEXT NULL`);
+        console.log(`worker: members.${col} widened to LONGTEXT (was ${rows[0].Type})`);
+      }
+    } catch (e) {
+      console.warn(`worker: widen ${col}:`, e.message);
+    }
+  }
   console.log('MySQL Members table ensured');
 }
 

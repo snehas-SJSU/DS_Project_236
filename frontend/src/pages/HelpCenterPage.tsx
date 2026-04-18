@@ -20,7 +20,7 @@ const faq = [
   },
   {
     q: 'Where can I see API docs?',
-    a: 'Open Swagger UI at http://localhost:4000/docs.'
+    a: 'Open Swagger UI at /docs (same host as the app, e.g. http://localhost:3000/docs when using npm run dev).'
   }
 ];
 
@@ -67,7 +67,7 @@ export default function HelpCenterPage() {
           <Link to="/settings" className="rounded-full border border-slate-300 px-4 py-1.5 text-sm font-semibold text-slate-700 hover:bg-slate-50">Settings</Link>
           <Link to="/profile" className="rounded-full border border-slate-300 px-4 py-1.5 text-sm font-semibold text-slate-700 hover:bg-slate-50">Profile</Link>
           <Link to="/network" className="rounded-full border border-slate-300 px-4 py-1.5 text-sm font-semibold text-slate-700 hover:bg-slate-50">My Network</Link>
-          <a href="http://localhost:4000/docs" className="rounded-full border border-[#0a66c2] px-4 py-1.5 text-sm font-semibold text-[#0a66c2] hover:bg-[#edf3f8]">Swagger Docs</a>
+          <a href="/docs" className="rounded-full border border-[#0a66c2] px-4 py-1.5 text-sm font-semibold text-[#0a66c2] hover:bg-[#edf3f8]">Swagger Docs</a>
         </div>
       </section>
     </div>

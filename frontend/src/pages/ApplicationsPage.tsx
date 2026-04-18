@@ -14,7 +14,7 @@ export default function ApplicationsPage() {
   const [jobApps, setJobApps] = useState<any[]>([]);
 
   async function loadMemberApps() {
-    const res = await fetch('http://localhost:4000/api/applications/byMember', {
+    const res = await fetch('/api/applications/byMember', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ member_id: MEMBER_ID })
@@ -68,7 +68,7 @@ export default function ApplicationsPage() {
           <button
             className="rounded-full bg-[#0a66c2] px-4 py-2 text-sm font-semibold text-white hover:bg-[#004182]"
             onClick={async () => {
-              const res = await fetch('http://localhost:4000/api/applications/byJob', {
+              const res = await fetch('/api/applications/byJob', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ job_id: jobId })
@@ -104,12 +104,12 @@ export default function ApplicationsPage() {
                     key={status}
                     className="rounded-full border border-slate-300 px-3 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-50"
                     onClick={async () => {
-                      await fetch('http://localhost:4000/api/applications/updateStatus', {
+                      await fetch('/api/applications/updateStatus', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({ application_id: app.app_id, status })
                       });
-                      const refreshed = await fetch('http://localhost:4000/api/applications/byJob', {
+                      const refreshed = await fetch('/api/applications/byJob', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({ job_id: jobId })
@@ -126,7 +126,7 @@ export default function ApplicationsPage() {
                   onClick={async () => {
                     const note = window.prompt('Enter recruiter note') || '';
                     if (!note) return;
-                    await fetch('http://localhost:4000/api/applications/addNote', {
+                    await fetch('/api/applications/addNote', {
                       method: 'POST',
                       headers: { 'Content-Type': 'application/json' },
                       body: JSON.stringify({ application_id: app.app_id, note })

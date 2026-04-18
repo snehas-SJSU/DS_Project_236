@@ -20,7 +20,7 @@ export default function JobPostPage() {
     }
     setSaving(true);
     try {
-      const res = await fetch('http://localhost:4000/api/jobs/create', {
+      const res = await fetch('/api/jobs/create', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

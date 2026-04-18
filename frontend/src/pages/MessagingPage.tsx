@@ -1,6 +1,6 @@
 import { Fragment, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { ChevronDown, Crown, MoreHorizontal, Search, SendHorizonal, SquarePen, Star } from 'lucide-react';
-import { MEMBER_ID, resolveAvatarUrl } from '../lib/memberProfile';
+import { MEMBER_ID, resolveAvatarUrl, resolveViewerAvatarUrl } from '../lib/memberProfile';
 import Navbar from '../components/layout/Navbar';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { addActivity } from '../lib/localData';
@@ -38,12 +38,23 @@ type Message = {
   timestamp: string;
 };
 
+type SharedPostQuoted = {
+  post_id: string;
+  member_id: string;
+  author_name?: string | null;
+  author_headline?: string | null;
+  body: string;
+  image_data?: string | null;
+  author_profile_photo_url?: string | null;
+};
+
 type SharedPostCard = {
   post_id: string;
   author_name?: string | null;
   author_headline?: string | null;
   body: string;
   image_data?: string | null;
+  quoted?: SharedPostQuoted | null;
 };
 
 /** New shares append `[[post_share:P-…]]`; older messages match `/feed#P-…` in the share text. */
@@ -230,7 +241,7 @@ export default function MessagingPage() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [loading, setLoading] = useState(true);
   const [draft, setDraft] = useState('');
-  const [memberPhoto, setMemberPhoto] = useState<string>(resolveAvatarUrl(undefined, 'Me'));
+  const [memberPhoto, setMemberPhoto] = useState<string>(resolveViewerAvatarUrl(undefined, 'Me'));
   const [memberName, setMemberName] = useState('Sneha Singh');
   const [search, setSearch] = useState('');
   const [people, setPeople] = useState<Person[]>([]);
@@ -245,11 +256,16 @@ export default function MessagingPage() {
   const postShareInflightRef = useRef<Set<string>>(new Set());
   const memberId = MEMBER_ID;
 
+  const avatarForShareQuoted = (q: SharedPostQuoted) =>
+    q.member_id === memberId
+      ? resolveViewerAvatarUrl(q.author_profile_photo_url, q.author_name || q.member_id)
+      : resolveAvatarUrl(q.author_profile_photo_url, q.author_name || q.member_id);
+
   const displayNameFor = (idOrName: string) => personNameMap[idOrName] || idOrName;
 
   async function loadThreads() {
     setLoading(true);
-    const res = await fetch('http://localhost:4000/api/threads/byUser', {
+    const res = await fetch('/api/threads/byUser', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ user_id: memberId })
@@ -289,7 +305,7 @@ export default function MessagingPage() {
 
   useEffect(() => {
     loadThreads().catch(() => setLoading(false));
-    fetch('http://localhost:4000/api/members/search', {
+    fetch('/api/members/search', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ keyword: '' })
@@ -329,7 +345,7 @@ export default function MessagingPage() {
           'M-DEMO-02': 'Recruiter at Nova Labs'
         });
       });
-    fetch('http://localhost:4000/api/members/get', {
+    fetch('/api/members/get', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ member_id: memberId })
@@ -337,7 +353,7 @@ export default function MessagingPage() {
       .then((res) => res.json())
       .then((data) => {
         if (!data || data.error) return;
-        setMemberPhoto(resolveAvatarUrl(data.profile_photo_url, data.name));
+        setMemberPhoto(resolveViewerAvatarUrl(data.profile_photo_url, data.name));
         setMemberName(data.name || 'Sneha Singh');
       })
       .catch(() => undefined);
@@ -359,7 +375,7 @@ export default function MessagingPage() {
   useEffect(() => {
     if (!activeThreadId) return;
     const loadActiveMessages = () =>
-      fetch('http://localhost:4000/api/messages/list', {
+      fetch('/api/messages/list', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ thread_id: activeThreadId, limit: 100 })
@@ -379,7 +395,7 @@ export default function MessagingPage() {
       if (!postId || postShareCache[postId] !== undefined) continue;
       if (postShareInflightRef.current.has(postId)) continue;
       postShareInflightRef.current.add(postId);
-      void fetch('http://localhost:4000/api/posts/get', {
+      void fetch('/api/posts/get', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ post_id: postId, viewer_member_id: memberId })
@@ -398,7 +414,8 @@ export default function MessagingPage() {
               author_name: data.author_name,
               author_headline: data.author_headline,
               body: data.body,
-              image_data: data.image_data
+              image_data: data.image_data,
+              quoted: data.quoted || null
             }
           }));
         })
@@ -454,7 +471,7 @@ export default function MessagingPage() {
       showToast(`Opened conversation with ${displayNameFor(existing.title)}.`, 'info');
       return;
     }
-    const openRes = await fetch('http://localhost:4000/api/threads/open', {
+    const openRes = await fetch('/api/threads/open', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ participant_a: memberId, participant_b: receiverId })
@@ -471,7 +488,7 @@ export default function MessagingPage() {
 
   async function sendMessage(threadId: string, text: string) {
     setSending(true);
-    const sendRes = await fetch('http://localhost:4000/api/messages/send', {
+    const sendRes = await fetch('/api/messages/send', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -487,7 +504,7 @@ export default function MessagingPage() {
       return false;
     }
     setFailedSend(null);
-    const refreshed = await fetch('http://localhost:4000/api/messages/list', {
+    const refreshed = await fetch('/api/messages/list', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ thread_id: threadId, limit: 100 })
@@ -812,6 +829,7 @@ export default function MessagingPage() {
                             }
                             const snippet =
                               preview.body.length > 220 ? `${preview.body.slice(0, 217).trim()}…` : preview.body;
+                            const q = preview.quoted;
                             return (
                               <div className="space-y-2">
                                 <p
@@ -837,12 +855,43 @@ export default function MessagingPage() {
                                       <p className="mt-0.5 line-clamp-1 text-xs text-[#666]">{preview.author_headline}</p>
                                     ) : null}
                                   </div>
-                                  {preview.image_data ? (
-                                    <div className="aspect-[1.85/1] max-h-36 w-full overflow-hidden bg-[#eef3f8]">
-                                      <img src={preview.image_data} alt="" className="h-full w-full object-cover" />
-                                    </div>
-                                  ) : null}
-                                  <p className="line-clamp-3 px-3 py-2 text-sm leading-snug text-[#333]">{snippet}</p>
+                                  {q ? (
+                                    <>
+                                      <p className="line-clamp-3 px-3 py-2 text-sm leading-snug text-[#333]">{snippet}</p>
+                                      <div className="mx-3 mb-2 overflow-hidden rounded-md border border-[#e0dfdc] bg-[#f3f2ef]">
+                                        <div className="flex items-start gap-2 border-b border-[#e8e8e8] bg-[#fafafa] px-2 py-1.5">
+                                          <img
+                                            src={avatarForShareQuoted(q)}
+                                            alt=""
+                                            className="h-7 w-7 shrink-0 rounded-full border border-slate-200 object-cover"
+                                          />
+                                          <div className="min-w-0">
+                                            <p className="text-xs font-semibold text-[#191919]">
+                                              {q.author_name || q.member_id}
+                                            </p>
+                                            {q.author_headline ? (
+                                              <p className="line-clamp-1 text-[10px] text-[#666]">{q.author_headline}</p>
+                                            ) : null}
+                                          </div>
+                                        </div>
+                                        <p className="line-clamp-2 px-2 py-1.5 text-xs text-[#333]">{q.body}</p>
+                                        {q.image_data ? (
+                                          <div className="max-h-28 w-full overflow-hidden bg-[#eef3f8]">
+                                            <img src={q.image_data} alt="" className="h-full w-full object-cover" />
+                                          </div>
+                                        ) : null}
+                                      </div>
+                                    </>
+                                  ) : (
+                                    <>
+                                      {preview.image_data ? (
+                                        <div className="aspect-[1.85/1] max-h-36 w-full overflow-hidden bg-[#eef3f8]">
+                                          <img src={preview.image_data} alt="" className="h-full w-full object-cover" />
+                                        </div>
+                                      ) : null}
+                                      <p className="line-clamp-3 px-3 py-2 text-sm leading-snug text-[#333]">{snippet}</p>
+                                    </>
+                                  )}
                                   <p className="px-3 pb-2 text-xs font-semibold text-[#0a66c2]">View post →</p>
                                 </Link>
                               </div>
@@ -891,7 +940,7 @@ export default function MessagingPage() {
                         await startOrOpenConversation(receiverId, composeQuery);
                         threadId = activeThreadId || threadId;
                         if (!threadId) {
-                          const latest = await fetch('http://localhost:4000/api/threads/byUser', {
+                          const latest = await fetch('/api/threads/byUser', {
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json' },
                             body: JSON.stringify({ user_id: memberId })

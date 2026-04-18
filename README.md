@@ -80,6 +80,25 @@ graph TD
 
 ---
 
+<!-- ====================== 0.1 PORTS / GATEWAY / SWAGGER ====================== -->
+## 0.1 Ports, gateway, and Swagger (read this to avoid confusion)
+
+**This layout is intentional.**
+
+| Port | What it is | You use it for |
+|------|------------|----------------|
+| **4000** | **API gateway** (single HTTP entry to the backend) | `POST /api/...`, **`http://localhost:4000/docs`** (Swagger — **served by the gateway**, not “moved” elsewhere) |
+| **3000** | **React app** (Vite dev server) | **`http://localhost:3000`** for the UI. In dev, Vite **proxies** `/api` and `/docs` → `http://localhost:4000`, so **`http://localhost:3000/docs`** is the **same** Swagger document, just reached through the proxy for convenience (one browser origin). |
+| **4001–4007** | Individual microservices behind the gateway | Normally **not** opened in the browser; traffic goes **via 4000** (or relative `/api/...` from the app on 3000). |
+
+**Takeaways**
+
+1. **Swagger always lives on the gateway process** (`/docs` on port **4000**). Port **3000** does not host a second copy; it only **forwards** `/docs` when you run `npm run dev` in `frontend/` (see `frontend/vite.config.ts`).
+2. If someone says “use the app on3000,” that is correct for the **UI**. If they say “the API is on 4000,” that is also correct for the **gateway** and **Swagger**.
+3. **`npm run test:smoke`** calls **`http://localhost:4000/api`** on purpose so backend health is checked **without** relying on the Vite dev server.
+
+---
+
 <!-- ====================== 1.0 PREREQUISITES ====================== -->
 ## 1.0 Prerequisites
 
@@ -135,8 +154,11 @@ npm run dev
 
 ### 2.5 Open app and docs
 
+See **§0.1** for why both **4000** and **3000** appear — both are correct for different purposes.
+
 1. App: [http://localhost:3000](http://localhost:3000)
-2. Swagger: [http://localhost:4000/docs](http://localhost:4000/docs)
+2. Swagger (**canonical** — on the API gateway): [http://localhost:4000/docs](http://localhost:4000/docs)
+3. Swagger (**dev convenience** — Vite on 3000 proxies `/docs` to the gateway; same content as #2): [http://localhost:3000/docs](http://localhost:3000/docs)
 
 ### 2.5.1 Quick access URLs
 
@@ -144,8 +166,9 @@ npm run dev
 2. Sign in: [http://localhost:3000/login/email](http://localhost:3000/login/email)
 3. Sign up: [http://localhost:3000/signup](http://localhost:3000/signup)
 4. Feed (post-login): [http://localhost:3000/feed](http://localhost:3000/feed)
-5. Swagger API docs: [http://localhost:4000/docs](http://localhost:4000/docs)
-6. AI FastAPI docs (only when AI service is running): [http://localhost:8001/docs](http://localhost:8001/docs)
+5. Swagger API docs (gateway): [http://localhost:4000/docs](http://localhost:4000/docs)
+6. Swagger API docs (via dev server proxy — convenient if you only want to share port `3000`): [http://localhost:3000/docs](http://localhost:3000/docs)
+7. AI FastAPI docs (only when AI service is running): [http://localhost:8001/docs](http://localhost:8001/docs)
 
 ### 2.6 Exact terminal commands (copy/paste)
 
@@ -205,7 +228,8 @@ npm run dev
 ### 2.8 Open and test
 
 1. Browser: [http://localhost:3000](http://localhost:3000) — sign in at `/login/email`, then open `/feed`.
-2. API docs: [http://localhost:4000/docs](http://localhost:4000/docs).
+2. API docs (direct on gateway): [http://localhost:4000/docs](http://localhost:4000/docs).
+3. API docs (proxied — same host as the React app): [http://localhost:3000/docs](http://localhost:3000/docs) when the Vite dev server is running (`npm run dev` in `frontend/`).
 
 `docker compose up -d` starts Zookeeper, Kafka, MySQL, MongoDB, Redis (see **§6.0** for ports).
 
@@ -266,14 +290,18 @@ Auth status:
 <!-- ====================== 6.0 SERVICES AND PORTS ====================== -->
 ## 6.0 Services and Ports
 
-1. API Gateway: `:4000`
+**Summary of gateway vs UI:** see **§0.1**.
+
+1. API Gateway: `:4000` (HTTP API under `/api/*`; **Swagger UI** at **`/docs`** on this port, e.g. `http://localhost:4000/docs`)
 2. Member: `:4001`
 3. Job (+ recruiter admin APIs): `:4002`
 4. Application: `:4003`
 5. Messaging: `:4004`
 6. Analytics: `:4005`
 7. Connections: `:4006`
-8. Frontend: `:3000`
+8. Post / feed service: `:4007`
+9. Frontend (Vite): `:3000` — this is the **main app URL** for the React UI. The dev server **proxies** **`/api`** and **`/docs`** to **`http://localhost:4000`**, so API calls from the browser use relative paths like `/api/...` and you can open Swagger at **`http://localhost:3000/docs`** without using port `4000` in the browser.
+10. Optional: set **`VITE_API_BASE_URL`** at build time if the UI and API are hosted on different origins (see `frontend/src/main.tsx`).
 
 ---
 
@@ -303,6 +331,10 @@ chmod +x scripts/smoke-test.sh
 ./scripts/smoke-test.sh
 ```
 
+Notes:
+1. By default the script calls **`http://localhost:4000/api`** (gateway directly), not port `3000`. That validates backends regardless of the Vite proxy.
+2. Keep **`npm run start:all`** running so the gateway and services are up before running smoke.
+
 ---
 
 <!-- ====================== 9.0 TROUBLESHOOTING ====================== -->
@@ -323,7 +355,7 @@ chmod +x scripts/smoke-test.sh
 ### 9.1 Additional port/startup diagnostics
 
 ```bash
-lsof -nP -iTCP -sTCP:LISTEN | grep -E '400[0-6]'
+lsof -nP -iTCP -sTCP:LISTEN | grep -E '400[0-7]'
 ```
 
 ---

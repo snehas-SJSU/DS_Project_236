@@ -29,7 +29,7 @@ export default function CompanyPage() {
       setJobs([]);
       return;
     }
-    fetch('http://localhost:4000/api/jobs/search', {
+    fetch('/api/jobs/search', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ company: companyName })

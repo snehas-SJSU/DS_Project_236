@@ -35,7 +35,7 @@ export default function JobsSearchPage() {
 
   useEffect(() => {
     setLoading(true);
-    fetch('http://localhost:4000/api/jobs/search', {
+    fetch('/api/jobs/search', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -64,7 +64,7 @@ export default function JobsSearchPage() {
   /** Pull live per-member flags (applied/saved) for selected job. */
   useEffect(() => {
     if (!activeJob?.id) return;
-    fetch('http://localhost:4000/api/jobs/get', {
+    fetch('/api/jobs/get', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ job_id: activeJob.id, member_id: MEMBER_ID })
@@ -91,7 +91,7 @@ export default function JobsSearchPage() {
     }
     setIsApplying(true);
     try {
-      const res = await fetch('http://localhost:4000/api/applications/submit', {
+      const res = await fetch('/api/applications/submit', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -130,7 +130,7 @@ export default function JobsSearchPage() {
     }
     setIsSaving(true);
     try {
-      const res = await fetch('http://localhost:4000/api/jobs/save', {
+      const res = await fetch('/api/jobs/save', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ job_id: activeJob.id, member_id: MEMBER_ID })

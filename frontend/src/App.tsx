@@ -34,15 +34,30 @@ import LanguagePage from './pages/LanguagePage';
 import JobPostPage from './pages/JobPostPage';
 import CompanyPage from './pages/CompanyPage';
 import { isAuthenticated } from './lib/auth';
-import { MEMBER_ID, resolveAvatarUrl } from './lib/memberProfile';
+import { MEMBER_ID, resolveAvatarUrl, resolveViewerAvatarUrl } from './lib/memberProfile';
 import { showToast, ToastViewport } from './lib/toast';
-type ApiPostRow = {
+/** Original post embedded in “Repost with your thoughts” */
+type FeedQuotedPost = {
   post_id: string;
   member_id: string;
   author_name: string | null;
   author_headline?: string | null;
   body: string;
   image_data: string | null;
+  author_profile_photo_url?: string | null;
+};
+
+type ApiPostRow = {
+  post_id: string;
+  member_id: string;
+  author_name: string | null;
+  author_headline?: string | null;
+  /** From members.profile_photo_url when post-service joins members */
+  author_profile_photo_url?: string | null;
+  body: string;
+  image_data: string | null;
+  quoted_post_id?: string | null;
+  quoted?: FeedQuotedPost | null;
   created_at: string;
   like_count: number;
   comment_count: number;
@@ -94,9 +109,19 @@ function FeedPlaceholder() {
   const repostMenuRef = useRef<HTMLDivElement | null>(null);
   const [commentSort, setCommentSort] = useState<'recent' | 'relevant'>('relevant');
 
+  const feedAuthorAvatarSrc = (p: ApiPostRow) =>
+    p.member_id === MEMBER_ID
+      ? resolveViewerAvatarUrl(p.author_profile_photo_url, p.author_name || p.member_id)
+      : resolveAvatarUrl(p.author_profile_photo_url, p.author_name || p.member_id);
+
+  const feedQuotedAvatarSrc = (q: FeedQuotedPost) =>
+    q.member_id === MEMBER_ID
+      ? resolveViewerAvatarUrl(q.author_profile_photo_url, q.author_name || q.member_id)
+      : resolveAvatarUrl(q.author_profile_photo_url, q.author_name || q.member_id);
+
   const loadPosts = async () => {
     try {
-      const res = await fetch('http://localhost:4000/api/posts/list', {
+      const res = await fetch('/api/posts/list', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ limit: 50, viewer_member_id: MEMBER_ID })
@@ -130,7 +155,7 @@ function FeedPlaceholder() {
     const kw = sendSearch.trim().toLowerCase();
 
     const hydrateMember = async (memberId: string): Promise<MemberRow | null> => {
-      const r = await fetch('http://localhost:4000/api/members/get', {
+      const r = await fetch('/api/members/get', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ member_id: memberId })
@@ -149,7 +174,7 @@ function FeedPlaceholder() {
     const t = window.setTimeout(() => {
       void (async () => {
         try {
-          const connRes = await fetch('http://localhost:4000/api/connections/list', {
+          const connRes = await fetch('/api/connections/list', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ user_id: MEMBER_ID })
@@ -163,7 +188,7 @@ function FeedPlaceholder() {
           const mergedMap = new Map<string, MemberRow>();
           for (const m of fromConnections) mergedMap.set(m.member_id, m);
 
-          const sr = await fetch('http://localhost:4000/api/members/search', {
+          const sr = await fetch('/api/members/search', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ keyword: sendSearch.trim() || undefined })
@@ -223,7 +248,7 @@ function FeedPlaceholder() {
   }, [repostMenuPostId]);
 
   useEffect(() => {
-    fetch('http://localhost:4000/api/members/get', {
+    fetch('/api/members/get', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ member_id: MEMBER_ID })
@@ -254,7 +279,7 @@ function FeedPlaceholder() {
   }, [location.hash, location.pathname, apiPosts, feedLoading]);
 
   const loadComments = async (postId: string) => {
-    const res = await fetch('http://localhost:4000/api/posts/comments/list', {
+    const res = await fetch('/api/posts/comments/list', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ post_id: postId })
@@ -268,7 +293,7 @@ function FeedPlaceholder() {
     if (!text) return;
     const bodyText = scheduledAt ? `[Scheduled: ${scheduledAt}] ${text}` : text;
     try {
-      const res = await fetch('http://localhost:4000/api/posts/create', {
+      const res = await fetch('/api/posts/create', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -297,7 +322,7 @@ function FeedPlaceholder() {
   const toggleRepost = async (p: ApiPostRow) => {
     try {
       const path = p.reposted ? '/api/posts/unrepost' : '/api/posts/repost';
-      const res = await fetch(`http://localhost:4000${path}`, {
+      const res = await fetch(`${path}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ post_id: p.post_id, member_id: MEMBER_ID })
@@ -329,20 +354,20 @@ function FeedPlaceholder() {
       const link = `${window.location.origin}/feed#${post.post_id}`;
       const text = `Shared a post from ${post.author_name || 'feed'}:\n${snippet}\n${link}\n[[post_share:${post.post_id}]]`;
       for (const rid of ids) {
-        const openRes = await fetch('http://localhost:4000/api/threads/open', {
+        const openRes = await fetch('/api/threads/open', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ participant_a: MEMBER_ID, participant_b: rid })
         });
         const openData = await openRes.json().catch(() => ({}));
         if (!openData.thread_id) continue;
-        await fetch('http://localhost:4000/api/messages/send', {
+        await fetch('/api/messages/send', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ thread_id: openData.thread_id, sender_id: MEMBER_ID, text })
         });
       }
-      const sendOnce = await fetch('http://localhost:4000/api/posts/send', {
+      const sendOnce = await fetch('/api/posts/send', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ post_id: post.post_id, member_id: MEMBER_ID })
@@ -370,22 +395,22 @@ function FeedPlaceholder() {
       return;
     }
     const p = repostThoughtsPost;
-    const quoted = `${t}\n\n— Reposting ${p.author_name || 'member'}:\n${p.body}`;
     try {
-      const res = await fetch('http://localhost:4000/api/posts/create', {
+      const res = await fetch('/api/posts/create', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           member_id: MEMBER_ID,
           author_name: memberDisplayName,
-          body: quoted
+          body: t,
+          quoted_post_id: p.post_id
         })
       });
       if (!res.ok) {
         showToast('Could not publish post.', 'error');
         return;
       }
-      await fetch('http://localhost:4000/api/posts/repost', {
+      await fetch('/api/posts/repost', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ post_id: p.post_id, member_id: MEMBER_ID })
@@ -402,7 +427,7 @@ function FeedPlaceholder() {
   const toggleLike = async (p: ApiPostRow) => {
     try {
       const path = p.liked ? '/api/posts/unlike' : '/api/posts/like';
-      const res = await fetch(`http://localhost:4000${path}`, {
+      const res = await fetch(`${path}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ post_id: p.post_id, member_id: MEMBER_ID })
@@ -418,7 +443,7 @@ function FeedPlaceholder() {
     const t = commentDraft.trim();
     if (!t) return;
     try {
-      const res = await fetch('http://localhost:4000/api/posts/comment', {
+      const res = await fetch('/api/posts/comment', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -445,7 +470,7 @@ function FeedPlaceholder() {
       <div className="li-card p-4">
         <div className="mb-2 flex items-center gap-2">
           <div className="h-12 w-12 overflow-hidden rounded-full border border-slate-200 bg-slate-100">
-            <img src={resolveAvatarUrl(undefined, memberDisplayName)} alt="Me" className="h-full w-full object-cover" />
+            <img src={resolveViewerAvatarUrl(undefined, memberDisplayName)} alt="Me" className="h-full w-full object-cover" />
           </div>
           <button
             className="flex-1 rounded-full border border-[#d0d7de] px-4 py-3 text-left text-sm text-[#666666] hover:bg-[#f3f6f8]"
@@ -465,7 +490,7 @@ function FeedPlaceholder() {
         <article key={p.post_id} id={p.post_id} className="li-card scroll-mt-28 p-4">
           <div className="flex items-start gap-3">
             <div className="h-12 w-12 overflow-hidden rounded-full border border-slate-200 bg-slate-100">
-              <img src={resolveAvatarUrl(undefined, p.author_name || p.member_id)} alt="" className="h-full w-full object-cover" />
+              <img src={feedAuthorAvatarSrc(p)} alt="" className="h-full w-full object-cover" />
             </div>
             <div>
               <Link to={`/profile/${encodeURIComponent(p.member_id)}`} className="text-sm font-semibold text-[#191919] hover:text-[#0a66c2] hover:underline">
@@ -475,8 +500,35 @@ function FeedPlaceholder() {
               <p className="text-xs text-[#666666]">{new Date(p.created_at).toLocaleString()} • 🌎</p>
             </div>
           </div>
-          <p className="mt-3 text-sm leading-relaxed text-[#191919]">{p.body}</p>
-          {p.image_data ? (
+          <p className="mt-3 whitespace-pre-wrap text-sm leading-relaxed text-[#191919]">{p.body}</p>
+          {p.quoted ? (
+            <div className="mt-3 overflow-hidden rounded-lg border border-[#e0dfdc] bg-[#f3f2ef]">
+              <div className="flex items-start gap-2 border-b border-[#e8e8e8] bg-[#fafafa] px-3 py-2">
+                <div className="h-9 w-9 shrink-0 overflow-hidden rounded-full border border-slate-200 bg-slate-100">
+                  <img src={feedQuotedAvatarSrc(p.quoted)} alt="" className="h-full w-full object-cover" />
+                </div>
+                <div className="min-w-0">
+                  <Link
+                    to={`/profile/${encodeURIComponent(p.quoted.member_id)}`}
+                    className="text-sm font-semibold text-[#191919] hover:text-[#0a66c2] hover:underline"
+                  >
+                    {p.quoted.author_name || p.quoted.member_id}
+                  </Link>
+                  {p.quoted.author_headline ? (
+                    <p className="line-clamp-1 text-xs text-[#666666]">{p.quoted.author_headline}</p>
+                  ) : null}
+                </div>
+              </div>
+              <div className="px-3 py-2">
+                <p className="text-sm leading-relaxed text-[#191919]">{p.quoted.body}</p>
+                {p.quoted.image_data ? (
+                  <div className="mt-2 overflow-hidden rounded-md border border-slate-200">
+                    <img src={p.quoted.image_data} alt="" className="max-h-[280px] w-full object-cover" />
+                  </div>
+                ) : null}
+              </div>
+            </div>
+          ) : p.image_data ? (
             <div className="mt-3 overflow-hidden rounded-md border border-slate-200">
               <img src={p.image_data} alt="Post media" className="max-h-[360px] w-full object-cover" />
             </div>
@@ -755,6 +807,15 @@ function FeedPlaceholder() {
                 <div className="border-b border-[#e0dfdc] bg-[#f9fafb] p-3 text-xs text-[#666666]">
                   <p className="font-semibold text-[#191919]">{repostThoughtsPost.author_name}</p>
                   <p className="mt-1 line-clamp-4 text-[#191919]">{repostThoughtsPost.body}</p>
+                  {repostThoughtsPost.image_data ? (
+                    <div className="mt-2 max-h-40 overflow-hidden rounded-md border border-slate-200">
+                      <img
+                        src={repostThoughtsPost.image_data}
+                        alt=""
+                        className="max-h-40 w-full object-cover"
+                      />
+                    </div>
+                  ) : null}
                 </div>
                 <div className="p-4">
                   <textarea
@@ -792,7 +853,7 @@ function FeedPlaceholder() {
             <div className="flex items-start justify-between border-b border-slate-200 px-5 py-4">
               <div className="flex items-center gap-3">
                 <div className="h-12 w-12 overflow-hidden rounded-full border border-slate-200">
-                  <img src={resolveAvatarUrl(undefined, memberDisplayName)} alt="Me" className="h-full w-full object-cover" />
+                  <img src={resolveViewerAvatarUrl(undefined, memberDisplayName)} alt="Me" className="h-full w-full object-cover" />
                 </div>
                 <div>
                   <p className="text-base font-semibold text-[#191919]">{memberDisplayName}</p>
@@ -938,12 +999,12 @@ function AppShell({ children }: { children: React.ReactNode }) {
   const [member, setMember] = useState<{ name: string; headline: string; photo: string }>({
     name: 'Sneha Singh',
     headline: 'MS Student | Distributed Systems',
-    photo: resolveAvatarUrl(undefined, 'Sneha Singh')
+    photo: resolveViewerAvatarUrl(undefined, 'Sneha Singh')
   });
   const [memberDashboard, setMemberDashboard] = useState<any>(null);
 
   useEffect(() => {
-    fetch('http://localhost:4000/api/members/get', {
+    fetch('/api/members/get', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ member_id: MEMBER_ID })
@@ -954,12 +1015,12 @@ function AppShell({ children }: { children: React.ReactNode }) {
         setMember({
           name: data.name || 'Sneha Singh',
           headline: data.headline || data.title || 'MS Student | Distributed Systems',
-          photo: resolveAvatarUrl(data.profile_photo_url, data.name)
+          photo: resolveViewerAvatarUrl(data.profile_photo_url, data.name)
         });
       })
       .catch(() => undefined);
 
-    fetch('http://localhost:4000/api/analytics/member/dashboard', {
+    fetch('/api/analytics/member/dashboard', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ member_id: MEMBER_ID })

@@ -7,7 +7,21 @@ export function defaultAvatarUrl(name?: string) {
   return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
 }
 
-export function resolveAvatarUrl(photo?: string, name?: string) {
-  return photo || localStorage.getItem(LOCAL_AVATAR_KEY) || defaultAvatarUrl(name);
+/**
+ * Any member (feed authors, search, public profiles). Never uses localStorage —
+ * otherwise the viewer's uploaded avatar appears for everyone missing a photo URL.
+ */
+export function resolveAvatarUrl(photo?: string | null, name?: string) {
+  const p = photo && String(photo).trim();
+  if (p) return p;
+  return defaultAvatarUrl(name);
 }
 
+/** Logged-in user only: API / draft photo, else cached local upload, else default. */
+export function resolveViewerAvatarUrl(photo?: string | null, name?: string) {
+  const p = photo && String(photo).trim();
+  if (p) return p;
+  const cached = localStorage.getItem(LOCAL_AVATAR_KEY);
+  if (cached && cached.trim()) return cached;
+  return defaultAvatarUrl(name);
+}

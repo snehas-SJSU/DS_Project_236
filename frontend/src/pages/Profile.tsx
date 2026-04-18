@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Briefcase, GraduationCap, MapPin, Pencil } from 'lucide-react';
 import { Link } from 'react-router-dom';
-import { LOCAL_AVATAR_KEY, MEMBER_ID, resolveAvatarUrl } from '../lib/memberProfile';
+import { LOCAL_AVATAR_KEY, MEMBER_ID, resolveViewerAvatarUrl } from '../lib/memberProfile';
 import { showToast } from '../lib/toast';
 
 type LoadState = { status: 'loading' } | { status: 'ok'; data: any } | { status: 'error'; message: string };
@@ -22,7 +22,7 @@ export default function Profile() {
   const avatarFileInputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
-    fetch('http://localhost:4000/api/members/get', {
+    fetch('/api/members/get', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ member_id: MEMBER_ID })
@@ -63,10 +63,10 @@ export default function Profile() {
         setState({
           status: 'error',
           message:
-            'Could not reach http://localhost:4000. Start the stack (npm run start:all from the repo root) and try again.'
+            'Could not reach the API. Open this app at http://localhost:3000 (npm run dev) and start the backend (npm run start:all from the repo root).'
         });
       });
-    fetch('http://localhost:4000/api/analytics/member/dashboard', {
+    fetch('/api/analytics/member/dashboard', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ member_id: MEMBER_ID })
@@ -92,7 +92,7 @@ export default function Profile() {
     [profile.first_name, profile.last_name].filter(Boolean).join(' ').trim() ||
     'Sneha Singh';
   const headlineText = profile.headline || profile.title || 'Full Stack AI Engineer';
-  const avatarUrl = resolveAvatarUrl((draft.profile_photo_url || profile.profile_photo_url) as string | undefined, displayName);
+  const avatarUrl = resolveViewerAvatarUrl((draft.profile_photo_url || profile.profile_photo_url) as string | undefined, displayName);
   const coverClass = COVER_THEMES[draft.cover_theme || profile.cover_theme || 'blue'] || COVER_THEMES.blue;
   const onUploadImage = (file: File, key: 'profile_photo_url' | 'cover_photo_url') => {
     const reader = new FileReader();
@@ -109,10 +109,10 @@ export default function Profile() {
       showToast('Choose an image file.', 'error');
       return;
     }
-    // Raw file limit: base64 grows ~4/3; keep under gateway JSON body limit (~20MB).
-    const maxBytes = 8 * 1024 * 1024;
+    // Raw file limit: base64 grows ~4/3; keep under API JSON body limit (50MB on member-service).
+    const maxBytes = 12 * 1024 * 1024;
     if (file.size > maxBytes) {
-      showToast('Image too large — max 8MB file (JPEG/PNG).', 'error');
+      showToast('Image too large — max 12MB file (JPEG/PNG/WebP).', 'error');
       return;
     }
     const reader = new FileReader();
@@ -121,7 +121,7 @@ export default function Profile() {
       if (!dataUrl) return;
       setDraft((prev: any) => ({ ...prev, [key]: dataUrl }));
       try {
-        const res = await fetch('http://localhost:4000/api/members/update', {
+        const res = await fetch('/api/members/update', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ member_id: MEMBER_ID, [key]: dataUrl })
@@ -140,7 +140,7 @@ export default function Profile() {
           const msg =
             (errBody && (errBody.message || errBody.error)) ||
             (res.status === 413
-              ? 'Payload too large — use a smaller image (max 8MB file).'
+              ? 'Payload too large — use a smaller image (max 12MB file).'
               : 'Could not save image. Try a smaller file.');
           showToast(String(msg), 'error');
         }
@@ -357,7 +357,8 @@ export default function Profile() {
                 className="hidden"
                 onChange={(e) => {
                   const file = e.target.files?.[0];
-                  if (file) onUploadImage(file, 'cover_photo_url');
+                  e.target.value = '';
+                  if (file) persistImageUpload(file, 'cover_photo_url');
                 }}
               />
             </label>
@@ -377,7 +378,7 @@ export default function Profile() {
           <button
             className="rounded-md bg-blue-600 px-4 py-2 text-sm font-semibold text-white"
             onClick={async () => {
-              const res = await fetch('http://localhost:4000/api/members/update', {
+              const res = await fetch('/api/members/update', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({

@@ -29,12 +29,12 @@ export default function MemberSearchPage() {
 
   async function refreshConnectionState() {
     const [listRes, reqRes] = await Promise.all([
-      fetch('http://localhost:4000/api/connections/list', {
+      fetch('/api/connections/list', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ user_id: memberId })
       }),
-      fetch('http://localhost:4000/api/connections/requestsByUser', {
+      fetch('/api/connections/requestsByUser', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ user_id: memberId })
@@ -50,7 +50,7 @@ export default function MemberSearchPage() {
   async function runSearch(e?: FormEvent) {
     if (e) e.preventDefault();
     setLoading(true);
-    const res = await fetch('http://localhost:4000/api/members/search', {
+    const res = await fetch('/api/members/search', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -155,7 +155,7 @@ export default function MemberSearchPage() {
                     <button
                       className="rounded-full border border-[#0a66c2] px-4 py-1.5 text-sm font-semibold text-[#0a66c2] hover:bg-[#edf3f8]"
                       onClick={async () => {
-                        const response = await fetch('http://localhost:4000/api/connections/request', {
+                        const response = await fetch('/api/connections/request', {
                           method: 'POST',
                           headers: { 'Content-Type': 'application/json' },
                           body: JSON.stringify({ requester_id: memberId, receiver_id: member.id })

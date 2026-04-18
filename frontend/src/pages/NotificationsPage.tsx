@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import Navbar from '../components/layout/Navbar';
-import { MEMBER_ID, resolveAvatarUrl } from '../lib/memberProfile';
+import { MEMBER_ID, resolveViewerAvatarUrl } from '../lib/memberProfile';
 import { ACTIVITY_KEY, NOTIFICATIONS_READ_KEY, SETTINGS_KEY, readJson, writeJson } from '../lib/localData';
 import { showToast } from '../lib/toast';
 
@@ -32,7 +32,7 @@ export default function NotificationsPage() {
     name: 'Sneha Singh',
     headline: 'Senior Test Automation Engineer',
     school: 'San Jose State University',
-    photo: resolveAvatarUrl(undefined, 'Sneha Singh')
+    photo: resolveViewerAvatarUrl(undefined, 'Sneha Singh')
   });
   const [readIds, setReadIds] = useState<string[]>([]);
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
@@ -46,7 +46,7 @@ export default function NotificationsPage() {
   }, []);
 
   useEffect(() => {
-    fetch('http://localhost:4000/api/members/get', {
+    fetch('/api/members/get', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ member_id: MEMBER_ID })
@@ -58,7 +58,7 @@ export default function NotificationsPage() {
           name: data.name || 'Sneha Singh',
           headline: data.headline || data.title || 'Senior Test Automation Engineer',
           school: 'San Jose State University',
-          photo: resolveAvatarUrl(data.profile_photo_url, data.name)
+          photo: resolveViewerAvatarUrl(data.profile_photo_url, data.name)
         });
       })
       .catch(() => undefined);
@@ -72,22 +72,22 @@ export default function NotificationsPage() {
     let cancelled = false;
     const buildNotifications = async () => {
       const [reqRes, threadRes, appsRes, jobsRes] = await Promise.all([
-        fetch('http://localhost:4000/api/connections/requestsByUser', {
+        fetch('/api/connections/requestsByUser', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ user_id: MEMBER_ID })
         }),
-        fetch('http://localhost:4000/api/threads/byUser', {
+        fetch('/api/threads/byUser', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ user_id: MEMBER_ID })
         }),
-        fetch('http://localhost:4000/api/applications/byMember', {
+        fetch('/api/applications/byMember', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ member_id: MEMBER_ID })
         }),
-        fetch('http://localhost:4000/api/jobs/search', {
+        fetch('/api/jobs/search', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({})

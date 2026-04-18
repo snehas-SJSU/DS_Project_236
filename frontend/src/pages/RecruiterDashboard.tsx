@@ -20,33 +20,33 @@ export default function RecruiterDashboard() {
 
   useEffect(() => {
     const body = { window_days: windowDays };
-    fetch('http://localhost:4000/api/analytics/jobs/top', {
+    fetch('/api/analytics/jobs/top', {
       method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...body, metric: 'applications' })
     }).then((r) => r.json()).then((d) => setTopJobs(d.jobs || [])).catch(() => setTopJobs([]));
-    fetch('http://localhost:4000/api/analytics/jobs/top', {
+    fetch('/api/analytics/jobs/top', {
       method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...body, metric: 'low_applications' })
     }).then((r) => r.json()).then((d) => setLowJobs(d.jobs || [])).catch(() => setLowJobs([]));
-    fetch('http://localhost:4000/api/analytics/jobs/top', {
+    fetch('/api/analytics/jobs/top', {
       method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...body, metric: 'clicks' })
     }).then((r) => r.json()).then((d) => setClickJobs(d.jobs || [])).catch(() => setClickJobs([]));
-    fetch('http://localhost:4000/api/analytics/jobs/top', {
+    fetch('/api/analytics/jobs/top', {
       method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...body, metric: 'saves' })
     }).then((r) => r.json()).then((d) => setSaveJobs(d.jobs || [])).catch(() => setSaveJobs([]));
   }, [windowDays]);
 
   useEffect(() => {
     const body = { window_days: windowDays, granularity };
-    fetch('http://localhost:4000/api/analytics/jobs/timeseries', {
+    fetch('/api/analytics/jobs/timeseries', {
       method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...body, event_type: 'job.saved' })
     }).then((r) => r.json()).then((d) => setSavedTrend(d.series || [])).catch(() => setSavedTrend([]));
-    fetch('http://localhost:4000/api/analytics/jobs/timeseries', {
+    fetch('/api/analytics/jobs/timeseries', {
       method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...body, event_type: 'job.viewed' })
     }).then((r) => r.json()).then((d) => setClickTrend(d.series || [])).catch(() => setClickTrend([]));
   }, [windowDays, granularity]);
 
   useEffect(() => {
     if (!selectedJobId) return;
-    fetch('http://localhost:4000/api/analytics/geo', {
+    fetch('/api/analytics/geo', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ job_id: selectedJobId, window_days: windowDays })

@@ -6,7 +6,7 @@ export default function MemberAnalyticsPage() {
   const [dashboard, setDashboard] = useState<any>(null);
 
   useEffect(() => {
-    fetch('http://localhost:4000/api/analytics/member/dashboard', {
+    fetch('/api/analytics/member/dashboard', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ member_id: MEMBER_ID })

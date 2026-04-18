@@ -16,7 +16,7 @@ export default function JobTrackerPage() {
   const savedJobs = readJson<SavedJob[]>(SAVED_JOBS_KEY, []);
 
   useEffect(() => {
-    fetch('http://localhost:4000/api/applications/byMember', {
+    fetch('/api/applications/byMember', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ member_id: MEMBER_ID })

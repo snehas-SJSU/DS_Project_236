@@ -19,7 +19,7 @@ export default function RecruiterAdminPage() {
   const [status, setStatus] = useState('');
 
   const post = async (path: string, body: any) => {
-    const res = await fetch(`http://localhost:4000/api/recruiters/${path}`, {
+    const res = await fetch(`/api/recruiters/${path}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body)

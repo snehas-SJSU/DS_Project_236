@@ -57,17 +57,17 @@ export default function MemberPublicProfilePage() {
       setLoading(true);
       try {
         const [memberRes, conRes, reqRes] = await Promise.all([
-          fetch('http://localhost:4000/api/members/get', {
+          fetch('/api/members/get', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ member_id: memberId })
           }),
-          fetch('http://localhost:4000/api/connections/list', {
+          fetch('/api/connections/list', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ user_id: viewerId })
           }),
-          fetch('http://localhost:4000/api/connections/requestsByUser', {
+          fetch('/api/connections/requestsByUser', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ user_id: viewerId })
@@ -159,7 +159,7 @@ export default function MemberPublicProfilePage() {
                 <button
                   className="rounded-full border border-[#0a66c2] px-4 py-1.5 text-sm font-semibold text-[#0a66c2] hover:bg-[#edf3f8]"
                   onClick={async () => {
-                    const response = await fetch('http://localhost:4000/api/connections/request', {
+                    const response = await fetch('/api/connections/request', {
                       method: 'POST',
                       headers: { 'Content-Type': 'application/json' },
                       body: JSON.stringify({ requester_id: viewerId, receiver_id: memberId })

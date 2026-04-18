@@ -15,7 +15,7 @@ export default function JobInsightsPage() {
   const [jobs, setJobs] = useState<JobItem[]>([]);
 
   useEffect(() => {
-    fetch('http://localhost:4000/api/members/get', {
+    fetch('/api/members/get', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ member_id: MEMBER_ID })
@@ -24,7 +24,7 @@ export default function JobInsightsPage() {
       .then((data) => setSkills(Array.isArray(data?.skills) ? data.skills : []))
       .catch(() => setSkills([]));
 
-    fetch('http://localhost:4000/api/jobs/search', {
+    fetch('/api/jobs/search', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({})

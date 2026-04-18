@@ -1,7 +1,7 @@
 import { Bell, Briefcase, Building2, ChevronDown, CircleDollarSign, Compass, Crown, Grid3X3, Handshake, Home, MessageSquare, Network, Search, Settings, Sparkles } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { Link, NavLink, useNavigate } from 'react-router-dom';
-import { LOCAL_AVATAR_KEY, MEMBER_ID, resolveAvatarUrl } from '../../lib/memberProfile';
+import { LOCAL_AVATAR_KEY, MEMBER_ID, resolveViewerAvatarUrl } from '../../lib/memberProfile';
 
 export default function Navbar() {
   const navigate = useNavigate();
@@ -11,7 +11,7 @@ export default function Navbar() {
   const [meProfile, setMeProfile] = useState<{ name: string; headline: string; photo?: string }>({
     name: 'Sneha Singh',
     headline: 'MS in Applied Data Intelligence | Distributed Systems',
-    photo: resolveAvatarUrl(undefined, 'Sneha Singh')
+    photo: resolveViewerAvatarUrl(undefined, 'Sneha Singh')
   });
   const menuRef = useRef<HTMLDivElement | null>(null);
   const businessMenuRef = useRef<HTMLDivElement | null>(null);
@@ -30,7 +30,7 @@ export default function Navbar() {
   }, []);
 
   useEffect(() => {
-    fetch('http://localhost:4000/api/members/get', {
+    fetch('/api/members/get', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ member_id: MEMBER_ID })
@@ -38,7 +38,7 @@ export default function Navbar() {
       .then((res) => res.json())
       .then((data) => {
         if (!data || data.error) return;
-        const photo = resolveAvatarUrl(data.profile_photo_url, data.name);
+        const photo = resolveViewerAvatarUrl(data.profile_photo_url, data.name);
         if (photo) localStorage.setItem(LOCAL_AVATAR_KEY, photo);
         setMeProfile({
           name: data.name || 'Sneha Singh',

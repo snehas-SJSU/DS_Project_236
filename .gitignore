@@ -24,6 +24,8 @@ venv/
 .code-review-graph/
 
 # Local AI/editor tooling files
+.agents/
+skills-lock.json
 .cursor/
 .claude/
 .kiro/
