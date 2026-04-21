@@ -301,6 +301,7 @@ app.post('/members/get', async (req, res) => {
     const member = rows[0];
     const formatted = {
       ...member,
+      profile_views_daily: member.profile_views,
       skills: typeof member.skills === 'string' ? JSON.parse(member.skills || '[]') : member.skills,
       experience: typeof member.experience === 'string' ? JSON.parse(member.experience || '[]') : member.experience,
       education: typeof member.education === 'string' ? JSON.parse(member.education || '[]') : member.education
@@ -417,6 +418,7 @@ app.post('/members/search', async (req, res) => {
     const [rows] = await db.query(sql, params);
     const formatted = rows.map((m) => ({
       ...m,
+      profile_views_daily: m.profile_views,
       skills: typeof m.skills === 'string' ? JSON.parse(m.skills || '[]') : m.skills
     }));
     res.status(200).json(formatted);

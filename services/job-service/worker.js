@@ -24,6 +24,7 @@ async function initDB() {
     CREATE TABLE IF NOT EXISTS jobs (
       job_id VARCHAR(50) PRIMARY KEY,
       title VARCHAR(255),
+      company_id VARCHAR(50),
       company VARCHAR(255),
       industry VARCHAR(100),
       location VARCHAR(100),
@@ -43,6 +44,7 @@ async function initDB() {
     )
   `);
   await ensureColumn('jobs', 'industry', 'industry VARCHAR(100)');
+  await ensureColumn('jobs', 'company_id', 'company_id VARCHAR(50)');
   await ensureColumn('jobs', 'remote_mode', 'remote_mode VARCHAR(20)');
   await ensureColumn('jobs', 'seniority_level', 'seniority_level VARCHAR(50)');
   await ensureColumn('jobs', 'employment_type', 'employment_type VARCHAR(50)');
@@ -69,21 +71,21 @@ async function runWorker() {
 
         if (event.event_type === 'job.created') {
           const {
-            title, company, industry, location, remote_mode, seniority_level,
+            title, company, company_id, industry, location, remote_mode, seniority_level,
             employment_type, salary, type, skills, description, recruiter_id
           } = event.payload;
           await db.query(
             `INSERT INTO jobs (
-              job_id, title, company, industry, location, remote_mode, seniority_level, employment_type,
+              job_id, title, company_id, company, industry, location, remote_mode, seniority_level, employment_type,
               salary, type, skills, description, recruiter_id, status
             )
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'open')
-             ON DUPLICATE KEY UPDATE title=VALUES(title), company=VALUES(company), location=VALUES(location),
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'open')
+             ON DUPLICATE KEY UPDATE title=VALUES(title), company_id=VALUES(company_id), company=VALUES(company), location=VALUES(location),
              industry=VALUES(industry), remote_mode=VALUES(remote_mode), seniority_level=VALUES(seniority_level),
              employment_type=VALUES(employment_type), salary=VALUES(salary), type=VALUES(type), skills=VALUES(skills),
              description=VALUES(description), recruiter_id=VALUES(recruiter_id)`,
             [
-              event.entity.entity_id, title, company, industry || null, location, remote_mode || null,
+              event.entity.entity_id, title, company_id || null, company, industry || null, location, remote_mode || null,
               seniority_level || null, employment_type || type || null, salary, type || employment_type || null,
               typeof skills === 'string' ? skills : JSON.stringify(skills || []), description, recruiter_id || 'R-default'
             ]
@@ -116,7 +118,7 @@ async function runWorker() {
           } else {
             const sets = [];
             const vals = [];
-            ['title', 'company', 'location', 'salary', 'type', 'description'].forEach((k) => {
+            ['title', 'company_id', 'company', 'location', 'salary', 'type', 'description'].forEach((k) => {
               if (p[k] !== undefined) {
                 sets.push(`${k} = ?`);
                 vals.push(p[k]);

@@ -27,6 +27,7 @@ async function ensureJobsSchema() {
     CREATE TABLE IF NOT EXISTS jobs (
       job_id VARCHAR(50) PRIMARY KEY,
       title VARCHAR(255),
+      company_id VARCHAR(50),
       company VARCHAR(255),
       industry VARCHAR(100),
       location VARCHAR(100),
@@ -46,6 +47,7 @@ async function ensureJobsSchema() {
     )
   `);
   await ensureColumn('jobs', 'industry', 'industry VARCHAR(100)');
+  await ensureColumn('jobs', 'company_id', 'company_id VARCHAR(50)');
   await ensureColumn('jobs', 'remote_mode', 'remote_mode VARCHAR(20)');
   await ensureColumn('jobs', 'seniority_level', 'seniority_level VARCHAR(50)');
   await ensureColumn('jobs', 'employment_type', 'employment_type VARCHAR(50)');
@@ -77,7 +79,7 @@ async function sendJobEvent(payload) {
 app.post('/jobs/create', async (req, res) => {
   try {
     const {
-      title, company, location, salary, type, skills, description, recruiter_id,
+      title, company, company_id, location, salary, type, skills, description, recruiter_id,
       industry, seniority_level, employment_type, remote_mode
     } = req.body;
     const jobId = 'J-' + crypto.randomUUID().substring(0, 8);
@@ -85,7 +87,7 @@ app.post('/jobs/create', async (req, res) => {
     const idempotencyKey = req.headers['idempotency-key'] || crypto.createHash('sha256').update(`job.created-${jobId}-${Date.now()}`).digest('hex');
 
     const eventPayload = env('job.created', traceId, recruiter_id || 'recruiter', jobId, {
-      title, company, location, salary, type: type || employment_type, skills, description,
+      title, company, company_id: company_id || null, location, salary, type: type || employment_type, skills, description,
       recruiter_id: recruiter_id || 'R-default', industry: industry || null,
       seniority_level: seniority_level || null, employment_type: employment_type || type || null,
       remote_mode: remote_mode || null
@@ -134,11 +136,14 @@ app.post('/jobs/search', async (req, res) => {
     const [rows] = await db.query(sql, params);
     const formatted = rows.map((r) => ({
       id: r.job_id,
+      job_id: r.job_id,
+      company_id: r.company_id || null,
       title: r.title,
       company: r.company,
       location: r.location,
       salary: r.salary,
       type: r.type,
+      posted_datetime: r.created_at,
       postedAt: 'Just now',
       skills: typeof r.skills === 'string' ? JSON.parse(r.skills || '[]') : r.skills,
       description: r.description,
@@ -208,7 +213,13 @@ app.post('/jobs/get', async (req, res) => {
       }
     }
 
-    res.status(200).json({ ...job, applied, saved });
+    res.status(200).json({
+      ...job,
+      company_id: job.company_id || null,
+      posted_datetime: job.created_at,
+      applied,
+      saved
+    });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'INTERNAL_ERROR', message: err.message, trace_id: crypto.randomUUID() });
@@ -304,7 +315,13 @@ app.post('/jobs/byRecruiter', async (req, res) => {
       'SELECT * FROM jobs WHERE recruiter_id = ? ORDER BY created_at DESC LIMIT 100',
       [recruiter_id]
     );
-    res.status(200).json(rows);
+    res.status(200).json(
+      rows.map((r) => ({
+        ...r,
+        company_id: r.company_id || null,
+        posted_datetime: r.created_at
+      }))
+    );
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'INTERNAL_ERROR', message: err.message, trace_id: crypto.randomUUID() });

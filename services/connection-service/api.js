@@ -7,6 +7,14 @@ const app = express();
 app.use(express.json());
 const producer = kafka.producer();
 
+function mapConnectionRequestRow(r) {
+  return {
+    ...r,
+    connection_request_id: r.request_id,
+    timestamp: r.created_at
+  };
+}
+
 async function ensureSchema() {
   await db.query(`
     CREATE TABLE IF NOT EXISTS connection_requests (
@@ -67,7 +75,7 @@ app.post('/connections/request', async (req, res) => {
       }]
     });
 
-    res.status(201).json({ request_id: requestId, trace_id: traceId });
+    res.status(201).json({ request_id: requestId, connection_request_id: requestId, trace_id: traceId });
   } catch (err) {
     if (err.code === 'ER_DUP_ENTRY') {
       return res.status(409).json({ error: 'DUPLICATE_REQUEST', message: 'Request already exists', trace_id: crypto.randomUUID() });
@@ -164,7 +172,10 @@ app.post('/connections/requestsByUser', async (req, res) => {
     const incoming = incomingRaw.filter((row) => !connectedIds.has(row.requester_id));
     // Once a connection exists, hide sent rows for that person (pending, accepted, etc.) so UI matches "friends" state.
     const sent = sentRaw.filter((row) => !connectedIds.has(row.receiver_id));
-    res.status(200).json({ incoming, sent });
+    res.status(200).json({
+      incoming: incoming.map(mapConnectionRequestRow),
+      sent: sent.map(mapConnectionRequestRow)
+    });
   } catch (err) {
     res.status(500).json({ error: 'INTERNAL_ERROR', message: err.message, trace_id: crypto.randomUUID() });
   }

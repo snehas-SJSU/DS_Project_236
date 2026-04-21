@@ -7,6 +7,14 @@ const app = express();
 app.use(express.json({ limit: '15mb' }));
 const producer = kafka.producer();
 
+function mapApplicationRow(r) {
+  return {
+    ...r,
+    application_id: r.app_id,
+    application_datetime: r.applied_at
+  };
+}
+
 async function ensureApplicationsTable() {
   await db.query(`
     CREATE TABLE IF NOT EXISTS applications (
@@ -116,7 +124,7 @@ app.post('/applications/get', async (req, res) => {
     if (!rows.length) {
       return res.status(404).json({ error: 'NOT_FOUND', message: 'Application not found', trace_id: crypto.randomUUID() });
     }
-    res.status(200).json(rows[0]);
+    res.status(200).json(mapApplicationRow(rows[0]));
   } catch (err) {
     res.status(500).json({ error: 'INTERNAL_ERROR', message: err.message, trace_id: crypto.randomUUID() });
   }
@@ -130,7 +138,7 @@ app.post('/applications/byJob', async (req, res) => {
       return res.status(400).json({ error: 'BAD_REQUEST', message: 'job_id required', trace_id: crypto.randomUUID() });
     }
     const [rows] = await db.query('SELECT * FROM applications WHERE job_id = ? ORDER BY applied_at DESC', [job_id]);
-    res.status(200).json(rows);
+    res.status(200).json(rows.map(mapApplicationRow));
   } catch (err) {
     res.status(500).json({ error: 'INTERNAL_ERROR', message: err.message, trace_id: crypto.randomUUID() });
   }
@@ -144,7 +152,7 @@ app.post('/applications/byMember', async (req, res) => {
       return res.status(400).json({ error: 'BAD_REQUEST', message: 'member_id required', trace_id: crypto.randomUUID() });
     }
     const [rows] = await db.query('SELECT * FROM applications WHERE member_id = ? ORDER BY applied_at DESC', [member_id]);
-    res.status(200).json(rows);
+    res.status(200).json(rows.map(mapApplicationRow));
   } catch (err) {
     res.status(500).json({ error: 'INTERNAL_ERROR', message: err.message, trace_id: crypto.randomUUID() });
   }
