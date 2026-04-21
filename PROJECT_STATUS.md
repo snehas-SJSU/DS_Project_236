@@ -55,6 +55,21 @@ Last updated: Apr 2026 (connections, feed/share UX, smoke hardening, same-origin
 - Pending item is benchmark evidence generation: run JMeter (or equivalent) and publish baseline vs Redis-enabled performance comparison (`B` vs `B+S`) with charts/tables.
 - Ownership for this step can be assigned to the performance/JMeter assignee; this is a reporting/measurement phase, not a missing core Redis implementation.
 
+## Pending note (AI section)
+
+- Section 7 remains intentionally pending/in-progress for final grading scope.
+- Current AI baseline exists: FastAPI service, gateway `/api/ai/*` proxy, task submit/status endpoints, approval endpoint, and WebSocket progress stub.
+- Remaining AI items (Section 7 core functionality checklist):
+  - **AI orchestrator/supervisor consume loop** — pending (`ai.requests` consumer not implemented end-to-end).
+  - **`ai.results` topic publish flow** — pending (intermediate/final outputs not Kafka-published).
+  - **Multi-step skill chaining by supervisor** — pending (resume parse -> match -> shortlist -> outreach not orchestrated via Kafka pipeline).
+  - **Persistent AI task store** — pending (task state/trace/results currently in-memory, not DB-backed).
+  - **Trace continuity across full AI chain** — pending (`trace_id` starts at submit, but full persisted lineage is incomplete).
+  - **Human-in-loop approval wired into orchestrated lifecycle** — partial/pending (approval endpoint exists but not integrated with full supervisor/results lifecycle).
+  - **Failure/retry/idempotency strategy for AI workflow** — pending (core services have idempotency; AI pipeline strategy not fully implemented/documented).
+  - **AI evaluation metrics/report** — pending (matching quality + HITL approval-rate evidence not yet produced).
+  - **AI deliverables package** — pending (workflow diagram, topic design, per-skill I/O spec, evaluation results, failure handling write-up, end-to-end demo evidence).
+
 ## Runbook
 
 1. `docker compose up -d`

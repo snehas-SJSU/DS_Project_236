@@ -2,6 +2,8 @@ const express = require('express');
 const crypto = require('crypto');
 const db = require('../../shared/mysql');
 const { getMongoDb } = require('../../shared/mongo');
+const { alreadyProcessed, markProcessed } = require('../../shared/idempotency');
+const { validateKafkaEnvelope } = require('../../shared/kafka-envelope');
 
 const app = express();
 app.use(express.json());
@@ -25,18 +27,32 @@ async function ensureApplicationsTable() {
 
 app.post('/events/ingest', async (req, res) => {
   try {
-    const body = req.body;
+    const body = req.body || {};
+    const validated = validateKafkaEnvelope(body);
+    if (!validated.ok) {
+      return res.status(400).json({
+        error: 'BAD_REQUEST',
+        message: 'Invalid Kafka envelope',
+        details: validated.errors,
+        trace_id: crypto.randomUUID()
+      });
+    }
+    if (await alreadyProcessed(`analytics-ingest:${body.idempotency_key}`)) {
+      return res.status(200).json({ accepted: true, deduplicated: true, trace_id: body.trace_id });
+    }
     const mongo = await getMongoDb();
     await mongo.collection('events').insertOne({
-      event_type: body.event_type || 'unknown',
-      trace_id: body.trace_id || crypto.randomUUID(),
-      timestamp: body.timestamp || new Date().toISOString(),
+      event_type: body.event_type,
+      trace_id: body.trace_id,
+      timestamp: body.timestamp,
       actor_id: body.actor_id,
       entity: body.entity,
-      payload: body.payload || {},
+      payload: body.payload,
+      idempotency_key: body.idempotency_key,
       ingested_at: new Date().toISOString()
     });
-    res.status(202).json({ accepted: true });
+    await markProcessed(`analytics-ingest:${body.idempotency_key}`);
+    res.status(202).json({ accepted: true, trace_id: body.trace_id });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'INTERNAL_ERROR', message: err.message, trace_id: crypto.randomUUID() });

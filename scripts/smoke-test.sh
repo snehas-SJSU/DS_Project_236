@@ -216,7 +216,7 @@ post "/posts/unlike" "{\"post_id\":\"${post_id}\",\"member_id\":\"${SMOKE_MEMBER
 echo "[11] members search + recruiters search + events ingest"
 post "/members/search" '{"keyword":""}' >/dev/null
 post "/recruiters/search" '{}' >/dev/null
-post "/events/ingest" "{\"event_type\":\"smoke.test\",\"member_id\":\"${SMOKE_MEMBER_ID}\",\"payload\":{}}" >/dev/null
+post "/events/ingest" "{\"event_type\":\"smoke.test\",\"trace_id\":\"SMOKE-$(date +%s)\",\"timestamp\":\"$(date -u +%Y-%m-%dT%H:%M:%SZ)\",\"actor_id\":\"${SMOKE_MEMBER_ID}\",\"entity\":{\"entity_type\":\"member\",\"entity_id\":\"${SMOKE_MEMBER_ID}\"},\"payload\":{\"source\":\"smoke\"},\"idempotency_key\":\"idem-smoke-$(date +%s)\"}" >/dev/null
 
 echo "[12] messaging: open thread + send + list"
 peer_demo="${SMOKE_MSG_PEER:-M-DEMO-01}"
