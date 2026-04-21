@@ -335,6 +335,16 @@ Notes:
 1. By default the script calls **`http://localhost:4000/api`** (gateway directly), not port `3000`. That validates backends regardless of the Vite proxy.
 2. Keep **`npm run start:all`** running so the gateway and services are up before running smoke.
 
+### 8.1 Redis caching vs JMeter ownership (important for grading)
+
+1. **Redis SQL caching implementation is already in code** (entity lookup caching + invalidation on state change paths).
+2. **Remaining deliverable is benchmark evidence**, not core Redis coding: whoever owns the performance phase should run JMeter (or equivalent), compare baseline vs Redis-enabled runs, and attach charts/tables in the final report.
+3. Required evidence should include:
+   - Scenario labels (for example: baseline `B` vs baseline + SQL caching `B+S`)
+   - Throughput + latency comparison
+   - Test setup summary (threads, duration, dataset size, date)
+   - Operator/owner name for reproducibility
+
 ---
 
 <!-- ====================== 9.0 TROUBLESHOOTING ====================== -->

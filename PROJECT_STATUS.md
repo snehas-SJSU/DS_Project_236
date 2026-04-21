@@ -49,6 +49,12 @@ Last updated: Apr 2026 (connections, feed/share UX, smoke hardening, same-origin
 
 - Google OAuth is not implemented yet. The `Continue with Google` button is currently UI-only and intentionally pending.
 
+## Pending note (performance evidence)
+
+- Redis SQL caching is implemented in backend code paths (lookup caching + invalidation) and included in current runtime.
+- Pending item is benchmark evidence generation: run JMeter (or equivalent) and publish baseline vs Redis-enabled performance comparison (`B` vs `B+S`) with charts/tables.
+- Ownership for this step can be assigned to the performance/JMeter assignee; this is a reporting/measurement phase, not a missing core Redis implementation.
+
 ## Runbook
 
 1. `docker compose up -d`
