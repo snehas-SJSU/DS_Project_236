@@ -5,6 +5,7 @@ import { LOCAL_AVATAR_KEY, MEMBER_ID, resolveViewerAvatarUrl } from '../lib/memb
 import { showToast } from '../lib/toast';
 
 type LoadState = { status: 'loading' } | { status: 'ok'; data: any } | { status: 'error'; message: string };
+type EditSection = 'profile' | 'suggested' | 'about' | 'activity' | 'analytics' | 'experience' | 'education' | 'skills';
 const AVATAR_OPTIONS = ['Avery', 'Morgan', 'Noah', 'Sophia', 'Liam', 'Maya'];
 const COVER_THEMES: Record<string, string> = {
   blue: 'from-blue-400 to-indigo-500',
@@ -16,8 +17,12 @@ const COVER_THEMES: Record<string, string> = {
 export default function Profile() {
   const [state, setState] = useState<LoadState>({ status: 'loading' });
   const [editing, setEditing] = useState(false);
+  const [editSection, setEditSection] = useState<EditSection>('profile');
   const [dashboard, setDashboard] = useState<any>(null);
   const [draft, setDraft] = useState<any>({});
+  const [experienceDraft, setExperienceDraft] = useState<any[]>([]);
+  const [educationDraft, setEducationDraft] = useState<any[]>([]);
+  const [skillsDraftText, setSkillsDraftText] = useState('');
   const coverFileInputRef = useRef<HTMLInputElement | null>(null);
   const avatarFileInputRef = useRef<HTMLInputElement | null>(null);
 
@@ -151,6 +156,65 @@ export default function Profile() {
     reader.readAsDataURL(file);
   };
 
+  const openEditor = (section: EditSection) => {
+    setEditSection(section);
+    setEditing(true);
+    if (section === 'experience') {
+      const seed = Array.isArray(profile.experience) && profile.experience.length
+        ? profile.experience
+        : [{ role: '', company: '', period: '', description: '' }];
+      setExperienceDraft(seed.map((x: any) => ({ ...x })));
+    }
+    if (section === 'education') {
+      const seed = Array.isArray(profile.education) && profile.education.length
+        ? profile.education
+        : [{ school: '', degree: '', period: '' }];
+      setEducationDraft(seed.map((x: any) => ({ ...x })));
+    }
+    if (section === 'skills') {
+      const seed = Array.isArray(profile.skills) ? profile.skills : [];
+      setSkillsDraftText(seed.join(', '));
+    }
+  };
+
+  const editSectionLabel: Record<EditSection, string> = {
+    profile: 'Profile basics',
+    suggested: 'Suggested for you',
+    about: 'About',
+    activity: 'Activity',
+    analytics: 'Member analytics',
+    experience: 'Experience',
+    education: 'Education',
+    skills: 'Top skills'
+  };
+  const showBasics = editSection === 'profile';
+  const showAbout = editSection === 'about';
+  const showActivity = editSection === 'activity';
+  const showAnalytics = editSection === 'analytics';
+  const showExperience = editSection === 'experience';
+  const showEducation = editSection === 'education';
+  const showSkills = editSection === 'skills';
+  const showSuggested = editSection === 'suggested';
+  const isInline = editing && editSection !== 'profile';
+
+  const saveMemberFields = async (fields: Record<string, any>) => {
+    const res = await fetch('/api/members/update', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ member_id: MEMBER_ID, ...fields })
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.message || err.error || 'Update failed');
+    }
+    const merged = { ...state.data, ...draft, ...fields };
+    if (merged.profile_photo_url) {
+      localStorage.setItem(LOCAL_AVATAR_KEY, merged.profile_photo_url as string);
+    }
+    setDraft(merged);
+    setState({ status: 'ok', data: merged });
+  };
+
   return (
     <div className="space-y-3">
         <section className="li-card relative overflow-hidden p-0">
@@ -236,7 +300,10 @@ export default function Profile() {
             </div>
             <div className="mt-3 flex flex-wrap gap-2">
               <button
-                onClick={() => setEditing((v) => !v)}
+                onClick={() => {
+                  if (editing) setEditing(false);
+                  else openEditor('profile');
+                }}
                 className="rounded-full bg-[#0a66c2] px-4 py-1.5 text-sm font-semibold text-white hover:bg-[#004182]"
               >
                 {editing ? 'Cancel editing' : 'Edit profile'}
@@ -261,7 +328,7 @@ export default function Profile() {
           <h3 className="text-sm font-semibold text-slate-900">Suggested for you</h3>
           <button
             type="button"
-            onClick={() => setEditing(true)}
+            onClick={() => openEditor('suggested')}
             className="inline-flex h-7 w-7 items-center justify-center rounded-full text-slate-500 hover:bg-slate-100"
             title="Edit suggested content"
           >
@@ -283,10 +350,10 @@ export default function Profile() {
         </div>
       </section>
 
-      {editing && (
+      {editing && editSection === 'profile' && (
         <section className="li-card space-y-3 border border-blue-200 p-5">
           <div className="flex items-center justify-between">
-            <h3 className="text-lg font-semibold text-slate-900">Edit profile</h3>
+            <h3 className="text-lg font-semibold text-slate-900">Edit profile: {editSectionLabel[editSection]}</h3>
             <button
               type="button"
               onClick={() => setEditing(false)}
@@ -295,86 +362,113 @@ export default function Profile() {
               Close
             </button>
           </div>
-          <p className="text-sm text-slate-600">Update your headline, location, avatar, and cover style below.</p>
-          <input
-            value={draft.headline || draft.title || ''}
-            onChange={(e) => setDraft({ ...draft, headline: e.target.value, title: e.target.value })}
-            placeholder="Headline"
-            className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
-          />
-          <textarea
-            value={draft.about || ''}
-            onChange={(e) => setDraft({ ...draft, about: e.target.value, summary: e.target.value })}
-            placeholder="About"
-            className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
-            rows={4}
-          />
-          <input
-            value={draft.location || ''}
-            onChange={(e) => setDraft({ ...draft, location: e.target.value })}
-            placeholder="Location"
-            className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
-          />
-          <div>
-            <p className="mb-2 text-sm font-semibold text-slate-700">Choose avatar style</p>
-            <label className="mb-2 inline-flex cursor-pointer items-center rounded-md border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50">
-              Upload avatar image
-              <input
-                type="file"
-                accept="image/*"
-                className="hidden"
-                onChange={(e) => {
-                  const file = e.target.files?.[0];
-                  if (file) onUploadImage(file, 'profile_photo_url');
-                }}
-              />
-            </label>
-            <div className="flex flex-wrap gap-2">
-              {AVATAR_OPTIONS.map((seed) => {
-                const optionUrl = `https://api.dicebear.com/7.x/avataaars/svg?seed=${seed}`;
-                return (
-                  <button
-                    key={seed}
-                    type="button"
-                    onClick={() => setDraft({ ...draft, profile_photo_url: optionUrl })}
-                    className={`h-12 w-12 overflow-hidden rounded-full border-2 ${
-                      (draft.profile_photo_url || profile.profile_photo_url) === optionUrl ? 'border-blue-600' : 'border-slate-300'
-                    }`}
-                  >
-                    <img src={optionUrl} alt={seed} className="h-full w-full object-cover" />
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-          <div>
-            <p className="mb-2 text-sm font-semibold text-slate-700">Choose cover theme</p>
-            <label className="mb-2 inline-flex cursor-pointer items-center rounded-md border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50">
-              Upload cover image
-              <input
-                type="file"
-                accept="image/*"
-                className="hidden"
-                onChange={(e) => {
-                  const file = e.target.files?.[0];
-                  e.target.value = '';
-                  if (file) persistImageUpload(file, 'cover_photo_url');
-                }}
-              />
-            </label>
-            <div className="flex flex-wrap gap-2">
-              {Object.keys(COVER_THEMES).map((theme) => (
-                <button
-                  key={theme}
-                  type="button"
-                  onClick={() => setDraft({ ...draft, cover_theme: theme, cover_photo_url: null })}
-                  className={`h-8 w-20 rounded-md bg-gradient-to-r ${COVER_THEMES[theme]} ${
-                    (draft.cover_theme || profile.cover_theme || 'blue') === theme ? 'ring-2 ring-offset-1 ring-blue-600' : ''
-                  }`}
+          <p className="text-sm text-slate-600">
+            Update your headline, location, avatar, cover, and key details below. The pencil icon now opens this editor for its section.
+          </p>
+          {(showBasics || showAbout || showActivity) && (
+            <>
+              {(showBasics || showActivity) && (
+                <input
+                  value={draft.headline || draft.title || ''}
+                  onChange={(e) => setDraft({ ...draft, headline: e.target.value, title: e.target.value })}
+                  placeholder="Headline"
+                  className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
                 />
-              ))}
+              )}
+              {(showBasics || showAbout) && (
+                <textarea
+                  value={draft.about || ''}
+                  onChange={(e) => setDraft({ ...draft, about: e.target.value, summary: e.target.value })}
+                  placeholder="About"
+                  className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
+                  rows={4}
+                />
+              )}
+              {(showBasics || showActivity) && (
+                <input
+                  value={draft.location || ''}
+                  onChange={(e) => setDraft({ ...draft, location: e.target.value })}
+                  placeholder="Location"
+                  className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
+                />
+              )}
+            </>
+          )}
+
+          {showBasics && (
+            <>
+              <div>
+                <p className="mb-2 text-sm font-semibold text-slate-700">Choose avatar style</p>
+                <label className="mb-2 inline-flex cursor-pointer items-center rounded-md border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50">
+                  Upload avatar image
+                  <input
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (file) onUploadImage(file, 'profile_photo_url');
+                    }}
+                  />
+                </label>
+                <div className="flex flex-wrap gap-2">
+                  {AVATAR_OPTIONS.map((seed) => {
+                    const optionUrl = `https://api.dicebear.com/7.x/avataaars/svg?seed=${seed}`;
+                    return (
+                      <button
+                        key={seed}
+                        type="button"
+                        onClick={() => setDraft({ ...draft, profile_photo_url: optionUrl })}
+                        className={`h-12 w-12 overflow-hidden rounded-full border-2 ${
+                          (draft.profile_photo_url || profile.profile_photo_url) === optionUrl ? 'border-blue-600' : 'border-slate-300'
+                        }`}
+                      >
+                        <img src={optionUrl} alt={seed} className="h-full w-full object-cover" />
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+              <div>
+                <p className="mb-2 text-sm font-semibold text-slate-700">Choose cover theme</p>
+                <label className="mb-2 inline-flex cursor-pointer items-center rounded-md border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50">
+                  Upload cover image
+                  <input
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      e.target.value = '';
+                      if (file) persistImageUpload(file, 'cover_photo_url');
+                    }}
+                  />
+                </label>
+                <div className="flex flex-wrap gap-2">
+                  {Object.keys(COVER_THEMES).map((theme) => (
+                    <button
+                      key={theme}
+                      type="button"
+                      onClick={() => setDraft({ ...draft, cover_theme: theme, cover_photo_url: null })}
+                      className={`h-8 w-20 rounded-md bg-gradient-to-r ${COVER_THEMES[theme]} ${
+                        (draft.cover_theme || profile.cover_theme || 'blue') === theme ? 'ring-2 ring-offset-1 ring-blue-600' : ''
+                      }`}
+                    />
+                  ))}
+                </div>
+              </div>
+            </>
+          )}
+
+          {(showExperience || showEducation || showSkills || showAnalytics || showSuggested) && (
+            <div className="rounded-md border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700">
+              {showExperience && 'Experience is editable inline in the Experience section card.'}
+              {showEducation && 'Education is editable inline in the Education section card.'}
+              {showSkills && 'Skills are editable inline in the Top skills section card.'}
+              {showAnalytics && 'Analytics are computed from activity and applications; visibility can be controlled later.'}
+              {showSuggested && 'Suggested cards are recommendation UI blocks; no profile field write needed.'}
             </div>
-          </div>
+          )}
           <button
             className="rounded-md bg-blue-600 px-4 py-2 text-sm font-semibold text-white"
             onClick={async () => {
@@ -413,14 +507,41 @@ export default function Profile() {
           <h3 className="text-lg font-semibold text-slate-900">About</h3>
           <button
             type="button"
-            onClick={() => setEditing(true)}
+            onClick={() => openEditor('about')}
             className="inline-flex h-8 w-8 items-center justify-center rounded-full text-slate-500 hover:bg-slate-100"
             title="Edit about"
           >
             <Pencil size={15} />
           </button>
         </div>
-        <p className="mt-2 text-sm leading-relaxed text-slate-700">{profile.about || profile.summary || 'No about section yet.'}</p>
+        {isInline && editSection === 'about' ? (
+          <div className="mt-3 space-y-3">
+            <textarea
+              value={draft.about || ''}
+              onChange={(e) => setDraft((d: any) => ({ ...d, about: e.target.value, summary: e.target.value }))}
+              rows={4}
+              className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
+            />
+            <div className="flex gap-2">
+              <button
+                className="rounded-md bg-blue-600 px-3 py-1.5 text-sm font-semibold text-white"
+                onClick={async () => {
+                  try {
+                    await saveMemberFields({ about: draft.about, summary: draft.summary });
+                    setEditing(false);
+                  } catch (e: any) {
+                    showToast(String(e.message || 'Could not update about'), 'error');
+                  }
+                }}
+              >
+                Save
+              </button>
+              <button className="rounded-md border border-slate-300 px-3 py-1.5 text-sm" onClick={() => setEditing(false)}>Cancel</button>
+            </div>
+          </div>
+        ) : (
+          <p className="mt-2 text-sm leading-relaxed text-slate-700">{profile.about || profile.summary || 'No about section yet.'}</p>
+        )}
       </section>
       <section className="li-card p-5">
         <div className="flex items-center justify-between">
@@ -429,7 +550,7 @@ export default function Profile() {
             <button className="rounded-full border border-slate-300 px-3 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-50">Create a post</button>
             <button
               type="button"
-              onClick={() => setEditing(true)}
+              onClick={() => openEditor('activity')}
               className="inline-flex h-8 w-8 items-center justify-center rounded-full text-slate-500 hover:bg-slate-100"
               title="Edit activity"
             >
@@ -437,8 +558,37 @@ export default function Profile() {
             </button>
           </div>
         </div>
-        <p className="mt-2 text-sm font-semibold text-[#0a66c2]">{displayName} posted yet</p>
-        <p className="text-xs text-slate-600">Posts you share will be displayed here.</p>
+        {isInline && editSection === 'activity' ? (
+          <div className="mt-3 space-y-3">
+            <input
+              value={draft.headline || draft.title || ''}
+              onChange={(e) => setDraft((d: any) => ({ ...d, headline: e.target.value, title: e.target.value }))}
+              className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
+              placeholder="Activity headline"
+            />
+            <div className="flex gap-2">
+              <button
+                className="rounded-md bg-blue-600 px-3 py-1.5 text-sm font-semibold text-white"
+                onClick={async () => {
+                  try {
+                    await saveMemberFields({ headline: draft.headline, title: draft.title });
+                    setEditing(false);
+                  } catch (e: any) {
+                    showToast(String(e.message || 'Could not update activity'), 'error');
+                  }
+                }}
+              >
+                Save
+              </button>
+              <button className="rounded-md border border-slate-300 px-3 py-1.5 text-sm" onClick={() => setEditing(false)}>Cancel</button>
+            </div>
+          </div>
+        ) : (
+          <>
+            <p className="mt-2 text-sm font-semibold text-[#0a66c2]">{displayName} posted yet</p>
+            <p className="text-xs text-slate-600">Posts you share will be displayed here.</p>
+          </>
+        )}
       </section>
       {dashboard && (
         <section className="li-card p-5">
@@ -446,13 +596,21 @@ export default function Profile() {
           <h3 className="text-lg font-semibold text-slate-900">Member analytics</h3>
           <button
             type="button"
-            onClick={() => setEditing(true)}
+            onClick={() => openEditor('analytics')}
             className="inline-flex h-8 w-8 items-center justify-center rounded-full text-slate-500 hover:bg-slate-100"
             title="Edit analytics visibility"
           >
             <Pencil size={15} />
           </button>
         </div>
+          {isInline && editSection === 'analytics' ? (
+            <div className="mt-3 rounded-md border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700">
+              Analytics is computed data (views + applications). No direct profile field to edit here.
+              <div className="mt-2">
+                <button className="rounded-md border border-slate-300 px-3 py-1.5 text-sm" onClick={() => setEditing(false)}>Close</button>
+              </div>
+            </div>
+          ) : null}
           <p className="text-sm text-slate-600">Profile views (30d): {dashboard.profile_views_30d ?? 0}</p>
           <div className="mt-2 flex flex-wrap gap-2">
             {(dashboard.applications_by_status || []).map((row: any) => (
@@ -472,14 +630,105 @@ export default function Profile() {
           </div>
           <button
             type="button"
-            onClick={() => setEditing(true)}
+            onClick={() => openEditor('experience')}
             className="inline-flex h-8 w-8 items-center justify-center rounded-full text-slate-500 hover:bg-slate-100"
             title="Edit experience"
           >
             <Pencil size={15} />
           </button>
         </div>
-        {(profile.experience || []).length === 0 ? (
+        {isInline && editSection === 'experience' ? (
+          <div className="space-y-3">
+            {experienceDraft.map((exp: any, idx: number) => (
+              <div key={idx} className="rounded-md border border-slate-200 p-3">
+                <div className="grid gap-2 md:grid-cols-2">
+                  <input
+                    value={exp.role || ''}
+                    onChange={(e) =>
+                      setExperienceDraft((prev) =>
+                        prev.map((row, i) => (i === idx ? { ...row, role: e.target.value } : row))
+                      )
+                    }
+                    placeholder="Role"
+                    className="rounded-md border border-slate-300 px-3 py-2 text-sm"
+                  />
+                  <input
+                    value={exp.company || ''}
+                    onChange={(e) =>
+                      setExperienceDraft((prev) =>
+                        prev.map((row, i) => (i === idx ? { ...row, company: e.target.value } : row))
+                      )
+                    }
+                    placeholder="Company"
+                    className="rounded-md border border-slate-300 px-3 py-2 text-sm"
+                  />
+                </div>
+                <input
+                  value={exp.period || ''}
+                  onChange={(e) =>
+                    setExperienceDraft((prev) =>
+                      prev.map((row, i) => (i === idx ? { ...row, period: e.target.value } : row))
+                    )
+                  }
+                  placeholder="Period (e.g., Jan 2020 - Present)"
+                  className="mt-2 w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
+                />
+                <textarea
+                  value={exp.description || ''}
+                  onChange={(e) =>
+                    setExperienceDraft((prev) =>
+                      prev.map((row, i) => (i === idx ? { ...row, description: e.target.value } : row))
+                    )
+                  }
+                  rows={3}
+                  placeholder="Description"
+                  className="mt-2 w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
+                />
+                <button
+                  type="button"
+                  className="mt-2 rounded-md border border-slate-300 px-3 py-1 text-xs"
+                  onClick={() => setExperienceDraft((prev) => prev.filter((_, i) => i !== idx))}
+                  disabled={experienceDraft.length <= 1}
+                >
+                  Remove
+                </button>
+              </div>
+            ))}
+            <button
+              type="button"
+              className="rounded-md border border-slate-300 px-3 py-1.5 text-sm"
+              onClick={() =>
+                setExperienceDraft((prev) => [...prev, { role: '', company: '', period: '', description: '' }])
+              }
+            >
+              + Add experience
+            </button>
+            <div className="flex gap-2">
+              <button
+                className="rounded-md bg-blue-600 px-3 py-1.5 text-sm font-semibold text-white"
+                onClick={async () => {
+                  try {
+                    const value = experienceDraft
+                      .map((x) => ({
+                        role: String(x.role || '').trim(),
+                        company: String(x.company || '').trim(),
+                        period: String(x.period || '').trim(),
+                        description: String(x.description || '').trim()
+                      }))
+                      .filter((x) => x.role || x.company || x.period || x.description);
+                    await saveMemberFields({ experience: value });
+                    setEditing(false);
+                  } catch {
+                    showToast('Could not save experience.', 'error');
+                  }
+                }}
+              >
+                Save
+              </button>
+              <button className="rounded-md border border-slate-300 px-3 py-1.5 text-sm" onClick={() => setEditing(false)}>Cancel</button>
+            </div>
+          </div>
+        ) : (profile.experience || []).length === 0 ? (
           <p className="text-sm text-slate-500">No experience added yet.</p>
         ) : (
           <div className="space-y-5">
@@ -503,14 +752,91 @@ export default function Profile() {
           </div>
           <button
             type="button"
-            onClick={() => setEditing(true)}
+            onClick={() => openEditor('education')}
             className="inline-flex h-8 w-8 items-center justify-center rounded-full text-slate-500 hover:bg-slate-100"
             title="Edit education"
           >
             <Pencil size={15} />
           </button>
         </div>
-        {(profile.education || []).length === 0 ? (
+        {isInline && editSection === 'education' ? (
+          <div className="space-y-3">
+            {educationDraft.map((edu: any, idx: number) => (
+              <div key={idx} className="rounded-md border border-slate-200 p-3">
+                <div className="grid gap-2 md:grid-cols-2">
+                  <input
+                    value={edu.school || ''}
+                    onChange={(e) =>
+                      setEducationDraft((prev) =>
+                        prev.map((row, i) => (i === idx ? { ...row, school: e.target.value } : row))
+                      )
+                    }
+                    placeholder="School"
+                    className="rounded-md border border-slate-300 px-3 py-2 text-sm"
+                  />
+                  <input
+                    value={edu.degree || ''}
+                    onChange={(e) =>
+                      setEducationDraft((prev) =>
+                        prev.map((row, i) => (i === idx ? { ...row, degree: e.target.value } : row))
+                      )
+                    }
+                    placeholder="Degree"
+                    className="rounded-md border border-slate-300 px-3 py-2 text-sm"
+                  />
+                </div>
+                <input
+                  value={edu.period || ''}
+                  onChange={(e) =>
+                    setEducationDraft((prev) =>
+                      prev.map((row, i) => (i === idx ? { ...row, period: e.target.value } : row))
+                    )
+                  }
+                  placeholder="Period (e.g., 2018 - 2020)"
+                  className="mt-2 w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
+                />
+                <button
+                  type="button"
+                  className="mt-2 rounded-md border border-slate-300 px-3 py-1 text-xs"
+                  onClick={() => setEducationDraft((prev) => prev.filter((_, i) => i !== idx))}
+                  disabled={educationDraft.length <= 1}
+                >
+                  Remove
+                </button>
+              </div>
+            ))}
+            <button
+              type="button"
+              className="rounded-md border border-slate-300 px-3 py-1.5 text-sm"
+              onClick={() => setEducationDraft((prev) => [...prev, { school: '', degree: '', period: '' }])}
+            >
+              + Add education
+            </button>
+            <div className="flex gap-2">
+              <button
+                className="rounded-md bg-blue-600 px-3 py-1.5 text-sm font-semibold text-white"
+                onClick={async () => {
+                  try {
+                    const value = educationDraft
+                      .map((x) => ({
+                        school: String(x.school || '').trim(),
+                        degree: String(x.degree || '').trim(),
+                        period: String(x.period || '').trim()
+                      }))
+                      .filter((x) => x.school || x.degree || x.period);
+                    await saveMemberFields({ education: value });
+                    setEditing(false);
+                  } catch {
+                    showToast('Could not save education.', 'error');
+                  }
+                }}
+              >
+                Save
+              </button>
+              <button className="rounded-md border border-slate-300 px-3 py-1.5 text-sm" onClick={() => setEditing(false)}>Cancel</button>
+            </div>
+          </div>
+        ) : (profile.education || []).length === 0 ? (
           <p className="text-sm text-slate-500">No education added yet.</p>
         ) : (
           <div className="space-y-4">
@@ -534,13 +860,43 @@ export default function Profile() {
           <h3 className="text-base font-semibold text-slate-900">Top skills</h3>
           <button
             type="button"
-            onClick={() => setEditing(true)}
+            onClick={() => openEditor('skills')}
             className="inline-flex h-8 w-8 items-center justify-center rounded-full text-slate-500 hover:bg-slate-100"
             title="Edit skills"
           >
             <Pencil size={15} />
           </button>
         </div>
+        {isInline && editSection === 'skills' ? (
+          <div className="mt-3 space-y-3">
+            <input
+              value={skillsDraftText}
+              onChange={(e) => setSkillsDraftText(e.target.value)}
+              className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
+              placeholder="Comma-separated skills (e.g., React, Kafka, Node.js)"
+            />
+            <div className="flex gap-2">
+              <button
+                className="rounded-md bg-blue-600 px-3 py-1.5 text-sm font-semibold text-white"
+                onClick={async () => {
+                  try {
+                    const value = skillsDraftText
+                      .split(',')
+                      .map((s) => s.trim())
+                      .filter(Boolean);
+                    await saveMemberFields({ skills: value });
+                    setEditing(false);
+                  } catch {
+                    showToast('Could not save skills.', 'error');
+                  }
+                }}
+              >
+                Save
+              </button>
+              <button className="rounded-md border border-slate-300 px-3 py-1.5 text-sm" onClick={() => setEditing(false)}>Cancel</button>
+            </div>
+          </div>
+        ) : (
         <div className="mt-3 flex flex-wrap gap-2">
           {(profile.skills || []).length === 0 ? (
             <p className="text-sm text-slate-500">No skills listed.</p>
@@ -552,6 +908,7 @@ export default function Profile() {
             ))
           )}
         </div>
+        )}
       </section>
     </div>
   );
