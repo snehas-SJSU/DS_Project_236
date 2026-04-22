@@ -1210,6 +1210,17 @@ function ProfileShell({ children }: { children: React.ReactNode }) {
   );
 }
 
+function JobsTrackerShell({ children }: { children: React.ReactNode }) {
+  return (
+    <>
+      <Navbar />
+      <div className="mx-auto w-full max-w-[1128px] px-3 py-6">
+        {children}
+      </div>
+    </>
+  );
+}
+
 function RequireAuth({ children }: { children: React.ReactNode }) {
   if (!isAuthenticated()) {
     return <Navigate to="/login/email" replace />;
@@ -1277,7 +1288,7 @@ function App() {
           <Route path="/saved" element={<RequireAuth><AppShell><SavedItemsPage /></AppShell></RequireAuth>} />
           <Route path="/signout" element={<SignOutPage />} />
           <Route path="/jobs/preferences" element={<RequireAuth><AppShell><JobPreferencesPage /></AppShell></RequireAuth>} />
-          <Route path="/jobs/tracker" element={<RequireAuth><AppShell><JobTrackerPage /></AppShell></RequireAuth>} />
+          <Route path="/jobs/tracker" element={<RequireAuth><JobsTrackerShell><JobTrackerPage /></JobsTrackerShell></RequireAuth>} />
           <Route path="/jobs/insights" element={<RequireAuth><AppShell><JobInsightsPage /></AppShell></RequireAuth>} />
           <Route path="/jobs/post" element={<RequireAuth><AppShell><JobPostPage /></AppShell></RequireAuth>} />
           <Route

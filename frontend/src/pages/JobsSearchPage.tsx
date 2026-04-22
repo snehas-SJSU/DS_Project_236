@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import Navbar from '../components/layout/Navbar';
 import { Job } from '../mockData/jobs';
+import { CheckCircle2, X } from 'lucide-react';
 import { MEMBER_ID } from '../lib/memberProfile';
 import { addActivity, readJson, SAVED_JOBS_KEY, writeJson } from '../lib/localData';
 import { companyProfilePath, jobsResultsPath, jobsSearchPath } from '../lib/jobRoutes';
@@ -17,6 +18,7 @@ export default function JobsSearchPage() {
   const [loading, setLoading] = useState(true);
   const [isApplying, setIsApplying] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [saveBannerJob, setSaveBannerJob] = useState<Job | null>(null);
 
   const keyword = useMemo(() => {
     const q = new URLSearchParams(location.search);
@@ -124,36 +126,44 @@ export default function JobsSearchPage() {
 
   const onSave = async () => {
     if (!activeJob) return;
-    if ((activeJob as any).saved) {
-      showToast('Job already saved.', 'info');
-      return;
-    }
     setIsSaving(true);
     try {
-      const res = await fetch('/api/jobs/save', {
+      const isAlreadySaved = Boolean((activeJob as any).saved);
+      const res = await fetch(isAlreadySaved ? '/api/jobs/unsave' : '/api/jobs/save', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ job_id: activeJob.id, member_id: MEMBER_ID })
       });
       if (!res.ok) {
-        showToast('Unable to save right now.', 'error');
+        showToast(`Unable to ${isAlreadySaved ? 'unsave' : 'save'} right now.`, 'error');
         return;
       }
       const existing = readJson<any[]>(SAVED_JOBS_KEY, []);
-      const next = [
-        {
-          id: activeJob.id,
-          title: activeJob.title,
-          company: activeJob.company,
-          location: activeJob.location,
-          savedAt: new Date().toLocaleDateString()
-        },
-        ...existing.filter((item) => item.id !== activeJob.id)
-      ];
-      writeJson(SAVED_JOBS_KEY, next.slice(0, 100));
-      setActiveJob((prev) => (prev ? ({ ...prev, saved: true } as any) : prev));
-      addActivity(`Saved job ${activeJob.title} at ${activeJob.company}`);
-      showToast('Job saved.', 'success');
+      if (isAlreadySaved) {
+        writeJson(
+          SAVED_JOBS_KEY,
+          existing.filter((item) => item.id !== activeJob.id)
+        );
+        setActiveJob((prev) => (prev ? ({ ...prev, saved: false } as any) : prev));
+        setSaveBannerJob(null);
+        showToast('Removed from saved jobs.', 'info');
+      } else {
+        const next = [
+          {
+            id: activeJob.id,
+            title: activeJob.title,
+            company: activeJob.company,
+            location: activeJob.location,
+            savedAt: new Date().toLocaleDateString()
+          },
+          ...existing.filter((item) => item.id !== activeJob.id)
+        ];
+        writeJson(SAVED_JOBS_KEY, next.slice(0, 100));
+        setActiveJob((prev) => (prev ? ({ ...prev, saved: true } as any) : prev));
+        addActivity(`Saved job ${activeJob.title} at ${activeJob.company}`);
+        setSaveBannerJob(activeJob);
+        showToast('Job saved.', 'success');
+      }
     } catch {
       showToast('Unable to save right now.', 'error');
     } finally {
@@ -222,11 +232,17 @@ export default function JobsSearchPage() {
                   {(activeJob as any).applied ? 'Applied' : isApplying ? 'Applying...' : 'Apply'}
                 </button>
                 <button
-                  onClick={onSave}
-                  disabled={isSaving || Boolean((activeJob as any).saved)}
-                  className="rounded-full border border-[#0a66c2] px-5 py-2 text-sm font-semibold text-[#0a66c2] hover:bg-[#edf3f8] disabled:cursor-not-allowed disabled:border-[#9ec6e5] disabled:text-[#9ec6e5]"
+                  onClick={() => {
+                    if (isSaving) return;
+                    onSave();
+                  }}
+                  className={`rounded-full border px-5 py-2 text-sm font-semibold transition-colors ${
+                    (activeJob as any).saved
+                      ? 'border-[#0a66c2] bg-[#edf3f8] text-[#0a66c2] hover:bg-[#dfeaf7]'
+                      : 'border-[#0a66c2] text-[#0a66c2] hover:bg-[#edf3f8]'
+                  }`}
                 >
-                  {(activeJob as any).saved ? 'Saved' : isSaving ? 'Saving...' : 'Save'}
+                  {isSaving ? 'Saving...' : ((activeJob as any).saved ? 'Saved' : 'Save')}
                 </button>
               </div>
               <div className="mt-6">
@@ -239,6 +255,35 @@ export default function JobsSearchPage() {
           )}
         </section>
       </div>
+      {saveBannerJob ? (
+        <div className="fixed bottom-5 left-5 z-[130] w-[min(92vw,340px)] rounded-lg border border-slate-200 bg-white p-3 shadow-xl">
+          <div className="flex items-start gap-2">
+            <CheckCircle2 size={16} className="mt-0.5 text-[#057642]" />
+            <p className="text-sm text-[#191919]">
+              You saved this job.
+            </p>
+            <button
+              type="button"
+              onClick={() => setSaveBannerJob(null)}
+              className="ml-auto rounded p-0.5 text-slate-400 hover:bg-slate-100 hover:text-slate-600"
+              aria-label="Dismiss save message"
+            >
+              <X size={14} />
+            </button>
+          </div>
+          <div className="mt-2 flex items-center gap-2">
+            <span className="text-xs text-[#666] line-clamp-1">
+              {saveBannerJob.title} at {saveBannerJob.company}
+            </span>
+            <Link
+              to="/jobs/tracker"
+              className="ml-auto text-xs font-semibold text-[#0a66c2] hover:underline"
+            >
+              See saved jobs
+            </Link>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }

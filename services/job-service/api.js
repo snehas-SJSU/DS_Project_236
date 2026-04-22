@@ -265,6 +265,50 @@ app.post('/jobs/save', async (req, res) => {
   }
 });
 
+app.post('/jobs/unsave', async (req, res) => {
+  try {
+    const { job_id, member_id } = req.body;
+    if (!job_id || !member_id) {
+      return res.status(400).json({ error: 'BAD_REQUEST', message: 'job_id and member_id required', trace_id: crypto.randomUUID() });
+    }
+
+    await db.query(`
+      CREATE TABLE IF NOT EXISTS saved_jobs (
+        job_id VARCHAR(50),
+        member_id VARCHAR(50),
+        saved_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        PRIMARY KEY (job_id, member_id)
+      )
+    `);
+    const [result] = await db.query(
+      'DELETE FROM saved_jobs WHERE job_id = ? AND member_id = ?',
+      [job_id, member_id]
+    );
+    if (result && result.affectedRows > 0) {
+      await db.query(
+        'UPDATE jobs SET saves_count = GREATEST(COALESCE(saves_count, 0) - 1, 0) WHERE job_id = ?',
+        [job_id]
+      );
+    }
+
+    const traceId = crypto.randomUUID();
+    const idem = crypto.randomUUID();
+    await producer.connect();
+    await producer.send({
+      topic: 'job.events',
+      messages: [{
+        key: job_id,
+        value: JSON.stringify(env('job.unsaved', traceId, member_id, job_id, { job_id, member_id }, idem))
+      }]
+    });
+
+    res.status(200).json({ message: 'Unsaved', job_id, member_id, trace_id: traceId });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'INTERNAL_ERROR', message: err.message, trace_id: crypto.randomUUID() });
+  }
+});
+
 app.post('/jobs/update', async (req, res) => {
   try {
     const { job_id, ...fields } = req.body;
