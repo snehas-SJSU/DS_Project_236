@@ -15,6 +15,39 @@ const CACHE_PREFIX = 'member:';
 const CACHE_TTL = 600;
 const AUTH_TOKEN_TTL_HOURS = 24;
 const JWT_SECRET = process.env.JWT_SECRET || 'linkedin-sim-dev-secret';
+const BASELINE_MEMBER = {
+  member_id: 'M-123',
+  name: 'Sneha Singh',
+  first_name: 'Sneha',
+  last_name: 'Singh',
+  title: 'Full Stack AI Engineer | Specializing in Distributed Systems',
+  headline: 'Full Stack AI Engineer | Specializing in Distributed Systems',
+  location: 'San Jose, California',
+  city: 'San Jose',
+  state: 'California',
+  country: 'United States',
+  email: 'sneha.singh@example.com',
+  about:
+    'Passionate software engineer focused on building scalable distributed systems and integrating Agentic AI workflows.',
+  summary:
+    'Passionate software engineer focused on building scalable distributed systems and integrating Agentic AI workflows.',
+  skills: ['Distributed Systems', 'React.js', 'Kafka & APIs', 'Node.js', 'Python', 'MySQL'],
+  experience: [
+    {
+      role: 'Software Engineer Intern',
+      company: 'LinkedIn',
+      period: 'May 2023 - Present',
+      description: 'Developed microservices using Node.js and Kafka with Redis-backed caching and event-driven workflows.'
+    }
+  ],
+  education: [
+    {
+      school: 'San Jose State University',
+      degree: 'Master of Science - Computer Science',
+      period: '2022 - 2024'
+    }
+  ]
+};
 
 function hashPassword(password, salt) {
   return crypto.pbkdf2Sync(password, salt, 100000, 64, 'sha512').toString('hex');
@@ -44,6 +77,54 @@ function isStrongPassword(password) {
     /[a-z]/.test(val) &&
     /\d/.test(val) &&
     /[^A-Za-z0-9]/.test(val)
+  );
+}
+
+async function ensureBaselineMember() {
+  const payload = BASELINE_MEMBER;
+  await db.query(
+    `INSERT INTO members (
+      member_id, name, first_name, last_name, title, headline, location, city, state, country,
+      email, about, summary, skills, experience, education, cover_theme, status
+    )
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active')
+    ON DUPLICATE KEY UPDATE
+      name=VALUES(name),
+      first_name=VALUES(first_name),
+      last_name=VALUES(last_name),
+      title=VALUES(title),
+      headline=VALUES(headline),
+      location=VALUES(location),
+      city=VALUES(city),
+      state=VALUES(state),
+      country=VALUES(country),
+      email=VALUES(email),
+      about=VALUES(about),
+      summary=VALUES(summary),
+      skills=VALUES(skills),
+      experience=VALUES(experience),
+      education=VALUES(education),
+      cover_theme=VALUES(cover_theme),
+      status='active'`,
+    [
+      payload.member_id,
+      payload.name,
+      payload.first_name,
+      payload.last_name,
+      payload.title,
+      payload.headline,
+      payload.location,
+      payload.city,
+      payload.state,
+      payload.country,
+      payload.email,
+      payload.about,
+      payload.summary,
+      JSON.stringify(payload.skills),
+      JSON.stringify(payload.experience),
+      JSON.stringify(payload.education),
+      'blue'
+    ]
   );
 }
 
@@ -559,6 +640,8 @@ async function ensureSchema() {
     );
     console.log('Updated auth admin password for:', adminEmail);
   }
+
+  await ensureBaselineMember();
 }
 
 const PORT = process.env.PORT || 4001;

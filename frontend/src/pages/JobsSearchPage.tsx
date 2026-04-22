@@ -85,11 +85,28 @@ export default function JobsSearchPage() {
       showToast('You already applied to this job.', 'info');
       return;
     }
-    const resumeUrl = window.prompt('Resume URL (optional, e.g. Drive/S3 link):', '')?.trim() || '';
-    const resumeText = window.prompt('Resume text summary (optional):', '')?.trim() || '';
-    const coverLetter = window.prompt('Cover letter (optional):', '')?.trim() || '';
-    if (!resumeUrl && !resumeText) {
-      showToast('Tip: add resume URL or resume text for recruiter visibility.', 'info');
+    const resumeUrlInput = window.prompt('Resume URL (optional, e.g. Drive/S3 link):', '');
+    if (resumeUrlInput === null) {
+      showToast('Application cancelled.', 'info');
+      return;
+    }
+    const resumeTextInput = window.prompt('Resume text summary (optional):', '');
+    if (resumeTextInput === null) {
+      showToast('Application cancelled.', 'info');
+      return;
+    }
+    const coverLetterInput = window.prompt('Cover letter (optional):', '');
+    if (coverLetterInput === null) {
+      showToast('Application cancelled.', 'info');
+      return;
+    }
+
+    const resumeUrl = resumeUrlInput.trim();
+    const resumeText = resumeTextInput.trim();
+    const coverLetter = coverLetterInput.trim();
+    if (!resumeUrl && !resumeText && !coverLetter) {
+      showToast('Application cancelled. Add resume info or a cover letter to submit.', 'info');
+      return;
     }
     setIsApplying(true);
     try {
@@ -276,7 +293,7 @@ export default function JobsSearchPage() {
               {saveBannerJob.title} at {saveBannerJob.company}
             </span>
             <Link
-              to="/jobs/tracker"
+              to="/saved"
               className="ml-auto text-xs font-semibold text-[#0a66c2] hover:underline"
             >
               See saved jobs
@@ -287,4 +304,3 @@ export default function JobsSearchPage() {
     </div>
   );
 }
-

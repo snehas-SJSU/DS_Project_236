@@ -3,18 +3,59 @@
 @tailwind utilities;
 
 @layer base {
+  :root {
+    color: #1f2328;
+    background: #f3f2ef;
+  }
+
   body {
     @apply antialiased text-slate-900 bg-[#f3f2ef];
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  }
+
+  a,
+  button,
+  input,
+  textarea,
+  select {
+    @apply transition-colors duration-150;
   }
 }
 
 @layer components {
   .li-card {
-    @apply rounded-lg border border-[#e0dfdc] bg-white shadow-sm;
+    @apply rounded-xl border border-[#e0dfdc] bg-white shadow-[0_0_0_1px_rgba(0,0,0,0.01),0_1px_2px_rgba(0,0,0,0.08)];
   }
 
   .li-section-title {
     @apply text-base font-semibold text-[#191919];
+  }
+
+  .li-shell {
+    @apply min-h-screen bg-[#f3f2ef] text-[#191919];
+  }
+
+  .li-panel {
+    @apply rounded-2xl border border-[#e0dfdc] bg-white shadow-[0_1px_2px_rgba(0,0,0,0.06)];
+  }
+
+  .li-input {
+    @apply w-full rounded-lg border border-[#cfd6dc] bg-white px-3 py-3 text-sm text-[#191919] outline-none placeholder:text-[#666666] focus:border-[#0a66c2] focus:ring-4 focus:ring-[#0a66c2]/10;
+  }
+
+  .li-soft-input {
+    @apply rounded-md border border-transparent bg-[#edf3f8] text-sm text-[#191919] outline-none placeholder:text-[#526a6e] focus:border-[#d0d7de] focus:bg-white focus:ring-2 focus:ring-[#0a66c2]/10;
+  }
+
+  .li-btn-primary {
+    @apply inline-flex items-center justify-center rounded-full bg-[#0a66c2] px-5 py-2.5 text-sm font-semibold text-white hover:bg-[#004182];
+  }
+
+  .li-btn-secondary {
+    @apply inline-flex items-center justify-center rounded-full border border-[#0a66c2] px-5 py-2.5 text-sm font-semibold text-[#0a66c2] hover:bg-[#eef3f8];
+  }
+
+  .li-btn-ghost {
+    @apply inline-flex items-center justify-center rounded-full border border-[#8c8c8c] px-5 py-2.5 text-sm font-semibold text-[#404040] hover:bg-[#f3f6f8];
   }
 }
