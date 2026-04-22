@@ -99,6 +99,18 @@ async function sendJobEvent(payload) {
   });
 }
 
+async function ensureSavedJobsTable() {
+  await db.query(`
+    CREATE TABLE IF NOT EXISTS saved_jobs (
+      job_id VARCHAR(50),
+      member_id VARCHAR(50),
+      saved_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      PRIMARY KEY (job_id, member_id),
+      INDEX idx_saved_jobs_member_saved (member_id, saved_at)
+    )
+  `);
+}
+
 app.post('/jobs/create', async (req, res) => {
   try {
     const {
@@ -256,19 +268,14 @@ app.post('/jobs/save', async (req, res) => {
       return res.status(400).json({ error: 'BAD_REQUEST', message: 'job_id and member_id required', trace_id: crypto.randomUUID() });
     }
 
-    await db.query(`
-      CREATE TABLE IF NOT EXISTS saved_jobs (
-        job_id VARCHAR(50),
-        member_id VARCHAR(50),
-        saved_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        PRIMARY KEY (job_id, member_id)
-      )
-    `);
-    await db.query(
+    await ensureSavedJobsTable();
+    const [result] = await db.query(
       'INSERT IGNORE INTO saved_jobs (job_id, member_id) VALUES (?, ?)',
       [job_id, member_id]
     );
-    await db.query('UPDATE jobs SET saves_count = COALESCE(saves_count, 0) + 1 WHERE job_id = ?', [job_id]);
+    if (result && result.affectedRows > 0) {
+      await db.query('UPDATE jobs SET saves_count = COALESCE(saves_count, 0) + 1 WHERE job_id = ?', [job_id]);
+    }
 
     const traceId = crypto.randomUUID();
     const idem = crypto.randomUUID();
@@ -295,14 +302,7 @@ app.post('/jobs/unsave', async (req, res) => {
       return res.status(400).json({ error: 'BAD_REQUEST', message: 'job_id and member_id required', trace_id: crypto.randomUUID() });
     }
 
-    await db.query(`
-      CREATE TABLE IF NOT EXISTS saved_jobs (
-        job_id VARCHAR(50),
-        member_id VARCHAR(50),
-        saved_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        PRIMARY KEY (job_id, member_id)
-      )
-    `);
+    await ensureSavedJobsTable();
     const [result] = await db.query(
       'DELETE FROM saved_jobs WHERE job_id = ? AND member_id = ?',
       [job_id, member_id]
@@ -326,6 +326,75 @@ app.post('/jobs/unsave', async (req, res) => {
     });
 
     res.status(200).json({ message: 'Unsaved', job_id, member_id, trace_id: traceId });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'INTERNAL_ERROR', message: err.message, trace_id: crypto.randomUUID() });
+  }
+});
+
+app.post('/jobs/saved', async (req, res) => {
+  try {
+    await ensureJobsSchema();
+    await ensureSavedJobsTable();
+    const { member_id, limit = 100 } = req.body || {};
+    if (!member_id) {
+      return res.status(400).json({ error: 'BAD_REQUEST', message: 'member_id required', trace_id: crypto.randomUUID() });
+    }
+
+    const safeLimit = Math.min(Math.max(Number(limit) || 20, 1), 200);
+    const [rows] = await db.query(
+      `SELECT
+          s.job_id,
+          s.member_id,
+          s.saved_at,
+          j.title,
+          j.company,
+          j.company_id,
+          j.location,
+          j.salary,
+          j.type,
+          j.skills,
+          j.description,
+          j.status,
+          j.recruiter_id,
+          j.industry,
+          j.remote_mode,
+          j.seniority_level,
+          j.employment_type,
+          j.applicants_count,
+          j.created_at
+       FROM saved_jobs s
+       LEFT JOIN jobs j ON j.job_id = s.job_id
+       WHERE s.member_id = ?
+       ORDER BY s.saved_at DESC
+       LIMIT ?`,
+      [member_id, safeLimit]
+    );
+
+    res.status(200).json(
+      rows.map((r) => ({
+        id: r.job_id,
+        job_id: r.job_id,
+        member_id: r.member_id,
+        saved_at: r.saved_at,
+        title: r.title || 'Untitled job',
+        company: r.company || 'Unknown company',
+        company_id: r.company_id || null,
+        location: r.location || '',
+        salary: r.salary || '',
+        type: r.type || r.employment_type || '',
+        postedAt: r.created_at || r.saved_at,
+        skills: typeof r.skills === 'string' ? JSON.parse(r.skills || '[]') : (r.skills || []),
+        description: r.description || '',
+        status: r.status || 'open',
+        recruiter_id: r.recruiter_id || null,
+        industry: r.industry || null,
+        remote_mode: r.remote_mode || null,
+        seniority_level: r.seniority_level || null,
+        employment_type: r.employment_type || null,
+        applicants: r.applicants_count || 0
+      }))
+    );
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'INTERNAL_ERROR', message: err.message, trace_id: crypto.randomUUID() });
