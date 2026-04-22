@@ -22,6 +22,21 @@ async function ensureColumn(table, name, ddl) {
   }
 }
 
+async function ensureIndex(table, indexName, ddl) {
+  const [rows] = await db.query(
+    `SELECT COUNT(*) AS cnt FROM INFORMATION_SCHEMA.STATISTICS
+     WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND INDEX_NAME = ?`,
+    [table, indexName]
+  );
+  if (!rows[0]?.cnt) {
+    try {
+      await db.query(`ALTER TABLE ${table} ADD INDEX ${ddl}`);
+    } catch (err) {
+      if (err && err.code !== 'ER_DUP_KEYNAME') throw err;
+    }
+  }
+}
+
 async function ensureJobsSchema() {
   await db.query(`
     CREATE TABLE IF NOT EXISTS jobs (
@@ -54,6 +69,14 @@ async function ensureJobsSchema() {
   await ensureColumn('jobs', 'views_count', 'views_count INT DEFAULT 0');
   await ensureColumn('jobs', 'saves_count', 'saves_count INT DEFAULT 0');
   await ensureColumn('jobs', 'applicants_count', 'applicants_count INT DEFAULT 0');
+  // Indexes for job search + recruiter/dashboard query paths.
+  await ensureIndex('jobs', 'idx_jobs_status_created', 'idx_jobs_status_created (status, created_at)');
+  await ensureIndex('jobs', 'idx_jobs_recruiter_created', 'idx_jobs_recruiter_created (recruiter_id, created_at)');
+  await ensureIndex('jobs', 'idx_jobs_company', 'idx_jobs_company (company)');
+  await ensureIndex('jobs', 'idx_jobs_location', 'idx_jobs_location (location)');
+  await ensureIndex('jobs', 'idx_jobs_type', 'idx_jobs_type (type)');
+  await ensureIndex('jobs', 'idx_jobs_employment_type', 'idx_jobs_employment_type (employment_type)');
+  await ensureIndex('jobs', 'idx_jobs_industry', 'idx_jobs_industry (industry)');
 }
 
 function env(eventType, traceId, actorId, entityId, payload, idempotencyKey) {

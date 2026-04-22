@@ -103,6 +103,23 @@ wait_until_application_for_job() {
   exit 1
 }
 
+wait_until_job_closed() {
+  local job_id=$1
+  local i=0
+  local r=""
+  while [[ $i -lt $SMOKE_ASYNC_WAIT_ATTEMPTS ]]; do
+    r="$(post "/jobs/get" "{\"job_id\":\"${job_id}\"}")"
+    if echo "$r" | grep -q '"status":"closed"'; then
+      return 0
+    fi
+    sleep "$SMOKE_ASYNC_SLEEP_SEC"
+    i=$((i + 1))
+  done
+  echo "Timeout: job ${job_id} not closed yet (job worker lag?)."
+  echo "Last response: ${r}"
+  exit 1
+}
+
 echo "[0] gateway / member reachability"
 code0="$(http_post_code "/members/get" "{\"member_id\":\"${SMOKE_MEMBER_ID}\"}")"
 if [[ "${code0}" != "200" ]]; then
@@ -178,7 +195,7 @@ if [[ -z "${closed_job_id}" ]]; then
 fi
 wait_until_job_in_db "${closed_job_id}"
 post "/jobs/close" "{\"job_id\":\"${closed_job_id}\"}" >/dev/null
-sleep 1
+wait_until_job_closed "${closed_job_id}"
 closed_apply="$(post "/applications/submit" "{\"job_id\":\"${closed_job_id}\",\"member_id\":\"${SMOKE_MEMBER_ID}\"}")"
 fatal_if_gateway_html "applications/submit (closed)" "$closed_apply"
 assert_contains_any "${closed_apply}" "JOB_CLOSED"

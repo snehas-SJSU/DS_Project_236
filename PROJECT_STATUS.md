@@ -70,6 +70,17 @@ Last updated: Apr 2026 (connections, feed/share UX, smoke hardening, same-origin
   - **AI evaluation metrics/report** — pending (matching quality + HITL approval-rate evidence not yet produced).
   - **AI deliverables package** — pending (workflow diagram, topic design, per-skill I/O spec, evaluation results, failure handling write-up, end-to-end demo evidence).
 
+## Database requirements (Section 10)
+
+- **MySQL transactional records — implemented:** jobs, applications, recruiters/admin entities, members/auth/session, connections, and thread metadata are persisted in MySQL.
+- **MongoDB logs/events + message bodies — implemented:** analytics events are ingested into Mongo (`events` collection), and messaging body payloads are persisted in Mongo (`messages` collection).
+- **DB split justification — implemented:** MySQL is used for OLTP relational state and indexed query paths; MongoDB is used for append-style logs/events and unstructured message documents.
+- **Indexes for key queries — implemented and verified:**
+  - `applications`: unique `(job_id, member_id)` and indexes on `job_id`, `member_id`.
+  - `jobs`: `idx_jobs_status_created (status, created_at)`, `idx_jobs_recruiter_created (recruiter_id, created_at)`, plus filter-path indexes on `company`, `location`, `type`, `employment_type`, `industry`.
+  - These indexes are applied via idempotent startup migrations in both `job-service/api.js` and `job-service/worker.js`.
+- **Verification:** smoke test passes after async close-state stabilization (`scripts/smoke-test.sh` now waits for persisted `closed` status before asserting `JOB_CLOSED`).
+
 ## Runbook
 
 1. `docker compose up -d`
