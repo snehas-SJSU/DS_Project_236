@@ -132,6 +132,10 @@ Notes:
 docker compose up -d
 ```
 
+Important:
+1. Ensure Docker Desktop/daemon is running before this command.
+2. If you see `Cannot connect to the Docker daemon` or Kafka `ECONNREFUSED 127.0.0.1:9092`, start Docker first, rerun `docker compose up -d`, then rerun `npm run start:all`.
+
 Infra services started by this command:
 1. Zookeeper (`2181`)
 2. Kafka (`9092`)
@@ -151,6 +155,8 @@ npm run start:all
 cd frontend
 npm run dev
 ```
+
+If port `3000` is already in use, Vite auto-selects another port (for example `3001`). Open the exact Local URL shown in terminal.
 
 ### 2.5 Open app and docs
 
@@ -224,6 +230,8 @@ npm run start:all
 cd <repo-root>/frontend
 npm run dev
 ```
+
+Note: if `3000` is occupied, Vite will run on the next free port and print it in terminal.
 
 ### 2.8 Open and test
 
@@ -335,18 +343,6 @@ Notes:
 1. By default the script calls **`http://localhost:4000/api`** (gateway directly), not port `3000`. That validates backends regardless of the Vite proxy.
 2. Keep **`npm run start:all`** running so the gateway and services are up before running smoke.
 
-### 8.1 Redis caching vs JMeter ownership (important for grading)
-
-1. **Redis SQL caching implementation is already in code** (entity lookup caching + invalidation on state change paths).
-2. **Remaining deliverable is benchmark evidence**, not core Redis coding: whoever owns the performance phase should run JMeter (or equivalent), compare baseline vs Redis-enabled runs, and attach charts/tables in the final report.
-3. Required evidence should include:
-   - Scenario labels (for example: baseline `B` vs baseline + SQL caching `B+S`)
-   - Throughput + latency comparison
-   - Test setup summary (threads, duration, dataset size, date)
-   - Operator/owner name for reproducibility
-
----
-
 <!-- ====================== 9.0 TROUBLESHOOTING ====================== -->
 ## 9.0 Troubleshooting
 
@@ -361,6 +357,8 @@ Notes:
    - `npm run dev:app-api`
    - `npm run dev:app-worker`
 7. Premium page aliases supported: `/premium`, `/try-premium`, `/premium/free-trial`, `/premium/trial`.
+8. If Kafka worker logs show `ECONNREFUSED 127.0.0.1:9092`, Docker/Kafka is not up yet. Start Docker, run `docker compose up -d`, then restart `npm run start:all`.
+9. If frontend starts on `3001` (or another port), use that printed URL or free `3000` first.
 
 ### 9.1 Additional port/startup diagnostics
 
