@@ -468,21 +468,21 @@ function FeedPlaceholder() {
   return (
     <div className="space-y-3">
       <div className="li-card p-4">
-        <div className="mb-2 flex items-center gap-2">
+        <div className="mb-3 flex items-center gap-3">
           <div className="h-12 w-12 overflow-hidden rounded-full border border-slate-200 bg-slate-100">
             <img src={resolveViewerAvatarUrl(undefined, memberDisplayName)} alt="Me" className="h-full w-full object-cover" />
           </div>
           <button
-            className="flex-1 rounded-full border border-[#d0d7de] px-4 py-3 text-left text-sm text-[#666666] hover:bg-[#f3f6f8]"
+            className="flex-1 rounded-full border border-[#cfd6dc] px-4 py-3 text-left text-sm font-medium text-[#666666] hover:bg-[#f3f6f8]"
             onClick={() => setComposerOpen(true)}
           >
             Start a post
           </button>
         </div>
-        <div className="mt-2 flex gap-2">
-          <Link to="/profile/activity" className="rounded-full border border-[#d0d7de] px-4 py-1.5 text-sm font-semibold text-[#666666] hover:bg-[#f3f6f8]">Media</Link>
-          <Link to="/jobs" className="rounded-full border border-[#d0d7de] px-4 py-1.5 text-sm font-semibold text-[#666666] hover:bg-[#f3f6f8]">Job</Link>
-          <Link to="/profile/activity" className="rounded-full border border-[#d0d7de] px-4 py-1.5 text-sm font-semibold text-[#666666] hover:bg-[#f3f6f8]">Write article</Link>
+        <div className="mt-1 grid grid-cols-3 gap-2">
+          <Link to="/profile/activity" className="flex items-center justify-center rounded-lg px-4 py-2 text-sm font-semibold text-[#666666] hover:bg-[#f3f6f8]">Media</Link>
+          <Link to="/jobs" className="flex items-center justify-center rounded-lg px-4 py-2 text-sm font-semibold text-[#666666] hover:bg-[#f3f6f8]">Job</Link>
+          <Link to="/profile/activity" className="flex items-center justify-center rounded-lg px-4 py-2 text-sm font-semibold text-[#666666] hover:bg-[#f3f6f8]">Write article</Link>
         </div>
       </div>
       {feedLoading ? <p className="text-sm text-slate-500">Loading feed…</p> : null}
@@ -492,7 +492,7 @@ function FeedPlaceholder() {
             <div className="h-12 w-12 overflow-hidden rounded-full border border-slate-200 bg-slate-100">
               <img src={feedAuthorAvatarSrc(p)} alt="" className="h-full w-full object-cover" />
             </div>
-            <div>
+            <div className="min-w-0">
               <Link to={`/profile/${encodeURIComponent(p.member_id)}`} className="text-sm font-semibold text-[#191919] hover:text-[#0a66c2] hover:underline">
                 {p.author_name || p.member_id}
               </Link>
@@ -500,7 +500,7 @@ function FeedPlaceholder() {
               <p className="text-xs text-[#666666]">{new Date(p.created_at).toLocaleString()} • 🌎</p>
             </div>
           </div>
-          <p className="mt-3 whitespace-pre-wrap text-sm leading-relaxed text-[#191919]">{p.body}</p>
+          <p className="mt-3 whitespace-pre-wrap text-[14px] leading-6 text-[#191919]">{p.body}</p>
           {p.quoted ? (
             <div className="mt-3 overflow-hidden rounded-lg border border-[#e0dfdc] bg-[#f3f2ef]">
               <div className="flex items-start gap-2 border-b border-[#e8e8e8] bg-[#fafafa] px-3 py-2">
@@ -544,7 +544,7 @@ function FeedPlaceholder() {
             <button
               type="button"
               onClick={() => toggleLike(p)}
-              className={`flex min-h-[48px] flex-1 flex-col items-center justify-center gap-0.5 rounded-md py-1.5 transition-colors hover:bg-[#f3f2ef] sm:flex-row sm:gap-1.5 ${
+              className={`flex min-h-[48px] flex-1 flex-col items-center justify-center gap-0.5 rounded-lg py-1.5 transition-colors hover:bg-[#f3f2ef] sm:flex-row sm:gap-1.5 ${
                 p.liked ? 'text-[#0a66c2]' : ''
               }`}
             >
@@ -565,7 +565,7 @@ function FeedPlaceholder() {
                   loadComments(p.post_id).catch(() => undefined);
                 }
               }}
-              className={`flex min-h-[48px] flex-1 flex-col items-center justify-center gap-0.5 rounded-md py-1.5 transition-colors hover:bg-[#f3f2ef] sm:flex-row sm:gap-1.5 ${
+              className={`flex min-h-[48px] flex-1 flex-col items-center justify-center gap-0.5 rounded-lg py-1.5 transition-colors hover:bg-[#f3f2ef] sm:flex-row sm:gap-1.5 ${
                 commentOpenId === p.post_id ? 'text-[#0a66c2]' : ''
               }`}
             >
@@ -579,7 +579,7 @@ function FeedPlaceholder() {
                   e.stopPropagation();
                   setRepostMenuPostId((id) => (id === p.post_id ? null : p.post_id));
                 }}
-                className={`flex min-h-[48px] w-full flex-col items-center justify-center gap-0.5 rounded-md py-1.5 transition-colors hover:bg-[#f3f2ef] sm:flex-row sm:gap-1.5 ${
+                className={`flex min-h-[48px] w-full flex-col items-center justify-center gap-0.5 rounded-lg py-1.5 transition-colors hover:bg-[#f3f2ef] sm:flex-row sm:gap-1.5 ${
                   p.reposted ? 'text-[#0a66c2]' : ''
                 }`}
               >
@@ -587,7 +587,7 @@ function FeedPlaceholder() {
                 <span>Repost</span>
               </button>
               {repostMenuPostId === p.post_id ? (
-                <div className="absolute bottom-full left-1/2 z-[80] mb-1 w-[min(100vw-2rem,280px)] -translate-x-1/2 rounded-md border border-[#e0dfdc] bg-white py-1 shadow-lg">
+                <div className="absolute bottom-full left-1/2 z-[80] mb-1 w-[min(100vw-2rem,280px)] -translate-x-1/2 rounded-xl border border-[#e0dfdc] bg-white py-1 shadow-lg">
                   <button
                     type="button"
                     className="block w-full px-4 py-2.5 text-left text-sm text-[#191919] hover:bg-[#f3f6f8]"
@@ -621,7 +621,7 @@ function FeedPlaceholder() {
                 e.stopPropagation();
                 openSendModal(p);
               }}
-              className={`flex min-h-[48px] flex-1 flex-col items-center justify-center gap-0.5 rounded-md py-1.5 transition-colors hover:bg-[#f3f2ef] sm:flex-row sm:gap-1.5 ${
+              className={`flex min-h-[48px] flex-1 flex-col items-center justify-center gap-0.5 rounded-lg py-1.5 transition-colors hover:bg-[#f3f2ef] sm:flex-row sm:gap-1.5 ${
                 p.sent ? 'text-[#0a66c2]' : ''
               }`}
             >
@@ -630,7 +630,7 @@ function FeedPlaceholder() {
             </button>
           </div>
           {commentOpenId === p.post_id ? (
-            <div className="mt-3 rounded-md border border-[#e0dfdc] bg-[#f9fafb] p-3">
+            <div className="mt-3 rounded-xl border border-[#e0dfdc] bg-[#f9fafb] p-3">
               <div className="mb-2 flex flex-wrap items-center justify-between gap-2 border-b border-[#e0dfdc] pb-2">
                 <span className="text-xs font-semibold text-[#666666]">Comments</span>
                 <select
@@ -1035,9 +1035,9 @@ function AppShell({ children }: { children: React.ReactNode }) {
       <Navbar />
       <div className="mx-auto grid w-full max-w-[1128px] grid-cols-1 gap-6 px-3 py-6 lg:grid-cols-12">
         <aside className="hidden lg:col-span-3 lg:block">
-          <div className="sticky top-[66px] space-y-2">
+          <div className="sticky top-[72px] space-y-2">
             <div className="li-card overflow-hidden p-0">
-              <div className="h-14 bg-gradient-to-r from-[#70b5f9] to-[#a0b4f5]" />
+              <div className="h-16 bg-gradient-to-r from-[#70b5f9] via-[#90caf9] to-[#c7d2fe]" />
               <div className="px-4 pb-4">
                 <Link
                   to={`/profile/${encodeURIComponent(MEMBER_ID)}`}
@@ -1048,13 +1048,19 @@ function AppShell({ children }: { children: React.ReactNode }) {
                 <Link to={`/profile/${encodeURIComponent(MEMBER_ID)}`} className="text-lg font-semibold text-[#191919] hover:text-[#0a66c2] hover:underline">
                   {member.name}
                 </Link>
-                <p className="text-sm text-[#666666]">{member.headline}</p>
+                <p className="mt-1 text-sm leading-5 text-[#666666]">{member.headline}</p>
               </div>
             </div>
             <div className="li-card p-4">
-              <div className="flex items-center justify-between text-sm font-semibold text-[#191919]">
-                <span>Profile viewers</span>
-                <span className="text-[#0a66c2]">{memberDashboard?.profile_views_30d ?? 0}</span>
+              <div className="space-y-3 text-sm">
+                <div className="flex items-center justify-between font-semibold text-[#191919]">
+                  <span>Profile viewers</span>
+                  <span className="text-[#0a66c2]">{memberDashboard?.profile_views_30d ?? 0}</span>
+                </div>
+                <div className="flex items-center justify-between font-semibold text-[#191919]">
+                  <span>Post impressions</span>
+                  <span className="text-[#0a66c2]">{Math.max((memberDashboard?.profile_views_30d ?? 0) * 3, 18)}</span>
+                </div>
               </div>
               <Link to="/analytics/member" className="mt-3 block text-base font-semibold text-[#191919] hover:text-[#0a66c2]">
                 View all analytics
@@ -1072,7 +1078,7 @@ function AppShell({ children }: { children: React.ReactNode }) {
         </aside>
         <main className="lg:col-span-6">{children}</main>
         <aside className="hidden lg:col-span-3 lg:block">
-          <div className="sticky top-[66px] space-y-2">
+          <div className="sticky top-[72px] space-y-2">
             <div className="li-card p-4">
               <p className="li-section-title text-sm">Trending in engineering</p>
               <ul className="mt-2 space-y-2 text-sm text-[#666666]">
@@ -1082,7 +1088,7 @@ function AppShell({ children }: { children: React.ReactNode }) {
               </ul>
             </div>
             <div className="li-card overflow-hidden p-0">
-              <div className="h-20 bg-gradient-to-r from-[#dbeafe] to-[#f5d0fe]" />
+              <div className="h-20 bg-gradient-to-r from-[#dbeafe] via-[#e9d5ff] to-[#fde68a]" />
               <div className="p-4 text-sm">
                 <p className="font-semibold text-[#191919]">Try Premium for free</p>
                 <p className="mt-1 text-[#666666]">See who viewed your profile in the last 365 days.</p>

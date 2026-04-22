@@ -22,26 +22,27 @@ export default function SignInPage() {
   const [loading, setLoading] = useState(false);
 
   return (
-    <div className="flex min-h-screen flex-col bg-white">
+    <div className="flex min-h-screen flex-col bg-[#f3f2ef]">
       <header className="px-8 py-5">
         <Link to="/" className="text-4xl font-bold text-[#0a66c2]">
           in
         </Link>
       </header>
 
-      <main className="flex flex-1 items-center justify-center px-4 pb-10">
-        <div className="w-full max-w-[352px] rounded-lg border border-[#e0dfdc] bg-white p-4 shadow-[0_4px_12px_rgba(0,0,0,0.08)]">
-          <h1 className="mb-3 text-[32px] font-semibold leading-none text-[#191919]">Sign in</h1>
+      <main className="flex flex-1 items-center justify-center px-4 pb-12">
+        <div className="li-panel w-full max-w-[400px] p-8">
+          <h1 className="mb-2 text-[32px] font-semibold leading-none text-[#191919]">Sign in</h1>
+          <p className="mb-5 text-sm text-[#526a6e]">Stay updated on your professional world.</p>
           <div className="space-y-2">
-            <button type="button" className="w-full rounded-full border border-[#8c8c8c] px-3 py-2 text-sm font-semibold text-[#3c4043] hover:bg-[#f7f9fa]">
+            <button type="button" className="li-btn-ghost w-full">
               Continue with Google
             </button>
-            <button type="button" className="w-full rounded-full border border-[#8c8c8c] px-3 py-2 text-sm font-semibold text-[#3c4043] hover:bg-[#f7f9fa]">
+            <button type="button" className="li-btn-ghost w-full">
               Sign in with Apple
             </button>
           </div>
 
-          <p className="mt-2 text-[11px] text-[#666666]">
+          <p className="mt-3 text-[11px] leading-relaxed text-[#666666]">
             By clicking Continue, you agree to LinkedIn&apos;s User Agreement, Privacy Policy, and Cookie Policy.
           </p>
 
@@ -86,7 +87,7 @@ export default function SignInPage() {
               placeholder="Email or phone"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              className="w-full rounded border border-[#8c8c8c] px-3 py-2.5 text-sm outline-none focus:border-[#0a66c2]"
+              className="li-input"
             />
             <div className="relative">
               <input
@@ -94,7 +95,7 @@ export default function SignInPage() {
                 placeholder="Password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                className="w-full rounded border border-[#8c8c8c] px-3 py-2.5 pr-16 text-sm outline-none focus:border-[#0a66c2]"
+                className="li-input pr-16"
               />
               <button
                 type="button"
@@ -119,7 +120,7 @@ export default function SignInPage() {
               Keep me logged in
             </label>
 
-            <button type="submit" className="w-full rounded-full bg-[#0a66c2] px-4 py-2.5 text-sm font-semibold text-white hover:bg-[#004182]">
+            <button type="submit" className="li-btn-primary w-full py-3">
               {loading ? 'Signing in...' : 'Sign in'}
             </button>
             {error ? <p className="text-xs font-medium text-[#c62828]">{error}</p> : null}
@@ -131,7 +132,7 @@ export default function SignInPage() {
         </div>
       </main>
 
-      <footer className="border-t border-[#e0dfdc] px-4 py-3">
+      <footer className="border-t border-[#e0dfdc] bg-white px-4 py-3">
         <div className="mx-auto flex w-full max-w-[980px] flex-wrap items-center justify-center gap-x-4 gap-y-1 text-[11px] text-[#666666]">
           <span className="font-semibold text-[#191919]">LinkedIn</span>
           <span>© 2026</span>
@@ -145,4 +146,3 @@ export default function SignInPage() {
     </div>
   );
 }
-

@@ -28,18 +28,18 @@ export default function JoinPage() {
   const [loading, setLoading] = useState(false);
 
   return (
-    <div className="flex min-h-screen flex-col bg-white">
+    <div className="flex min-h-screen flex-col bg-[#f3f2ef]">
       <header className="px-8 py-5">
         <Link to="/" className="text-4xl font-bold text-[#0a66c2]">
           in
         </Link>
       </header>
 
-      <main className="flex flex-1 items-start justify-center px-4 pt-8">
-        <div className="w-full max-w-[360px]">
-          <h1 className="mb-3 text-[32px] font-semibold leading-none text-[#191919]">Join LinkedIn now - it&apos;s free!</h1>
+      <main className="flex flex-1 items-start justify-center px-4 pt-8 pb-10">
+        <div className="w-full max-w-[400px]">
+          <h1 className="mb-4 text-center text-[32px] font-semibold leading-tight text-[#191919]">Make the most of your professional life</h1>
 
-          <div className="rounded border border-[#e0dfdc] bg-white p-4 shadow-[0_2px_6px_rgba(0,0,0,0.08)]">
+          <div className="li-panel p-6">
             <form
               className="space-y-3"
               onSubmit={async (e) => {
@@ -95,7 +95,7 @@ export default function JoinPage() {
                   type="email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  className="w-full rounded border border-[#8c8c8c] px-3 py-2 text-sm outline-none focus:border-[#0a66c2]"
+                  className="li-input"
                 />
               </div>
 
@@ -106,7 +106,7 @@ export default function JoinPage() {
                     type={showPassword ? 'text' : 'password'}
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
-                    className="w-full rounded border border-[#8c8c8c] px-3 py-2 pr-16 text-sm outline-none focus:border-[#0a66c2]"
+                    className="li-input pr-16"
                   />
                   <button
                     type="button"
@@ -128,7 +128,7 @@ export default function JoinPage() {
                     type={showConfirmPassword ? 'text' : 'password'}
                     value={confirmPassword}
                     onChange={(e) => setConfirmPassword(e.target.value)}
-                    className="w-full rounded border border-[#8c8c8c] px-3 py-2 pr-16 text-sm outline-none focus:border-[#0a66c2]"
+                    className="li-input pr-16"
                   />
                   <button
                     type="button"
@@ -154,7 +154,7 @@ export default function JoinPage() {
                 By clicking Agree &amp; Join or Continue, you agree to the LinkedIn User Agreement, Privacy Policy, and Cookie Policy.
               </p>
 
-              <button type="submit" className="w-full rounded-full bg-[#0a66c2] px-4 py-2.5 text-sm font-semibold text-white hover:bg-[#004182]">
+              <button type="submit" className="li-btn-primary w-full py-3">
                 {loading ? 'Creating account...' : 'Agree & Join'}
               </button>
               {error ? <p className="text-xs font-medium text-[#c62828]">{error}</p> : null}
@@ -166,7 +166,7 @@ export default function JoinPage() {
               <div className="h-px flex-1 bg-[#d9d9d9]" />
             </div>
 
-            <button type="button" className="w-full rounded-full border border-[#8c8c8c] px-3 py-2 text-sm font-semibold text-[#3c4043] hover:bg-[#f7f9fa]">
+            <button type="button" className="li-btn-ghost w-full">
               Continue with Google
             </button>
 
@@ -187,7 +187,7 @@ export default function JoinPage() {
         </div>
       </main>
 
-      <footer className="mt-8 border-t border-[#e0dfdc] px-4 py-3">
+      <footer className="mt-8 border-t border-[#e0dfdc] bg-white px-4 py-3">
         <div className="mx-auto flex w-full max-w-[980px] flex-wrap items-center justify-center gap-x-3 gap-y-1 text-[11px] text-[#666666]">
           <span className="font-semibold text-[#191919]">LinkedIn</span>
           <span>© 2026</span>
@@ -201,4 +201,3 @@ export default function JoinPage() {
     </div>
   );
 }
-

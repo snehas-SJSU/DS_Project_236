@@ -4,6 +4,7 @@ import { ArrowLeft, MoreHorizontal } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { MEMBER_ID } from '../lib/memberProfile';
 import { readJson, SAVED_JOBS_KEY, writeJson } from '../lib/localData';
+import { normalizeJobListRows } from '../lib/jobNormalize';
 import { showToast } from '../lib/toast';
 
 type SavedJob = {
@@ -12,17 +13,23 @@ type SavedJob = {
   company: string;
   location: string;
   savedAt: string;
+  saved_at?: string;
+  source?: 'saved' | 'applied';
 };
 
 const JOB_NOTES_KEY = 'li_sim_job_tracker_notes';
 const JOB_ARCHIVED_KEY = 'li_sim_job_tracker_archived';
 type DateFilter = '24h' | 'week' | null;
+type StageFilter = 'all' | 'submitted' | 'reviewing' | 'interview' | 'offer' | 'rejected';
 
 export default function JobTrackerPage() {
   const navigate = useNavigate();
   const [applications, setApplications] = useState<any[]>([]);
   const [savedJobs, setSavedJobs] = useState<SavedJob[]>(() => readJson<SavedJob[]>(SAVED_JOBS_KEY, []));
   const [archivedJobIds, setArchivedJobIds] = useState<string[]>(() => readJson<string[]>(JOB_ARCHIVED_KEY, []));
+  const [savedJobsLoading, setSavedJobsLoading] = useState(true);
+  const [savedJobsError, setSavedJobsError] = useState('');
+  const [appliedJobsLoading, setAppliedJobsLoading] = useState(false);
   const [connectionCount, setConnectionCount] = useState(0);
   const [connectionIds, setConnectionIds] = useState<string[]>([]);
   const [connectionPeople, setConnectionPeople] = useState<Array<{ member_id: string; name: string; title: string }>>([]);
@@ -34,9 +41,50 @@ export default function JobTrackerPage() {
   const [dateFilterOpen, setDateFilterOpen] = useState(false);
   const [dateFilterDraft, setDateFilterDraft] = useState<DateFilter>(null);
   const [dateFilter, setDateFilter] = useState<DateFilter>(null);
+  const [stageFilter, setStageFilter] = useState<StageFilter>('all');
   const [rowMenuJobId, setRowMenuJobId] = useState<string | null>(null);
 
   useEffect(() => {
+    setSavedJobsLoading(true);
+    setSavedJobsError('');
+    fetch('/api/jobs/saved', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ member_id: MEMBER_ID, limit: 100 })
+    })
+      .then((res) => res.json().then((data) => ({ ok: res.ok, data })))
+      .then(({ ok, data }) => {
+        if (!ok) {
+          setSavedJobsError('Could not load saved jobs right now.');
+          setSavedJobs([]);
+          return;
+        }
+        const rows = normalizeJobListRows(Array.isArray(data) ? data : []).map((job, index) => ({
+          ...job,
+          saved_at: Array.isArray(data) && data[index] ? data[index].saved_at : undefined,
+          source: 'saved' as const,
+          savedAt: Array.isArray(data) && data[index]?.saved_at
+            ? new Date(data[index].saved_at).toLocaleDateString()
+            : new Date().toLocaleDateString()
+        })) as SavedJob[];
+        setSavedJobs(rows);
+        writeJson(
+          SAVED_JOBS_KEY,
+          rows.map((job) => ({
+            id: job.id,
+            title: job.title,
+            company: job.company,
+            location: job.location,
+            savedAt: job.savedAt
+          }))
+        );
+      })
+      .catch(() => {
+        setSavedJobsError('Could not load saved jobs right now.');
+        setSavedJobs([]);
+      })
+      .finally(() => setSavedJobsLoading(false));
+
     fetch('/api/applications/byMember', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -62,6 +110,59 @@ export default function JobTrackerPage() {
         setConnectionIds([]);
       });
   }, []);
+
+  useEffect(() => {
+    const unsavedAppliedJobIds = Array.from(
+      new Set(
+        applications
+          .map((app) => String(app?.job_id || '').trim())
+          .filter((jobId) => jobId && !savedJobs.some((job) => job.id === jobId))
+      )
+    );
+
+    if (!applications.length || !unsavedAppliedJobIds.length) return;
+
+    setAppliedJobsLoading(true);
+    Promise.all(
+      unsavedAppliedJobIds.map(async (jobId) => {
+        try {
+          const res = await fetch('/api/jobs/get', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ job_id: jobId, member_id: MEMBER_ID })
+          });
+          const data = await res.json().catch(() => ({}));
+          if (!res.ok || data?.error) return null;
+          const rows = normalizeJobListRows([data]);
+          const job = rows[0];
+          if (!job) return null;
+          return {
+            id: job.id,
+            title: job.title,
+            company: job.company,
+            location: job.location,
+            source: 'applied' as const,
+            savedAt: 'Applied job',
+            saved_at: data?.created_at || undefined
+          } satisfies SavedJob;
+        } catch {
+          return null;
+        }
+      })
+    )
+      .then((rows) => {
+        const fetched = rows.filter(Boolean) as SavedJob[];
+        if (!fetched.length) return;
+        setSavedJobs((prev) => {
+          const merged = [...prev];
+          for (const row of fetched) {
+            if (!merged.some((job) => job.id === row.id)) merged.push(row);
+          }
+          return merged;
+        });
+      })
+      .finally(() => setAppliedJobsLoading(false));
+  }, [applications, savedJobs]);
 
   useEffect(() => {
     if (!connectionsOpen) return;
@@ -110,6 +211,10 @@ export default function JobTrackerPage() {
     countByStatus('reviewing') + countByStatus('interview') + countByStatus('offer');
   const interviewCount = countByStatus('interview');
   const archivedCount = archivedJobIds.length;
+  const actuallySavedCount = useMemo(
+    () => savedJobs.filter((job) => job.source === 'saved').length,
+    [savedJobs]
+  );
   const appliedSet = useMemo(() => {
     const s = new Set<string>();
     for (const a of applications) {
@@ -128,6 +233,10 @@ export default function JobTrackerPage() {
     const now = Date.now();
     return savedJobs.filter((j) => {
       if (archivedJobIds.includes(j.id)) return false;
+      if (stageFilter !== 'all') {
+        const status = String(applications.find((a) => String(a.job_id) === j.id)?.status || 'submitted').toLowerCase();
+        if (status !== stageFilter) return false;
+      }
       if (!dateFilter) return true;
       const d = parseSavedDate(j.savedAt);
       if (!d) return true;
@@ -136,7 +245,7 @@ export default function JobTrackerPage() {
       if (dateFilter === 'week') return age <= 7 * 24 * 60 * 60 * 1000;
       return true;
     });
-  }, [savedJobs, archivedJobIds, dateFilter]);
+  }, [savedJobs, archivedJobIds, dateFilter, stageFilter, applications]);
 
   const openNoteEditor = (job: SavedJob) => {
     setNoteEditorJob(job);
@@ -189,7 +298,16 @@ export default function JobTrackerPage() {
 
   const persistSavedJobs = (next: SavedJob[]) => {
     setSavedJobs(next);
-    writeJson(SAVED_JOBS_KEY, next);
+    writeJson(
+      SAVED_JOBS_KEY,
+      next.map((job) => ({
+        id: job.id,
+        title: job.title,
+        company: job.company,
+        location: job.location,
+        savedAt: job.savedAt
+      }))
+    );
   };
 
   const unsaveJob = async (job: SavedJob) => {
@@ -229,12 +347,21 @@ export default function JobTrackerPage() {
     }
     try {
       const app = applications.find((a) => String(a.job_id) === job.id);
-      if (app?.app_id) {
-        await fetch('/api/applications/updateStatus', {
+      const applicationId = String(app?.application_id || app?.app_id || '').trim();
+      if (!applicationId) {
+        showToast('No application record found for this saved job.', 'error');
+        return;
+      }
+
+      const res = await fetch('/api/applications/updateStatus', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ app_id: app.app_id, status })
+          body: JSON.stringify({ application_id: applicationId, status })
         });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        showToast(data?.message || 'Unable to change stage right now.', 'error');
+        return;
       }
       setApplications((prev) =>
         prev.map((a) => (String(a.job_id) === job.id ? { ...a, status } : a))
@@ -245,6 +372,9 @@ export default function JobTrackerPage() {
       showToast('Unable to change stage right now.', 'error');
     }
   };
+
+  const stageForJob = (jobId: string) =>
+    String(applications.find((a) => String(a.job_id) === jobId)?.status || 'submitted').toLowerCase();
 
   return (
     <section className="li-card overflow-hidden p-0">
@@ -266,7 +396,10 @@ export default function JobTrackerPage() {
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <span className="rounded-full bg-[#057642] px-3 py-1 text-xs font-semibold text-white">
-            Saved {savedJobs.length > 0 ? `• ${savedJobs.length}` : ''}
+            Tracked {savedJobs.length > 0 ? `• ${savedJobs.length}` : ''}
+          </span>
+          <span className="rounded-full border border-[#d0d7de] px-3 py-1 text-xs font-semibold text-[#444]">
+            Saved {actuallySavedCount > 0 ? `• ${actuallySavedCount}` : ''}
           </span>
           <span className="rounded-full border border-[#d0d7de] px-3 py-1 text-xs font-semibold text-[#444]">
             In progress {inProgressCount > 0 ? `• ${inProgressCount}` : ''}
@@ -346,7 +479,15 @@ export default function JobTrackerPage() {
           <span className="text-right">Action</span>
         </div>
 
-        {visibleSavedJobs.length === 0 ? (
+        {savedJobsLoading || appliedJobsLoading ? (
+          <div className="py-8 text-center">
+            <p className="text-sm text-[#666]">Loading your tracked jobs...</p>
+          </div>
+        ) : savedJobsError ? (
+          <div className="py-8 text-center">
+            <p className="text-sm text-[#9f2d2d]">{savedJobsError}</p>
+          </div>
+        ) : visibleSavedJobs.length === 0 ? (
           <div className="py-8 text-center">
             <p className="text-sm text-[#666]">Not seeing some jobs?</p>
             <Link to="/jobs" className="mt-2 inline-block text-sm font-semibold text-[#0a66c2] hover:underline">
@@ -362,7 +503,14 @@ export default function JobTrackerPage() {
                   <p className="text-xs text-[#666]">
                     {job.company} · {job.location}
                   </p>
-                  <p className="text-[11px] text-[#8a8a8a]">Saved on {job.savedAt}</p>
+                  <div className="mt-1 flex flex-wrap items-center gap-2">
+                    <p className="text-[11px] text-[#8a8a8a]">
+                      {job.source === 'saved' ? `Saved on ${job.savedAt}` : 'Tracked from application'}
+                    </p>
+                    <span className="rounded-full bg-[#eef3f8] px-2 py-0.5 text-[11px] font-semibold capitalize text-[#0a66c2]">
+                      {stageForJob(job.id)}
+                    </span>
+                  </div>
                 </div>
                 <button
                   type="button"
@@ -434,10 +582,26 @@ export default function JobTrackerPage() {
           <p className="text-xs text-[#666]">No application status yet.</p>
         ) : (
           <div className="flex flex-wrap gap-2 text-xs">
+            <button
+              type="button"
+              onClick={() => setStageFilter('all')}
+              className={`rounded-full px-2.5 py-1 ${
+                stageFilter === 'all' ? 'bg-[#0a66c2] font-semibold text-white' : 'bg-[#f3f2ef] text-[#555]'
+              }`}
+            >
+              all
+            </button>
             {grouped.map(([status, count]) => (
-              <span key={status} className="rounded-full bg-[#f3f2ef] px-2.5 py-1 text-[#555]">
+              <button
+                key={status}
+                type="button"
+                onClick={() => setStageFilter(status as StageFilter)}
+                className={`rounded-full px-2.5 py-1 ${
+                  stageFilter === status ? 'bg-[#0a66c2] font-semibold text-white' : 'bg-[#f3f2ef] text-[#555]'
+                }`}
+              >
                 {status}: {count}
-              </span>
+              </button>
             ))}
           </div>
         )}
@@ -540,4 +704,3 @@ export default function JobTrackerPage() {
     </section>
   );
 }
-

@@ -50,15 +50,15 @@ export default function Navbar() {
   }, []);
 
   const navItemClass = ({ isActive }: { isActive: boolean }) =>
-    `group flex min-w-[60px] flex-col items-center border-b-2 px-1 pb-1 pt-2 transition-colors ${
+    `group flex min-w-[66px] flex-col items-center border-b-2 px-1 pb-1 pt-2 transition-colors ${
       isActive ? 'border-[#191919] text-[#191919]' : 'border-transparent text-[#666666] hover:text-[#191919]'
     }`;
 
   return (
-    <nav className="sticky top-0 z-50 border-b border-[#e0dfdc] bg-white">
-      <div className="mx-auto flex h-[52px] max-w-[1128px] items-center justify-between gap-3 px-3">
-          <div className="flex items-center gap-2">
-            <Link to="/feed" className="rounded bg-[#0a66c2] p-1.5 text-xl font-bold leading-none text-white">
+    <nav className="sticky top-0 z-50 border-b border-[#e0dfdc] bg-white/95 backdrop-blur">
+      <div className="mx-auto flex h-[56px] max-w-[1128px] items-center justify-between gap-3 px-3">
+          <div className="flex items-center gap-2.5">
+            <Link to="/feed" className="rounded-md bg-[#0a66c2] px-2 py-1 text-[28px] font-bold leading-none text-white shadow-sm">
               in
             </Link>
             <form
@@ -70,18 +70,18 @@ export default function Navbar() {
                 navigate(`/jobs/search?keywords=${encodeURIComponent(keywords)}`);
               }}
             >
-              <Search size={14} className="pointer-events-none absolute left-3 top-2.5 text-[#666666]" />
+              <Search size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[#526a6e]" />
               <input
                 type="text"
                 placeholder="Search jobs, profiles..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-44 rounded bg-[#edf3f8] py-1.5 pl-9 pr-3 text-[13px] focus:w-64 focus:outline-none md:w-56"
+                className="li-soft-input h-9 w-56 pl-9 pr-3 focus:w-72"
               />
             </form>
           </div>
 
-          <div className="flex items-center gap-2 md:gap-3">
+          <div className="flex items-center gap-1.5 md:gap-2.5">
             <NavLink to="/feed" className={navItemClass}>
               <Home size={18} />
               <span className="mt-0.5 text-[12px] font-medium">Home</span>
@@ -118,7 +118,7 @@ export default function Navbar() {
                 </span>
               </button>
               {isBusinessMenuOpen && (
-                <div className="absolute right-0 top-[52px] z-50 w-[640px] overflow-hidden rounded-lg border border-[#d9d9d9] bg-white shadow-[0_8px_24px_rgba(0,0,0,0.12)]">
+                <div className="absolute right-0 top-[56px] z-50 w-[640px] overflow-hidden rounded-2xl border border-[#d9d9d9] bg-white shadow-[0_12px_28px_rgba(0,0,0,0.14)]">
                   <div className="grid grid-cols-2">
                     <div className="border-r border-[#e0dfdc] p-5">
                       <p className="mb-4 text-[26px] font-semibold text-[#191919]">My Apps</p>
@@ -190,7 +190,7 @@ export default function Navbar() {
             <NavLink
               to="/premium"
               className={({ isActive }) =>
-                `group flex min-w-[70px] flex-col items-center border-b-2 px-1 pb-1 pt-2 transition-colors ${
+                `group flex min-w-[78px] flex-col items-center border-b-2 px-1 pb-1 pt-2 transition-colors ${
                   isActive ? 'border-[#191919] text-[#915907]' : 'border-transparent text-[#915907] hover:text-[#7c4a00]'
                 }`
               }
@@ -217,7 +217,7 @@ export default function Navbar() {
                 <span className="mt-0.5 text-[12px] font-medium">Me</span>
               </button>
               {isMeMenuOpen && (
-                <div className="absolute right-0 top-[52px] z-50 w-[280px] overflow-hidden rounded-lg border border-[#d9d9d9] bg-white shadow-[0_8px_24px_rgba(0,0,0,0.12)]">
+                <div className="absolute right-0 top-[56px] z-50 w-[296px] overflow-hidden rounded-2xl border border-[#d9d9d9] bg-white shadow-[0_12px_28px_rgba(0,0,0,0.14)]">
                   <div className="border-b border-[#e0dfdc] p-3">
                     <div className="flex items-start gap-2">
                       <div className="h-12 w-12 overflow-hidden rounded-full bg-slate-300">
@@ -230,7 +230,7 @@ export default function Navbar() {
                     </div>
                     <Link
                       to="/profile"
-                      className="mt-3 block rounded-full border border-[#0a66c2] px-3 py-1.5 text-center text-sm font-semibold text-[#0a66c2] hover:bg-[#eef3f8]"
+                      className="mt-3 block rounded-full border border-[#0a66c2] px-3 py-2 text-center text-sm font-semibold text-[#0a66c2] hover:bg-[#eef3f8]"
                       onClick={() => setIsMeMenuOpen(false)}
                     >
                       View profile
