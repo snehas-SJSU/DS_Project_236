@@ -19,7 +19,11 @@
     "dev:analytics-api": "cd services/analytics-service && npm run start:api",
     "dev:analytics-worker": "cd services/analytics-service && npm run start:worker",
     "dev:post-api": "cd services/post-service && node api.js",
+    "dev:ai-service": "cd services/ai-service && AI_SKILLS_BASE_URL=${AI_SKILLS_BASE_URL:-http://127.0.0.1:${AI_SKILLS_SERVICE_PORT:-8018}} ../../.aienv311/bin/python -m uvicorn main:app --reload --host 127.0.0.1 --port ${AI_SERVICE_PORT:-8001}",
+    "dev:ai-skills-service": "cd services/ai-skills-service && AI_SERVICE_BASE_URL=${AI_SERVICE_BASE_URL:-http://127.0.0.1:${AI_SERVICE_PORT:-8001}/ai} ../../.aienv311/bin/python -m uvicorn main:app --reload --host 127.0.0.1 --port ${AI_SKILLS_SERVICE_PORT:-8018}",
+    "dev:outreach-worker": "cd services/messaging-service && npm run start:outreach-worker",
+    "start:ai-stack": "npx concurrently \"npm run dev:ai-service\" \"npm run dev:ai-skills-service\" \"npm run dev:outreach-worker\"",
     "test:smoke": "bash scripts/smoke-test.sh",
-    "start:all": "npx concurrently \"npm run dev:gateway\" \"npm run dev:member-api\" \"npm run dev:member-worker\" \"npm run dev:connection-api\" \"npm run dev:job-api\" \"npm run dev:job-worker\" \"npm run dev:app-api\" \"npm run dev:app-worker\" \"npm run dev:msg-api\" \"npm run dev:msg-worker\" \"npm run dev:analytics-api\" \"npm run dev:analytics-worker\" \"npm run dev:post-api\""
+    "start:all": "npx concurrently \"npm run dev:gateway\" \"npm run dev:member-api\" \"npm run dev:member-worker\" \"npm run dev:connection-api\" \"npm run dev:job-api\" \"npm run dev:job-worker\" \"npm run dev:app-api\" \"npm run dev:app-worker\" \"npm run dev:msg-api\" \"npm run dev:msg-worker\" \"npm run dev:analytics-api\" \"npm run dev:analytics-worker\" \"npm run dev:post-api\" \"npm run dev:outreach-worker\" \"npm run dev:ai-service\" \"npm run dev:ai-skills-service\""
   }
 }
