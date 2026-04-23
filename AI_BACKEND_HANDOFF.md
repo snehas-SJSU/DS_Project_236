@@ -34,6 +34,8 @@
 
 ### 3) Idempotency + failure handling
 - Submit-level idempotency via `client_request_id` + `actor_id` reuse behavior.
+- Kafka `idempotency_key` on each published event is a **stable SHA-256** of `(task_id, topic, event_type, payload)` so redelivered messages can be deduped by consumers.
+- Optional **`AI_REQUIRE_LIVE_DATA=true`**: do not use bundled candidate/job fixtures; Member/Job HTTP APIs must return data. Skill routes return **503** with `LIVE_DATA_REQUIRED` if not; supervisor pipeline fails the step with the same semantics. Default is off (dev-friendly fallbacks). See `services/ai-service/.env.example`.
 - Duplicate-processing protections in workflow steps.
 - Structured failure paths and error envelopes.
 - Approval flow wrapped with failure handling.

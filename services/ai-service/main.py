@@ -21,11 +21,32 @@ try:
 except ImportError:
     pass
 
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, Request, WebSocket, WebSocketDisconnect
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
+
+class LiveDataRequiredError(Exception):
+    """Raised when AI_REQUIRE_LIVE_DATA is enabled but Member/Job APIs return no usable record."""
+
+
+def _require_live_platform_data() -> bool:
+    return os.getenv("AI_REQUIRE_LIVE_DATA", "").strip().lower() in {"1", "true", "yes", "on"}
+
+
 app = FastAPI(title="LinkedIn AgenticAI Service")
+
+
+@app.exception_handler(LiveDataRequiredError)
+async def _live_data_required_handler(_request: Request, exc: LiveDataRequiredError):
+    return JSONResponse(
+        status_code=503,
+        content={
+            "error_code": "LIVE_DATA_REQUIRED",
+            "message": str(exc) or "Member or Job platform API did not return usable data.",
+        },
+    )
+
 
 try:
     from kafka import KafkaConsumer, KafkaProducer
@@ -138,11 +159,21 @@ def _error_response(status_code: int, error_code: str, message: str, trace_id: s
     )
 
 
+def _kafka_idempotency_key(task_id: str, topic: str, event_type: str, payload: Dict[str, Any]) -> str:
+    canonical = json.dumps(
+        {"task_id": task_id, "topic": topic, "event_type": event_type, "payload": payload},
+        sort_keys=True,
+        default=str,
+    )
+    return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+
+
 def _publish_event(topic: str, event_type: str, task: Dict[str, Any], payload: Dict[str, Any]):
     if not get_producer:
         _append_task_event(task, event_type, payload, topic=topic, source="no_kafka_producer")
         return
     try:
+        idem = _kafka_idempotency_key(task["task_id"], topic, event_type, payload)
         message = {
             "event_type": event_type,
             "trace_id": task["trace_id"],
@@ -150,7 +181,7 @@ def _publish_event(topic: str, event_type: str, task: Dict[str, Any], payload: D
             "actor_id": task["actor_id"],
             "entity": {"entity_type": "ai_task", "entity_id": task["task_id"]},
             "payload": payload,
-            "idempotency_key": str(uuid.uuid4()),
+            "idempotency_key": idem,
         }
         _append_task_event(task, event_type, payload, topic=topic, source="ai_service")
         get_producer().send(topic, value=message)
@@ -758,7 +789,21 @@ def _resume_parse_groq(resume_text: str) -> Optional[Dict[str, Any]]:
 def _resume_parse_skill(body: Dict[str, Any]) -> Dict[str, Any]:
     member_id = (body.get("member_id") or "").strip()
     text = body.get("text") or ""
-    profile = _load_member_profile(member_id) or _get_candidate_profiles().get(member_id, {})
+    if _require_live_platform_data():
+        if member_id:
+            profile = _load_member_profile(member_id)
+            if not profile or not profile.get("member_id"):
+                raise LiveDataRequiredError(
+                    f"Member profile for member_id={member_id} is required (AI_REQUIRE_LIVE_DATA=true) but the Member API returned no data."
+                )
+        else:
+            if not (text or "").strip():
+                raise LiveDataRequiredError(
+                    "When AI_REQUIRE_LIVE_DATA=true, provide member_id (Member API) or non-empty resume text."
+                )
+            profile = {}
+    else:
+        profile = _load_member_profile(member_id) or _get_candidate_profiles().get(member_id, {})
     resume_text = text or profile.get("resume_text", "")
     base = _resume_parse_heuristic(resume_text, profile, member_id)
     parse_provider = "heuristic"
@@ -816,6 +861,10 @@ def _job_profile_for(job_id: str) -> Dict[str, Any]:
     service_profile = _load_job_profile(job_id)
     if service_profile:
         return service_profile
+    if _require_live_platform_data():
+        raise LiveDataRequiredError(
+            f"Job profile for job_id={job_id} is required (AI_REQUIRE_LIVE_DATA=true) but the Job API returned no data."
+        )
     return _get_job_profiles().get(job_id, default_profile)
 
 
@@ -972,7 +1021,14 @@ def _outreach_draft_skill(body: Dict[str, Any]) -> Dict[str, Any]:
 def _career_coach_skill(body: Dict[str, Any]) -> Dict[str, Any]:
     member_id = (body.get("member_id") or "").strip()
     job_id = (body.get("job_id") or body.get("target_job_id") or "").strip()
-    profile = _load_member_profile(member_id) if member_id else {}
+    if _require_live_platform_data() and member_id:
+        profile = _load_member_profile(member_id)
+        if not profile or not profile.get("member_id"):
+            raise LiveDataRequiredError(
+                f"Member profile for member_id={member_id} is required (AI_REQUIRE_LIVE_DATA=true) but the Member API returned no data."
+            )
+    else:
+        profile = _load_member_profile(member_id) if member_id else {}
     job = _job_profile_for(job_id) if job_id else {}
 
     headline = f"{profile.get('title', '')} {profile.get('headline', '')}".strip() or "(no headline loaded)"
