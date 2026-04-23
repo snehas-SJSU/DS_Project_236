@@ -13,6 +13,7 @@
 - **Local environment:** Docker can host the full stack (e.g. `linkedin-gateway` on **:4000**, `linkedin-frontend` on **:3000**, plus Kafka/MySQL/Mongo/Redis and service containers). Alternatively, use `docker compose up -d` then `npm run start:all` and `cd frontend && npm run dev` per `README.md`.
 - **AI service (FastAPI):** Run from `services/ai-service` with `python3 -m uvicorn main:app --reload --host 127.0.0.1 --port 8001` after `pip install -r requirements.txt` (repo root). Health: `http://localhost:8001/health`. Gateway proxies `/api/ai/*` to this service when configured and reachable.
 - **Docs / API entry:** App **http://localhost:3000**; gateway Swagger **http://localhost:4000/docs**; proxied Swagger **http://localhost:3000/docs** when Vite dev server is running.
+- **Branch audit + non-AI remaining checklist (Yash):** `YASH_PROJECT_COMPLETION_REPORT.md` at repo root.
 
 ---
 
