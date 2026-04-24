@@ -5,10 +5,10 @@ info:
   description: |
     Complete distributed system backend API documentation for Data 236 Project.
 
-    **Agentic AI (FastAPI):** Paths under `/ai/*` match **Uvicorn** on port **8001** exactly.
-    Use this gateway (`/api` prefix) for **Try it out** — e.g. `POST /api/ai/tasks/submit` → `http://localhost:8001/ai/tasks/submit`.
-    **WebSocket:** `ws://localhost:4000/api/ai/ws/ai/tasks/{task_id}` (proxied to FastAPI `/ws/ai/tasks/{task_id}`).
-    Canonical interactive docs for the Python service alone: `http://localhost:8001/docs`.
+    **Agentic AI (FastAPI):** Paths under `/ai/*` are proxied to the AI Uvicorn service (default **8001**; set env `AI_SERVICE_PORT` on the gateway to match your AI port, e.g. **8772**).
+    Use this gateway (`/api` prefix) for **Try it out** — e.g. `POST /api/ai/tasks/submit` → `http://127.0.0.1:{AI_SERVICE_PORT}/ai/tasks/submit`.
+    **WebSocket:** `ws://localhost:4000/api/ai/ws/ai/tasks/{task_id}` (proxied to FastAPI `/ws/ai/tasks/{task_id}`). OpenAPI does not model WebSockets; use a WS client or FastAPI `/docs` on the AI port.
+    Canonical interactive docs for the Python service alone: `http://127.0.0.1:{AI_SERVICE_PORT}/docs`.
 servers:
   - url: http://localhost:4000/api
     description: Local API Gateway
@@ -19,6 +19,42 @@ paths:
     post:
       tags: [Profile Service]
       summary: Create a new member profile
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email]
+              properties:
+                email:
+                  type: string
+                  format: email
+                password:
+                  type: string
+                name:
+                  type: string
+                title:
+                  type: string
+                headline:
+                  type: string
+                location:
+                  type: string
+                skills:
+                  type: array
+                  items:
+                    type: string
+                resume_text:
+                  type: string
+                about:
+                  type: string
+            example:
+              email: cand_demo@test.com
+              name: Demo Candidate
+              title: Software Engineer
+              location: San Jose
+              skills: [python, kafka, fastapi]
+              resume_text: Engineer with 5 years Python, Kafka, and FastAPI.
       responses:
         '201':
           description: Created
@@ -26,6 +62,18 @@ paths:
     post:
       tags: [Profile Service]
       summary: Retrieve a member profile
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [member_id]
+              properties:
+                member_id:
+                  type: string
+            example:
+              member_id: M-101
       responses:
         '200':
           description: OK
@@ -33,6 +81,31 @@ paths:
     post:
       tags: [Profile Service]
       summary: Update member fields
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [member_id]
+              properties:
+                member_id:
+                  type: string
+                name:
+                  type: string
+                title:
+                  type: string
+                location:
+                  type: string
+                skills:
+                  type: array
+                  items:
+                    type: string
+                resume_text:
+                  type: string
+            example:
+              member_id: M-101
+              resume_text: Updated resume text for testing.
       responses:
         '200':
           description: OK
@@ -40,6 +113,18 @@ paths:
     post:
       tags: [Profile Service]
       summary: Soft-delete member profile
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [member_id]
+              properties:
+                member_id:
+                  type: string
+            example:
+              member_id: M-101
       responses:
         '200':
           description: OK
@@ -47,6 +132,19 @@ paths:
     post:
       tags: [Profile Service]
       summary: Full-text search across members
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                keyword:
+                  type: string
+                location:
+                  type: string
+                skill:
+                  type: string
+            example: {}
       responses:
         '200':
           description: OK
@@ -67,11 +165,15 @@ paths:
                   type: string
                 company:
                   type: string
+                company_id:
+                  type: string
                 location:
                   type: string
                 salary:
                   type: string
                 type:
+                  type: string
+                employment_type:
                   type: string
                 description:
                   type: string
@@ -79,6 +181,24 @@ paths:
                   type: array
                   items:
                     type: string
+                recruiter_id:
+                  type: string
+                industry:
+                  type: string
+                seniority_level:
+                  type: string
+                remote_mode:
+                  type: string
+            example:
+              title: Platform Engineer
+              company: LinkedIn Sim
+              location: San Jose
+              type: full-time
+              employment_type: full-time
+              seniority_level: mid
+              skills: [python, kafka, fastapi, redis]
+              description: Build scalable backend services.
+              recruiter_id: R-5001
       responses:
         '201':
           description: Created
@@ -86,6 +206,21 @@ paths:
     post:
       tags: [Job Service]
       summary: Get job details
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [job_id]
+              properties:
+                job_id:
+                  type: string
+                member_id:
+                  type: string
+                  description: Optional viewer for applied/saved flags
+            example:
+              job_id: J-LIVE-1
       responses:
         '200':
           description: OK
@@ -100,6 +235,25 @@ paths:
     post:
       tags: [Job Service]
       summary: Search and filter jobs
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                keyword:
+                  type: string
+                location:
+                  type: string
+                type:
+                  type: string
+                industry:
+                  type: string
+                remote:
+                  type: string
+                company:
+                  type: string
+            example: {}
       responses:
         '200':
           description: OK
@@ -288,11 +442,37 @@ paths:
         '201':
           description: Created
 
-  # Agentic AI Service (same contract as FastAPI/Uvicorn :8001; gateway adds /api prefix)
+  # Agentic AI Service (same contract as FastAPI/Uvicorn; gateway adds /api prefix)
   /ai/tasks/submit:
     post:
       tags: [Agentic AI Service]
       summary: Submit AI task asynchronously
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [task_type, job_id, candidate_ids, actor_id]
+              properties:
+                task_type:
+                  type: string
+                  enum: [candidate_shortlist]
+                job_id:
+                  type: string
+                candidate_ids:
+                  type: array
+                  items:
+                    type: string
+                actor_id:
+                  type: string
+                trace_id:
+                  type: string
+            example:
+              task_type: candidate_shortlist
+              job_id: J-LIVE-1
+              candidate_ids: [M-101, M-202, M-303]
+              actor_id: R-5001
       responses:
         '202':
           description: Accepted
@@ -306,6 +486,26 @@ paths:
           required: true
           schema:
             type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [decision, reviewer_id]
+              properties:
+                decision:
+                  type: string
+                  enum: [approve, edit, reject]
+                edited_text:
+                  type: string
+                  description: Required when decision is edit
+                reviewer_id:
+                  type: string
+            example:
+              decision: edit
+              edited_text: Looks good, please schedule a call.
+              reviewer_id: R-5001
       responses:
         '200':
           description: OK
@@ -322,6 +522,39 @@ paths:
       responses:
         '200':
           description: OK
+  /ai/tasks/{task_id}/events:
+    get:
+      tags: [Agentic AI Service]
+      summary: Get task event stream for observability
+      parameters:
+        - name: task_id
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            default: 200
+      responses:
+        '200':
+          description: OK
+  /ai/tasks:
+    get:
+      tags: [Agentic AI Service]
+      summary: List AI tasks (optional filter by recruiter actor_id)
+      parameters:
+        - name: actor_id
+          in: query
+          required: false
+          schema:
+            type: string
+          description: When set, returns tasks for that recruiter
+      responses:
+        '200':
+          description: OK
   /ai/health:
     get:
       tags: [Agentic AI Service]
@@ -333,6 +566,18 @@ paths:
     post:
       tags: [Agentic AI Service]
       summary: Parse resume synchronously
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                member_id:
+                  type: string
+                text:
+                  type: string
+            example:
+              member_id: M-101
       responses:
         '200':
           description: OK
@@ -340,6 +585,28 @@ paths:
     post:
       tags: [Agentic AI Service]
       summary: Score job match
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [job_id, parsed_profile]
+              properties:
+                job_id:
+                  type: string
+                member_id:
+                  type: string
+                parsed_profile:
+                  type: object
+            example:
+              job_id: J-LIVE-1
+              parsed_profile:
+                member_id: M-101
+                skills: [python, kafka, fastapi]
+                resume_text: Python engineer with 5 years Kafka and FastAPI.
+                location: San Jose
+                seniority: mid
       responses:
         '200':
           description: OK
@@ -347,6 +614,28 @@ paths:
     post:
       tags: [Agentic AI Service]
       summary: Fetch ranked shortlist
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [job_id, scores]
+              properties:
+                job_id:
+                  type: string
+                scores:
+                  type: array
+                  items:
+                    type: object
+                top_k:
+                  type: integer
+            example:
+              job_id: J-LIVE-1
+              top_k: 3
+              scores:
+                - member_id: M-101
+                  score: 0.85
       responses:
         '200':
           description: OK
@@ -354,6 +643,28 @@ paths:
     post:
       tags: [Agentic AI Service]
       summary: Draft recruiter outreach
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [job_id, shortlist]
+              properties:
+                job_id:
+                  type: string
+                shortlist:
+                  type: array
+                  items:
+                    type: object
+                actor_id:
+                  type: string
+            example:
+              job_id: J-LIVE-1
+              actor_id: R-5001
+              shortlist:
+                - member_id: M-101
+                  score: 0.85
       responses:
         '200':
           description: OK
@@ -361,6 +672,25 @@ paths:
     post:
       tags: [Agentic AI Service]
       summary: Get career suggestions
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        '200':
+          description: OK
+  /ai/metrics:
+    get:
+      tags: [Agentic AI Service]
+      summary: AI metrics summary (alias)
+      responses:
+        '200':
+          description: OK
+  /ai/metrics/summary:
+    get:
+      tags: [Agentic AI Service]
+      summary: AI metrics summary
       responses:
         '200':
           description: OK

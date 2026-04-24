@@ -297,9 +297,11 @@ export default function MessagingPage() {
         (a.lastActivity ? new Date(a.lastActivity).getTime() : 0)
     );
     setThreads(dedupedByPeer);
-    if (dedupedByPeer.length && !activeThreadId) {
-      setActiveThreadId(dedupedByPeer[0].id);
-    }
+    setActiveThreadId((prev) => {
+      if (!dedupedByPeer.length) return '';
+      if (prev && dedupedByPeer.some((t) => t.id === prev)) return prev;
+      return dedupedByPeer[0].id;
+    });
     setLoading(false);
   }
 

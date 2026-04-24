@@ -83,6 +83,20 @@ async function submitHandler(req, res) {
     const traceId = crypto.randomUUID();
     const idempotencyKey = req.headers['idempotency-key'] || crypto.createHash('sha256').update(`${job_id}-${member_id}-${traceId}`).digest('hex');
 
+    await db.query(
+      'INSERT INTO applications (app_id, job_id, member_id, status, resume_url, resume_text, cover_letter, answers) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+      [
+        appId,
+        job_id,
+        member_id,
+        'submitted',
+        resume_url || null,
+        resume_text || null,
+        cover_letter || null,
+        answers ? JSON.stringify(answers) : null
+      ]
+    );
+
     const eventPayload = envelope('application.submitted', traceId, member_id, appId, {
       job_id,
       member_id,
