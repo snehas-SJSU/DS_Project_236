@@ -1,98 +1,92 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
-import { ArrowLeft, MoreHorizontal } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
+import { ArrowLeft, ExternalLink, Lock, MoreHorizontal } from 'lucide-react';
 import { MEMBER_ID } from '../lib/memberProfile';
-import { readJson, SAVED_JOBS_KEY, writeJson } from '../lib/localData';
-import { normalizeJobListRows } from '../lib/jobNormalize';
+import { jobsResultsPath } from '../lib/jobRoutes';
 import { showToast } from '../lib/toast';
 
-type SavedJob = {
+type TrackedJob = {
   id: string;
   title: string;
   company: string;
   location: string;
-  savedAt: string;
-  saved_at?: string;
-  source?: 'saved' | 'applied';
+  salary?: string;
+  type?: string;
+  status?: string;
+  saved_at?: string | null;
+  applied_at?: string | null;
+  created_at?: string | null;
+  application_id?: string | null;
+  stage: string;
+  note?: string;
+  archived?: boolean;
+  source: 'saved' | 'applied';
 };
 
-const JOB_NOTES_KEY = 'li_sim_job_tracker_notes';
-const JOB_ARCHIVED_KEY = 'li_sim_job_tracker_archived';
+type PremiumStatus = {
+  is_active: boolean;
+  plan_name?: string | null;
+};
+
 type DateFilter = '24h' | 'week' | null;
-type StageFilter = 'all' | 'submitted' | 'reviewing' | 'interview' | 'offer' | 'rejected';
+type StageFilter = 'all' | 'saved' | 'submitted' | 'reviewing' | 'interview' | 'offer' | 'rejected' | 'archived';
+
+function displayDate(job: TrackedJob) {
+  const iso = job.saved_at || job.applied_at || job.created_at;
+  if (!iso) return 'recently';
+  const d = new Date(iso);
+  return Number.isNaN(d.getTime()) ? 'recently' : d.toLocaleDateString();
+}
+
+function parseStage(job: TrackedJob) {
+  return String(job.stage || (job.source === 'saved' ? 'saved' : 'submitted')).toLowerCase();
+}
 
 export default function JobTrackerPage() {
   const navigate = useNavigate();
-  const [applications, setApplications] = useState<any[]>([]);
-  const [savedJobs, setSavedJobs] = useState<SavedJob[]>(() => readJson<SavedJob[]>(SAVED_JOBS_KEY, []));
-  const [archivedJobIds, setArchivedJobIds] = useState<string[]>(() => readJson<string[]>(JOB_ARCHIVED_KEY, []));
-  const [savedJobsLoading, setSavedJobsLoading] = useState(true);
-  const [savedJobsError, setSavedJobsError] = useState('');
-  const [appliedJobsLoading, setAppliedJobsLoading] = useState(false);
+  const [trackedJobs, setTrackedJobs] = useState<TrackedJob[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [applyBusyJobId, setApplyBusyJobId] = useState<string | null>(null);
   const [connectionCount, setConnectionCount] = useState(0);
   const [connectionIds, setConnectionIds] = useState<string[]>([]);
   const [connectionPeople, setConnectionPeople] = useState<Array<{ member_id: string; name: string; title: string }>>([]);
   const [connectionsOpen, setConnectionsOpen] = useState(false);
-  const [jobNotes, setJobNotes] = useState<Record<string, string>>(() => readJson<Record<string, string>>(JOB_NOTES_KEY, {}));
-  const [noteEditorJob, setNoteEditorJob] = useState<SavedJob | null>(null);
+  const [noteEditorJob, setNoteEditorJob] = useState<TrackedJob | null>(null);
   const [noteDraft, setNoteDraft] = useState('');
-  const [dateFilterOpen, setDateFilterOpen] = useState(false);
-  const [dateFilterDraft, setDateFilterDraft] = useState<DateFilter>(null);
   const [dateFilter, setDateFilter] = useState<DateFilter>(null);
+  const [dateFilterDraft, setDateFilterDraft] = useState<DateFilter>(null);
+  const [dateFilterOpen, setDateFilterOpen] = useState(false);
   const [stageFilter, setStageFilter] = useState<StageFilter>('all');
   const [rowMenuJobId, setRowMenuJobId] = useState<string | null>(null);
+  const [premium, setPremium] = useState<PremiumStatus>({ is_active: false });
+
+  const refreshTracker = async () => {
+    setLoading(true);
+    setError('');
+    try {
+      const res = await fetch('/api/jobs/tracker', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ member_id: MEMBER_ID })
+      });
+      const data = await res.json().catch(() => []);
+      if (!res.ok) {
+        setError('Could not load your tracked jobs right now.');
+        setTrackedJobs([]);
+        return;
+      }
+      setTrackedJobs(Array.isArray(data) ? data : []);
+    } catch {
+      setError('Could not load your tracked jobs right now.');
+      setTrackedJobs([]);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
-    setSavedJobsLoading(true);
-    setSavedJobsError('');
-    fetch('/api/jobs/saved', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ member_id: MEMBER_ID, limit: 100 })
-    })
-      .then((res) => res.json().then((data) => ({ ok: res.ok, data })))
-      .then(({ ok, data }) => {
-        if (!ok) {
-          setSavedJobsError('Could not load saved jobs right now.');
-          setSavedJobs([]);
-          return;
-        }
-        const rows = normalizeJobListRows(Array.isArray(data) ? data : []).map((job, index) => ({
-          ...job,
-          saved_at: Array.isArray(data) && data[index] ? data[index].saved_at : undefined,
-          source: 'saved' as const,
-          savedAt: Array.isArray(data) && data[index]?.saved_at
-            ? new Date(data[index].saved_at).toLocaleDateString()
-            : new Date().toLocaleDateString()
-        })) as SavedJob[];
-        setSavedJobs(rows);
-        writeJson(
-          SAVED_JOBS_KEY,
-          rows.map((job) => ({
-            id: job.id,
-            title: job.title,
-            company: job.company,
-            location: job.location,
-            savedAt: job.savedAt
-          }))
-        );
-      })
-      .catch(() => {
-        setSavedJobsError('Could not load saved jobs right now.');
-        setSavedJobs([]);
-      })
-      .finally(() => setSavedJobsLoading(false));
-
-    fetch('/api/applications/byMember', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ member_id: MEMBER_ID })
-    })
-      .then((res) => res.json())
-      .then((data) => setApplications(Array.isArray(data) ? data : []))
-      .catch(() => setApplications([]));
-
+    refreshTracker().catch(() => undefined);
     fetch('/api/connections/list', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -101,72 +95,26 @@ export default function JobTrackerPage() {
       .then((res) => res.json())
       .then((data) => {
         const ids = Array.isArray(data) ? data.map((x) => String(x)) : [];
-        setConnectionCount(ids.length);
         setConnectionIds(ids);
+        setConnectionCount(ids.length);
       })
       .catch(() => {
-        setConnectionCount(0);
         setConnectionIds([]);
+        setConnectionCount(0);
       });
+    fetch('/api/members/premium/status', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ member_id: MEMBER_ID })
+    })
+      .then((res) => res.json())
+      .then((data) => setPremium({ is_active: Boolean(data?.is_active), plan_name: data?.plan_name || null }))
+      .catch(() => setPremium({ is_active: false }));
   }, []);
 
   useEffect(() => {
-    const unsavedAppliedJobIds = Array.from(
-      new Set(
-        applications
-          .map((app) => String(app?.job_id || '').trim())
-          .filter((jobId) => jobId && !savedJobs.some((job) => job.id === jobId))
-      )
-    );
-
-    if (!applications.length || !unsavedAppliedJobIds.length) return;
-
-    setAppliedJobsLoading(true);
-    Promise.all(
-      unsavedAppliedJobIds.map(async (jobId) => {
-        try {
-          const res = await fetch('/api/jobs/get', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ job_id: jobId, member_id: MEMBER_ID })
-          });
-          const data = await res.json().catch(() => ({}));
-          if (!res.ok || data?.error) return null;
-          const rows = normalizeJobListRows([data]);
-          const job = rows[0];
-          if (!job) return null;
-          return {
-            id: job.id,
-            title: job.title,
-            company: job.company,
-            location: job.location,
-            source: 'applied' as const,
-            savedAt: 'Applied job',
-            saved_at: data?.created_at || undefined
-          } satisfies SavedJob;
-        } catch {
-          return null;
-        }
-      })
-    )
-      .then((rows) => {
-        const fetched = rows.filter(Boolean) as SavedJob[];
-        if (!fetched.length) return;
-        setSavedJobs((prev) => {
-          const merged = [...prev];
-          for (const row of fetched) {
-            if (!merged.some((job) => job.id === row.id)) merged.push(row);
-          }
-          return merged;
-        });
-      })
-      .finally(() => setAppliedJobsLoading(false));
-  }, [applications, savedJobs]);
-
-  useEffect(() => {
-    if (!connectionsOpen) return;
-    if (!connectionIds.length) {
-      setConnectionPeople([]);
+    if (!connectionsOpen || !connectionIds.length) {
+      if (!connectionIds.length) setConnectionPeople([]);
       return;
     }
     Promise.all(
@@ -195,94 +143,124 @@ export default function JobTrackerPage() {
 
   const grouped = useMemo(() => {
     const map = new Map<string, number>();
-    applications.forEach((item) => {
-      const key = String(item.status || 'submitted').toLowerCase();
+    trackedJobs.forEach((job) => {
+      const key = job.archived ? 'archived' : parseStage(job);
       map.set(key, (map.get(key) || 0) + 1);
     });
     return Array.from(map.entries());
-  }, [applications]);
+  }, [trackedJobs]);
 
-  const countByStatus = (status: string) =>
-    applications.filter((a) => String(a.status || '').toLowerCase() === status.toLowerCase()).length;
-
-  const submittedCount = countByStatus('submitted');
-  const inProgressCount =
-    countByStatus('reviewing') + countByStatus('interview') + countByStatus('offer');
-  const interviewCount = countByStatus('interview');
-  const archivedCount = archivedJobIds.length;
   const actuallySavedCount = useMemo(
-    () => savedJobs.filter((job) => job.source === 'saved').length,
-    [savedJobs]
+    () => trackedJobs.filter((job) => job.source === 'saved' && !job.archived).length,
+    [trackedJobs]
   );
-  const appliedSet = useMemo(() => {
-    const s = new Set<string>();
-    for (const a of applications) {
-      if (a?.job_id) s.add(String(a.job_id));
+  const inProgressCount = useMemo(
+    () => trackedJobs.filter((job) => ['reviewing', 'interview', 'offer'].includes(parseStage(job)) && !job.archived).length,
+    [trackedJobs]
+  );
+  const appliedCount = useMemo(
+    () => trackedJobs.filter((job) => parseStage(job) === 'submitted' && !job.archived).length,
+    [trackedJobs]
+  );
+  const interviewCount = useMemo(
+    () => trackedJobs.filter((job) => parseStage(job) === 'interview' && !job.archived).length,
+    [trackedJobs]
+  );
+  const archivedCount = useMemo(
+    () => trackedJobs.filter((job) => job.archived).length,
+    [trackedJobs]
+  );
+
+  const premiumInsight = useMemo(() => {
+    const nextFollowUp = trackedJobs.find((job) => !job.archived && ['submitted', 'reviewing'].includes(parseStage(job)));
+    if (nextFollowUp) {
+      return `Follow up on ${nextFollowUp.title} at ${nextFollowUp.company}.`;
     }
-    return s;
-  }, [applications]);
+    const nextSaved = trackedJobs.find((job) => !job.archived && parseStage(job) === 'saved');
+    if (nextSaved) {
+      return `Revisit ${nextSaved.title} and decide whether to apply.`;
+    }
+    return 'Your tracker is clear right now. Keep saving jobs you want to revisit.';
+  }, [trackedJobs]);
 
-  const parseSavedDate = (savedAt: string) => {
-    const d = new Date(savedAt);
-    if (!Number.isNaN(d.getTime())) return d;
-    return null;
-  };
-
-  const visibleSavedJobs = useMemo(() => {
+  const visibleTrackedJobs = useMemo(() => {
     const now = Date.now();
-    return savedJobs.filter((j) => {
-      if (archivedJobIds.includes(j.id)) return false;
-      if (stageFilter !== 'all') {
-        const status = String(applications.find((a) => String(a.job_id) === j.id)?.status || 'submitted').toLowerCase();
-        if (status !== stageFilter) return false;
+    return trackedJobs.filter((job) => {
+      const archived = Boolean(job.archived);
+      if (stageFilter === 'archived') {
+        if (!archived) return false;
+      } else {
+        if (archived) return false;
+        if (stageFilter !== 'all' && parseStage(job) !== stageFilter) return false;
       }
       if (!dateFilter) return true;
-      const d = parseSavedDate(j.savedAt);
-      if (!d) return true;
+      const d = new Date(job.saved_at || job.applied_at || job.created_at || '');
+      if (Number.isNaN(d.getTime())) return true;
       const age = now - d.getTime();
       if (dateFilter === '24h') return age <= 24 * 60 * 60 * 1000;
       if (dateFilter === 'week') return age <= 7 * 24 * 60 * 60 * 1000;
       return true;
     });
-  }, [savedJobs, archivedJobIds, dateFilter, stageFilter, applications]);
+  }, [trackedJobs, stageFilter, dateFilter]);
 
-  const openNoteEditor = (job: SavedJob) => {
+  const openNoteEditor = (job: TrackedJob) => {
     setNoteEditorJob(job);
-    setNoteDraft(jobNotes[job.id] || '');
+    setNoteDraft(job.note || '');
   };
 
-  const saveNote = () => {
+  const saveNote = async () => {
     if (!noteEditorJob) return;
-    const next = { ...jobNotes, [noteEditorJob.id]: noteDraft.trim() };
-    setJobNotes(next);
-    localStorage.setItem(JOB_NOTES_KEY, JSON.stringify(next));
-    setNoteEditorJob(null);
-    showToast('Note saved.', 'success');
+    try {
+      const res = await fetch('/api/jobs/tracker/note', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ member_id: MEMBER_ID, job_id: noteEditorJob.id, note: noteDraft })
+      });
+      if (!res.ok) {
+        showToast('Unable to save note right now.', 'error');
+        return;
+      }
+      setTrackedJobs((prev) => prev.map((job) => (job.id === noteEditorJob.id ? { ...job, note: noteDraft } : job)));
+      setNoteEditorJob(null);
+      showToast('Note saved.', 'success');
+    } catch {
+      showToast('Unable to save note right now.', 'error');
+    }
   };
 
-  const applyFromTracker = async (job: SavedJob) => {
-    if (appliedSet.has(job.id)) {
+  const applyFromTracker = async (job: TrackedJob) => {
+    if (job.application_id) {
       showToast('Already applied to this job.', 'info');
       return;
     }
-    navigate(`/jobs/apply?jobId=${encodeURIComponent(job.id)}`);
+    setApplyBusyJobId(job.id);
+    try {
+      const res = await fetch('/api/applications/submit', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ job_id: job.id, member_id: MEMBER_ID })
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        const msg =
+          data.error === 'DUPLICATE_APPLICATION'
+            ? 'Already applied to this job.'
+            : data.error === 'JOB_CLOSED'
+              ? 'This job is closed.'
+              : 'Unable to apply right now.';
+        showToast(msg, 'error');
+        return;
+      }
+      await refreshTracker();
+      showToast('Application submitted.', 'success');
+    } catch {
+      showToast('Unable to apply right now.', 'error');
+    } finally {
+      setApplyBusyJobId(null);
+    }
   };
 
-  const persistSavedJobs = (next: SavedJob[]) => {
-    setSavedJobs(next);
-    writeJson(
-      SAVED_JOBS_KEY,
-      next.map((job) => ({
-        id: job.id,
-        title: job.title,
-        company: job.company,
-        location: job.location,
-        savedAt: job.savedAt
-      }))
-    );
-  };
-
-  const unsaveJob = async (job: SavedJob) => {
+  const unsaveJob = async (job: TrackedJob) => {
     try {
       const res = await fetch('/api/jobs/unsave', {
         method: 'POST',
@@ -293,24 +271,38 @@ export default function JobTrackerPage() {
         showToast('Unable to unsave right now.', 'error');
         return;
       }
-      persistSavedJobs(savedJobs.filter((j) => j.id !== job.id));
+      await refreshTracker();
       showToast('This job is no longer saved.', 'info');
     } catch {
       showToast('Unable to unsave right now.', 'error');
     }
   };
 
-  const archiveJob = (job: SavedJob) => {
-    const next = Array.from(new Set([...archivedJobIds, job.id]));
-    setArchivedJobIds(next);
-    writeJson(JOB_ARCHIVED_KEY, next);
-    setRowMenuJobId(null);
-    showToast('Job archived.', 'info');
+  const archiveJob = async (job: TrackedJob, archived: boolean) => {
+    try {
+      const res = await fetch('/api/jobs/tracker/archive', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ member_id: MEMBER_ID, job_id: job.id, archived })
+      });
+      if (!res.ok) {
+        showToast(`Unable to ${archived ? 'archive' : 'restore'} right now.`, 'error');
+        return;
+      }
+      setTrackedJobs((prev) => prev.map((row) => (row.id === job.id ? { ...row, archived } : row)));
+      setRowMenuJobId(null);
+      showToast(archived ? 'Job archived.' : 'Job restored.', 'success');
+    } catch {
+      showToast(`Unable to ${archived ? 'archive' : 'restore'} right now.`, 'error');
+    }
   };
 
-  const changeStage = async (job: SavedJob) => {
-    const current = applications.find((a) => String(a.job_id) === job.id)?.status || 'submitted';
-    const next = window.prompt('Set stage: submitted, reviewing, interview, offer, rejected', String(current));
+  const changeStage = async (job: TrackedJob) => {
+    if (!job.application_id) {
+      showToast('Apply first before changing the stage.', 'info');
+      return;
+    }
+    const next = window.prompt('Set stage: submitted, reviewing, interview, offer, rejected', parseStage(job));
     if (!next) return;
     const status = next.trim().toLowerCase();
     if (!['submitted', 'reviewing', 'interview', 'offer', 'rejected'].includes(status)) {
@@ -318,26 +310,17 @@ export default function JobTrackerPage() {
       return;
     }
     try {
-      const app = applications.find((a) => String(a.job_id) === job.id);
-      const applicationId = String(app?.application_id || app?.app_id || '').trim();
-      if (!applicationId) {
-        showToast('No application record found for this saved job.', 'error');
-        return;
-      }
-
       const res = await fetch('/api/applications/updateStatus', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ application_id: applicationId, status })
-        });
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ application_id: job.application_id, status })
+      });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
         showToast(data?.message || 'Unable to change stage right now.', 'error');
         return;
       }
-      setApplications((prev) =>
-        prev.map((a) => (String(a.job_id) === job.id ? { ...a, status } : a))
-      );
+      setTrackedJobs((prev) => prev.map((row) => (row.id === job.id ? { ...row, stage: status } : row)));
       setRowMenuJobId(null);
       showToast(`Stage changed to ${status}.`, 'success');
     } catch {
@@ -345,239 +328,273 @@ export default function JobTrackerPage() {
     }
   };
 
-  const stageForJob = (jobId: string) =>
-    String(applications.find((a) => String(a.job_id) === jobId)?.status || 'submitted').toLowerCase();
-
   return (
-    <section className="li-card overflow-hidden p-0">
-      <div className="border-b border-[#e0dfdc] px-5 py-4">
-        <div className="mb-3 flex items-center gap-2">
-          <button
-            type="button"
-            onClick={() => {
-              if (window.history.length > 1) navigate(-1);
-              else navigate('/jobs');
-            }}
-            className="inline-flex h-7 w-7 items-center justify-center rounded-full text-[#666] hover:bg-[#f3f2ef]"
-            title="Back"
-            aria-label="Back"
-          >
-            <ArrowLeft size={16} />
-          </button>
-          <h1 className="text-xl font-semibold text-[#191919]">Job tracker</h1>
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <span className="rounded-full bg-[#057642] px-3 py-1 text-xs font-semibold text-white">
-            Tracked {savedJobs.length > 0 ? `• ${savedJobs.length}` : ''}
-          </span>
-          <span className="rounded-full border border-[#d0d7de] px-3 py-1 text-xs font-semibold text-[#444]">
-            Saved {actuallySavedCount > 0 ? `• ${actuallySavedCount}` : ''}
-          </span>
-          <span className="rounded-full border border-[#d0d7de] px-3 py-1 text-xs font-semibold text-[#444]">
-            In progress {inProgressCount > 0 ? `• ${inProgressCount}` : ''}
-          </span>
-          <span className="rounded-full border border-[#d0d7de] px-3 py-1 text-xs font-semibold text-[#444]">
-            Applied {submittedCount > 0 ? `• ${submittedCount}` : ''}
-          </span>
-          <span className="rounded-full border border-[#d0d7de] px-3 py-1 text-xs font-semibold text-[#444]">
-            Interview {interviewCount > 0 ? `• ${interviewCount}` : ''}
-          </span>
-          <span className="rounded-full border border-[#d0d7de] px-3 py-1 text-xs font-semibold text-[#444]">
-            Archived {archivedCount > 0 ? `• ${archivedCount}` : ''}
-          </span>
-          <div className="relative ml-auto">
+    <section className="space-y-3">
+      <section className="li-card overflow-hidden p-0">
+        <div className="border-b border-[#e0dfdc] px-5 py-4">
+          <div className="mb-3 flex items-center gap-2">
             <button
               type="button"
-              onClick={() => setDateFilterOpen((v) => !v)}
-              className="rounded-full border border-[#d0d7de] px-3 py-1 text-xs font-semibold text-[#444] hover:bg-[#f3f2ef]"
+              onClick={() => {
+                if (window.history.length > 1) navigate(-1);
+                else navigate('/jobs');
+              }}
+              className="inline-flex h-7 w-7 items-center justify-center rounded-full text-[#666] hover:bg-[#f3f2ef]"
+              title="Back"
+              aria-label="Back"
             >
-              Date posted {dateFilter ? `(${dateFilter === '24h' ? 'Past 24 hours' : 'Past week'})` : ''}
+              <ArrowLeft size={16} />
             </button>
-            {dateFilterOpen ? (
-              <div className="absolute right-0 top-8 z-20 w-52 rounded-md border border-[#e0dfdc] bg-white p-2 shadow-lg">
-                <p className="px-1 pb-1 text-xs font-semibold text-[#444]">Date posted</p>
-                <label className="flex items-center justify-between px-1 py-1 text-xs text-[#444]">
-                  Past 24 hours
-                  <input
-                    type="radio"
-                    name="datePostedFilter"
-                    checked={dateFilterDraft === '24h'}
-                    onChange={() => setDateFilterDraft('24h')}
-                  />
-                </label>
-                <label className="flex items-center justify-between px-1 py-1 text-xs text-[#444]">
-                  Past week
-                  <input
-                    type="radio"
-                    name="datePostedFilter"
-                    checked={dateFilterDraft === 'week'}
-                    onChange={() => setDateFilterDraft('week')}
-                  />
-                </label>
-                <div className="mt-2 flex items-center justify-end gap-2">
-                  <button
-                    type="button"
-                    className="text-xs text-[#666] hover:underline"
-                    onClick={() => {
-                      setDateFilterDraft(null);
-                      setDateFilter(null);
-                      setDateFilterOpen(false);
-                    }}
-                  >
-                    Clear
-                  </button>
-                  <button
-                    type="button"
-                    className="rounded-full bg-[#0a66c2] px-3 py-1 text-xs font-semibold text-white"
-                    onClick={() => {
-                      setDateFilter(dateFilterDraft);
-                      setDateFilterOpen(false);
-                    }}
-                  >
-                    Apply
-                  </button>
-                </div>
-              </div>
-            ) : null}
+            <h1 className="text-xl font-semibold text-[#191919]">Job tracker</h1>
           </div>
-        </div>
-      </div>
-
-      <div className="px-5 py-3">
-        <div className="grid grid-cols-[minmax(0,1fr)_90px_120px_90px] gap-3 border-b border-[#e0dfdc] pb-2 text-xs font-semibold text-[#666]">
-          <span>Jobs</span>
-          <span>Connections</span>
-          <span>Notes</span>
-          <span className="text-right">Action</span>
-        </div>
-
-        {savedJobsLoading || appliedJobsLoading ? (
-          <div className="py-8 text-center">
-            <p className="text-sm text-[#666]">Loading your tracked jobs...</p>
-          </div>
-        ) : savedJobsError ? (
-          <div className="py-8 text-center">
-            <p className="text-sm text-[#9f2d2d]">{savedJobsError}</p>
-          </div>
-        ) : visibleSavedJobs.length === 0 ? (
-          <div className="py-8 text-center">
-            <p className="text-sm text-[#666]">Not seeing some jobs?</p>
-            <Link to="/jobs" className="mt-2 inline-block text-sm font-semibold text-[#0a66c2] hover:underline">
-              Find jobs
-            </Link>
-          </div>
-        ) : (
-          <div>
-            {visibleSavedJobs.map((job) => (
-              <div key={job.id} className="grid grid-cols-[minmax(0,1fr)_90px_120px_90px] gap-3 border-b border-[#f0efed] py-3">
-                <div className="min-w-0">
-                  <p className="line-clamp-2 text-sm font-semibold text-[#191919]">{job.title}</p>
-                  <p className="text-xs text-[#666]">
-                    {job.company} · {job.location}
-                  </p>
-                  <div className="mt-1 flex flex-wrap items-center gap-2">
-                    <p className="text-[11px] text-[#8a8a8a]">
-                      {job.source === 'saved' ? `Saved on ${job.savedAt}` : 'Tracked from application'}
-                    </p>
-                    <span className="rounded-full bg-[#eef3f8] px-2 py-0.5 text-[11px] font-semibold capitalize text-[#0a66c2]">
-                      {stageForJob(job.id)}
-                    </span>
-                  </div>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setConnectionsOpen(true)}
-                  className="flex items-center text-xs text-[#666] hover:text-[#0a66c2] hover:underline"
-                >
-                  {connectionCount > 0 ? `+${connectionCount}` : '0'}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => openNoteEditor(job)}
-                  className="flex items-center text-left text-xs text-[#666] hover:text-[#0a66c2]"
-                >
-                  {jobNotes[job.id]?.trim() ? 'View / Edit note' : '+ Add note'}
-                </button>
-                <div className="flex items-center justify-end">
-                  <div className="relative flex items-center gap-1">
-                    <button
-                      type="button"
-                      onClick={() => applyFromTracker(job)}
-                      disabled={appliedSet.has(job.id)}
-                      className="rounded-full border border-[#0a66c2] px-3 py-1 text-xs font-semibold text-[#0a66c2] hover:bg-[#edf3f8] disabled:cursor-not-allowed disabled:border-[#9ec6e5] disabled:text-[#9ec6e5]"
-                    >
-                      {appliedSet.has(job.id) ? 'Applied' : 'Apply'}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setRowMenuJobId((id) => (id === job.id ? null : job.id))}
-                      className="rounded-full p-1 text-[#666] hover:bg-[#f3f2ef]"
-                      aria-label="Job actions"
-                    >
-                      <MoreHorizontal size={15} />
-                    </button>
-                    {rowMenuJobId === job.id ? (
-                      <div className="absolute right-0 top-8 z-20 w-36 rounded-md border border-[#e0dfdc] bg-white py-1 shadow-lg">
-                        <button
-                          type="button"
-                          onClick={() => changeStage(job)}
-                          className="block w-full px-3 py-1.5 text-left text-xs text-[#191919] hover:bg-[#f3f2ef]"
-                        >
-                          Change stage
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => archiveJob(job)}
-                          className="block w-full px-3 py-1.5 text-left text-xs text-[#191919] hover:bg-[#f3f2ef]"
-                        >
-                          Archive
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => unsaveJob(job)}
-                          className="block w-full px-3 py-1.5 text-left text-xs text-[#191919] hover:bg-[#f3f2ef]"
-                        >
-                          Unsave
-                        </button>
-                      </div>
-                    ) : null}
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-
-      <div className="border-t border-[#e0dfdc] px-5 py-3">
-        {grouped.length === 0 ? (
-          <p className="text-xs text-[#666]">No application status yet.</p>
-        ) : (
-          <div className="flex flex-wrap gap-2 text-xs">
-            <button
-              type="button"
-              onClick={() => setStageFilter('all')}
-              className={`rounded-full px-2.5 py-1 ${
-                stageFilter === 'all' ? 'bg-[#0a66c2] font-semibold text-white' : 'bg-[#f3f2ef] text-[#555]'
-              }`}
-            >
-              all
-            </button>
-            {grouped.map(([status, count]) => (
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="rounded-full bg-[#057642] px-3 py-1 text-xs font-semibold text-white">
+              Tracked {trackedJobs.length > 0 ? `• ${trackedJobs.length}` : ''}
+            </span>
+            <span className="rounded-full border border-[#d0d7de] px-3 py-1 text-xs font-semibold text-[#444]">
+              Saved {actuallySavedCount > 0 ? `• ${actuallySavedCount}` : ''}
+            </span>
+            <span className="rounded-full border border-[#d0d7de] px-3 py-1 text-xs font-semibold text-[#444]">
+              In progress {inProgressCount > 0 ? `• ${inProgressCount}` : ''}
+            </span>
+            <span className="rounded-full border border-[#d0d7de] px-3 py-1 text-xs font-semibold text-[#444]">
+              Applied {appliedCount > 0 ? `• ${appliedCount}` : ''}
+            </span>
+            <span className="rounded-full border border-[#d0d7de] px-3 py-1 text-xs font-semibold text-[#444]">
+              Interview {interviewCount > 0 ? `• ${interviewCount}` : ''}
+            </span>
+            <span className="rounded-full border border-[#d0d7de] px-3 py-1 text-xs font-semibold text-[#444]">
+              Archived {archivedCount > 0 ? `• ${archivedCount}` : ''}
+            </span>
+            <div className="relative ml-auto">
               <button
-                key={status}
                 type="button"
-                onClick={() => setStageFilter(status as StageFilter)}
-                className={`rounded-full px-2.5 py-1 ${
-                  stageFilter === status ? 'bg-[#0a66c2] font-semibold text-white' : 'bg-[#f3f2ef] text-[#555]'
-                }`}
+                onClick={() => setDateFilterOpen((v) => !v)}
+                className="rounded-full border border-[#d0d7de] px-3 py-1 text-xs font-semibold text-[#444] hover:bg-[#f3f2ef]"
               >
-                {status}: {count}
+                Date posted {dateFilter ? `(${dateFilter === '24h' ? 'Past 24 hours' : 'Past week'})` : ''}
               </button>
-            ))}
+              {dateFilterOpen ? (
+                <div className="absolute right-0 top-8 z-20 w-52 rounded-md border border-[#e0dfdc] bg-white p-2 shadow-lg">
+                  <p className="px-1 pb-1 text-xs font-semibold text-[#444]">Date posted</p>
+                  <label className="flex items-center justify-between px-1 py-1 text-xs text-[#444]">
+                    Past 24 hours
+                    <input
+                      type="radio"
+                      name="datePostedFilter"
+                      checked={dateFilterDraft === '24h'}
+                      onChange={() => setDateFilterDraft('24h')}
+                    />
+                  </label>
+                  <label className="flex items-center justify-between px-1 py-1 text-xs text-[#444]">
+                    Past week
+                    <input
+                      type="radio"
+                      name="datePostedFilter"
+                      checked={dateFilterDraft === 'week'}
+                      onChange={() => setDateFilterDraft('week')}
+                    />
+                  </label>
+                  <div className="mt-2 flex items-center justify-end gap-2">
+                    <button
+                      type="button"
+                      className="text-xs text-[#666] hover:underline"
+                      onClick={() => {
+                        setDateFilterDraft(null);
+                        setDateFilter(null);
+                        setDateFilterOpen(false);
+                      }}
+                    >
+                      Clear
+                    </button>
+                    <button
+                      type="button"
+                      className="rounded-full bg-[#0a66c2] px-3 py-1 text-xs font-semibold text-white"
+                      onClick={() => {
+                        setDateFilter(dateFilterDraft);
+                        setDateFilterOpen(false);
+                      }}
+                    >
+                      Apply
+                    </button>
+                  </div>
+                </div>
+              ) : null}
+            </div>
           </div>
-        )}
-      </div>
+        </div>
+      </section>
+
+      <section className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_280px]">
+        <section className="li-card overflow-hidden p-0">
+          <div className="px-5 py-3">
+            <div className="grid grid-cols-[minmax(0,1fr)_90px_120px_120px] gap-3 border-b border-[#e0dfdc] pb-2 text-xs font-semibold text-[#666]">
+              <span>Jobs</span>
+              <span>Connections</span>
+              <span>Notes</span>
+              <span className="text-right">Action</span>
+            </div>
+
+            {loading ? (
+              <div className="py-8 text-center text-sm text-[#666]">Loading your tracked jobs...</div>
+            ) : error ? (
+              <div className="py-8 text-center text-sm text-[#9f2d2d]">{error}</div>
+            ) : visibleTrackedJobs.length === 0 ? (
+              <div className="py-8 text-center">
+                <p className="text-sm text-[#666]">Not seeing some jobs?</p>
+                <Link to="/jobs" className="mt-2 inline-block text-sm font-semibold text-[#0a66c2] hover:underline">
+                  Find jobs
+                </Link>
+              </div>
+            ) : (
+              <div>
+                {visibleTrackedJobs.map((job) => (
+                  <div key={job.id} className="grid grid-cols-[minmax(0,1fr)_90px_120px_120px] gap-3 border-b border-[#f0efed] py-3">
+                    <div className="min-w-0">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <Link to={jobsResultsPath(job.id)} className="line-clamp-2 text-sm font-semibold text-[#191919] hover:text-[#0a66c2] hover:underline">
+                          {job.title}
+                        </Link>
+                        <a href={jobsResultsPath(job.id)} className="inline-flex text-[#666] hover:text-[#0a66c2]" aria-label="Open job">
+                          <ExternalLink size={14} />
+                        </a>
+                      </div>
+                      <p className="text-xs text-[#666]">
+                        {job.company} · {job.location}
+                      </p>
+                      <div className="mt-1 flex flex-wrap items-center gap-2">
+                        <p className="text-[11px] text-[#8a8a8a]">
+                          {job.source === 'saved' ? `Saved on ${displayDate(job)}` : `Applied on ${displayDate(job)}`}
+                        </p>
+                        <span className="rounded-full bg-[#eef3f8] px-2 py-0.5 text-[11px] font-semibold capitalize text-[#0a66c2]">
+                          {job.archived ? 'archived' : parseStage(job)}
+                        </span>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setConnectionsOpen(true)}
+                      className="flex items-center text-xs text-[#666] hover:text-[#0a66c2] hover:underline"
+                    >
+                      {connectionCount > 0 ? `+${connectionCount}` : '0'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => openNoteEditor(job)}
+                      className="flex items-center text-left text-xs text-[#666] hover:text-[#0a66c2]"
+                    >
+                      {job.note?.trim() ? 'View / Edit note' : '+ Add note'}
+                    </button>
+                    <div className="flex items-center justify-end">
+                      <div className="relative flex items-center gap-1">
+                        <button
+                          type="button"
+                          onClick={() => applyFromTracker(job)}
+                          disabled={applyBusyJobId === job.id || Boolean(job.application_id) || Boolean(job.archived)}
+                          className="rounded-full border border-[#0a66c2] px-3 py-1 text-xs font-semibold text-[#0a66c2] hover:bg-[#edf3f8] disabled:cursor-not-allowed disabled:border-[#9ec6e5] disabled:text-[#9ec6e5]"
+                        >
+                          {job.application_id ? 'Applied' : applyBusyJobId === job.id ? 'Applying...' : 'Apply'}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setRowMenuJobId((id) => (id === job.id ? null : job.id))}
+                          className="rounded-full p-1 text-[#666] hover:bg-[#f3f2ef]"
+                          aria-label="Job actions"
+                        >
+                          <MoreHorizontal size={15} />
+                        </button>
+                        {rowMenuJobId === job.id ? (
+                          <div className="absolute right-0 top-8 z-20 w-40 rounded-md border border-[#e0dfdc] bg-white py-1 shadow-lg">
+                            <button
+                              type="button"
+                              onClick={() => changeStage(job)}
+                              className="block w-full px-3 py-1.5 text-left text-xs text-[#191919] hover:bg-[#f3f2ef]"
+                            >
+                              Change stage
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => archiveJob(job, !job.archived)}
+                              className="block w-full px-3 py-1.5 text-left text-xs text-[#191919] hover:bg-[#f3f2ef]"
+                            >
+                              {job.archived ? 'Restore' : 'Archive'}
+                            </button>
+                            {job.source === 'saved' ? (
+                              <button
+                                type="button"
+                                onClick={() => unsaveJob(job)}
+                                className="block w-full px-3 py-1.5 text-left text-xs text-[#191919] hover:bg-[#f3f2ef]"
+                              >
+                                Unsave
+                              </button>
+                            ) : null}
+                          </div>
+                        ) : null}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          <div className="border-t border-[#e0dfdc] px-5 py-3">
+            <div className="flex flex-wrap gap-2 text-xs">
+              <button
+                type="button"
+                onClick={() => setStageFilter('all')}
+                className={`rounded-full px-2.5 py-1 ${stageFilter === 'all' ? 'bg-[#0a66c2] font-semibold text-white' : 'bg-[#f3f2ef] text-[#555]'}`}
+              >
+                all
+              </button>
+              {grouped.map(([status, count]) => (
+                <button
+                  key={status}
+                  type="button"
+                  onClick={() => setStageFilter(status as StageFilter)}
+                  className={`rounded-full px-2.5 py-1 ${stageFilter === status ? 'bg-[#0a66c2] font-semibold text-white' : 'bg-[#f3f2ef] text-[#555]'}`}
+                >
+                  {status}: {count}
+                </button>
+              ))}
+            </div>
+          </div>
+        </section>
+
+        <aside className="space-y-3">
+          <section className="li-card p-4">
+            <p className="text-sm font-semibold text-[#191919]">Tracker summary</p>
+            <div className="mt-3 space-y-2 text-sm text-[#555]">
+              <p>{trackedJobs.filter((job) => !job.archived).length} active opportunities</p>
+              <p>{trackedJobs.filter((job) => Boolean(job.note?.trim())).length} jobs with notes</p>
+              <p>{trackedJobs.filter((job) => Boolean(job.application_id)).length} applied jobs</p>
+            </div>
+          </section>
+          <section className="li-card p-4">
+            {premium.is_active ? (
+              <>
+                <p className="text-sm font-semibold text-[#191919]">{premium.plan_name || 'Premium'} insight</p>
+                <p className="mt-2 text-sm text-[#555]">{premiumInsight}</p>
+                <Link to="/premium" className="mt-3 inline-block text-sm font-semibold text-[#0a66c2] hover:underline">
+                  Manage Premium
+                </Link>
+              </>
+            ) : (
+              <>
+                <div className="flex items-center gap-2 text-sm font-semibold text-[#191919]">
+                  <Lock size={15} />
+                  Premium insight locked
+                </div>
+                <p className="mt-2 text-sm text-[#555]">Unlock follow-up recommendations and priority tracker guidance with Premium.</p>
+                <Link to="/premium" className="mt-3 inline-block rounded-full border border-[#0a66c2] px-4 py-1.5 text-sm font-semibold text-[#0a66c2] hover:bg-[#edf3f8]">
+                  Try Premium
+                </Link>
+              </>
+            )}
+          </section>
+        </aside>
+      </section>
+
       {noteEditorJob ? (
         <div
           className="fixed inset-0 z-[150] flex items-start justify-center bg-black/45 p-4 pt-20"
@@ -627,6 +644,7 @@ export default function JobTrackerPage() {
           </div>
         </div>
       ) : null}
+
       {connectionsOpen ? (
         <div
           className="fixed inset-0 z-[160] flex items-start justify-center bg-black/45 p-4 pt-16"
@@ -658,13 +676,12 @@ export default function JobTrackerPage() {
                         <p className="truncate text-sm font-semibold text-[#191919]">{p.name}</p>
                         <p className="truncate text-xs text-[#666]">{p.title}</p>
                       </div>
-                      <button
-                        type="button"
-                        onClick={() => showToast(`Connection viewed: ${p.name}`, 'info')}
+                      <Link
+                        to={`/profile/${encodeURIComponent(p.member_id)}`}
                         className="rounded-full border border-[#d0d7de] px-3 py-1 text-xs font-semibold text-[#444] hover:bg-[#f3f2ef]"
                       >
-                        Connect
-                      </button>
+                        View
+                      </Link>
                     </div>
                   ))}
                 </div>
