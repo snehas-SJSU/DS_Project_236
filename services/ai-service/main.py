@@ -1426,7 +1426,7 @@ def _run_pipeline(task: Dict[str, Any]):
                             source = "demo_fallback"
                     if not ids:
                         raise RuntimeError(
-                            "No applicants found for this job. Ask candidates to apply, or set AI_FALLBACK_DEMO_CANDIDATES for local demos."
+                            "No applicants found for this job. Ask candidates to apply."
                         )
                     task["candidate_ids"] = ids
                     task["application_resume_text_by_member"] = application_resume_text_by_member
