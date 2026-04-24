@@ -453,7 +453,7 @@ paths:
           application/json:
             schema:
               type: object
-              required: [task_type, job_id, candidate_ids, actor_id]
+              required: [task_type, job_id, actor_id]
               properties:
                 task_type:
                   type: string
@@ -464,9 +464,23 @@ paths:
                   type: array
                   items:
                     type: string
+                  description: Required when candidate_source is explicit (default). Ignored for job_applicants / members_search.
+                candidate_source:
+                  type: string
+                  enum: [explicit, job_applicants, members_search]
+                  default: explicit
+                member_search:
+                  type: object
+                  description: Required filters when candidate_source is members_search (at least one field).
+                  properties:
+                    keyword: { type: string }
+                    location: { type: string }
+                    skill: { type: string }
                 actor_id:
                   type: string
                 trace_id:
+                  type: string
+                client_request_id:
                   type: string
             example:
               task_type: candidate_shortlist

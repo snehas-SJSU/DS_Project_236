@@ -10,7 +10,7 @@ import asyncio
 import hashlib
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Literal, Optional, Tuple
 from urllib import error as urlerror
 from urllib import request as urlrequest
 
@@ -23,7 +23,7 @@ except ImportError:
 
 from fastapi import FastAPI, Request, WebSocket, WebSocketDisconnect
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 class LiveDataRequiredError(Exception):
@@ -293,6 +293,23 @@ def _job_api_url() -> str:
     return os.getenv("AI_JOB_API_URL", "http://127.0.0.1:4000/api/jobs/get")
 
 
+def _applications_by_job_url() -> str:
+    return os.getenv("AI_APPLICATIONS_BY_JOB_URL", "http://127.0.0.1:4000/api/applications/byJob")
+
+
+def _members_search_url() -> str:
+    return os.getenv("AI_MEMBERS_SEARCH_URL", "http://127.0.0.1:4000/api/members/search")
+
+
+def _members_search_max() -> int:
+    raw = (os.getenv("AI_MEMBERS_SEARCH_MAX", "40") or "40").strip()
+    try:
+        n = int(raw)
+        return max(1, min(100, n))
+    except ValueError:
+        return 40
+
+
 def _outbound_request_headers(extra: Optional[Dict[str, str]] = None) -> Dict[str, str]:
     """Groq/Cloudflare often block Python-urllib’s default User-Agent; set a real-looking UA."""
     user_agent = (os.getenv("AI_HTTP_USER_AGENT") or "LinkedInAgenticAI/1.0 (Python)").strip()
@@ -310,6 +327,21 @@ def _post_json(url: str, payload: Dict[str, Any], timeout_seconds: float = 2.0) 
             data = response.read().decode("utf-8")
             parsed = json.loads(data)
             if isinstance(parsed, dict):
+                return parsed
+            return None
+    except (urlerror.URLError, TimeoutError, ValueError, json.JSONDecodeError):
+        return None
+
+
+def _post_json_value(url: str, payload: Dict[str, Any], timeout_seconds: float = 5.0) -> Any:
+    """POST JSON; return parsed dict or list, or None on failure."""
+    body = json.dumps(payload).encode("utf-8")
+    req = urlrequest.Request(url, data=body, headers=_outbound_request_headers({"Content-Type": "application/json"}), method="POST")
+    try:
+        with urlrequest.urlopen(req, timeout=timeout_seconds) as response:
+            data = response.read().decode("utf-8")
+            parsed = json.loads(data)
+            if isinstance(parsed, (dict, list)):
                 return parsed
             return None
     except (urlerror.URLError, TimeoutError, ValueError, json.JSONDecodeError):
@@ -717,6 +749,7 @@ def _public_task(task: Dict[str, Any], compact: bool = False) -> Dict[str, Any]:
             "state": out.get("state"),
             "job_id": out.get("job_id"),
             "candidate_ids": out.get("candidate_ids", []),
+            "candidate_source": out.get("candidate_source", "explicit"),
             "created_at": out.get("created_at"),
             "updated_at": out.get("updated_at"),
         }
@@ -1477,13 +1510,78 @@ def _recover_inflight_tasks():
         pass
 
 
+class MemberSearchFilters(BaseModel):
+    """Used when candidate_source=members_search (passed to POST /members/search)."""
+
+    keyword: Optional[str] = None
+    location: Optional[str] = None
+    skill: Optional[str] = None
+
+
 class SubmitTaskRequest(BaseModel):
     task_type: str
     job_id: str
-    candidate_ids: List[str]
+    candidate_ids: List[str] = Field(default_factory=list)
     actor_id: str
+    candidate_source: Literal["explicit", "job_applicants", "members_search"] = "explicit"
+    member_search: Optional[MemberSearchFilters] = None
     trace_id: Optional[str] = None
     client_request_id: Optional[str] = None
+
+
+def _candidate_ids_from_job_applicants(job_id: str) -> Tuple[List[str], Optional[str]]:
+    raw = _post_json_value(_applications_by_job_url(), {"job_id": job_id}, timeout_seconds=8.0)
+    if raw is None:
+        return [], "Applications service unreachable or invalid response."
+    if isinstance(raw, dict):
+        if raw.get("error"):
+            return [], str(raw.get("message") or raw.get("error") or "applications_error")
+        return [], "Unexpected applications response (expected a list)."
+    if not isinstance(raw, list):
+        return [], "Unexpected applications response."
+    out: List[str] = []
+    seen = set()
+    for row in raw:
+        if not isinstance(row, dict):
+            continue
+        mid = str(row.get("member_id") or "").strip()
+        if mid and mid not in seen:
+            seen.add(mid)
+            out.append(mid)
+    return out, None
+
+
+def _candidate_ids_from_members_search(filters: MemberSearchFilters) -> Tuple[List[str], Optional[str]]:
+    kw = (filters.keyword or "").strip()
+    loc = (filters.location or "").strip()
+    sk = (filters.skill or "").strip()
+    if not kw and not loc and not sk:
+        return [], "members_search requires member_search with at least one of keyword, location, or skill."
+    body: Dict[str, Any] = {}
+    if kw:
+        body["keyword"] = kw
+    if loc:
+        body["location"] = loc
+    if sk:
+        body["skill"] = sk
+    raw = _post_json_value(_members_search_url(), body, timeout_seconds=10.0)
+    if raw is None:
+        return [], "Member search unreachable or invalid response."
+    if isinstance(raw, dict) and raw.get("error"):
+        return [], str(raw.get("message") or raw.get("error") or "member_search_error")
+    if not isinstance(raw, list):
+        return [], "Unexpected member search response."
+    cap = _members_search_max()
+    out: List[str] = []
+    seen = set()
+    for row in raw[:cap]:
+        if not isinstance(row, dict):
+            continue
+        mid = str(row.get("member_id") or "").strip()
+        if mid and mid not in seen:
+            seen.add(mid)
+            out.append(mid)
+    return out, None
 
 
 class ApproveBody(BaseModel):
@@ -1564,10 +1662,44 @@ async def submit_task(req: SubmitTaskRequest):
         return _error_response(400, "VALIDATION_ERROR", "job_id is required.")
     if not req.actor_id.strip():
         return _error_response(400, "VALIDATION_ERROR", "actor_id is required.")
-    if not req.candidate_ids:
-        return _error_response(400, "VALIDATION_ERROR", "candidate_ids must contain at least one ID.")
     if req.client_request_id and len(req.client_request_id) > 128:
         return _error_response(400, "VALIDATION_ERROR", "client_request_id must be <= 128 chars.")
+
+    source = req.candidate_source
+    resolved_ids: List[str] = []
+    source_error: Optional[str] = None
+
+    if source == "explicit":
+        resolved_ids = [str(x).strip() for x in req.candidate_ids if str(x).strip()]
+        if not resolved_ids:
+            return _error_response(
+                400,
+                "VALIDATION_ERROR",
+                "candidate_ids must contain at least one ID when candidate_source is explicit.",
+            )
+    elif source == "job_applicants":
+        resolved_ids, source_error = _candidate_ids_from_job_applicants(req.job_id.strip())
+        if source_error:
+            return _error_response(502, "CANDIDATE_SOURCE_FAILED", source_error)
+        if not resolved_ids:
+            return _error_response(
+                404,
+                "NO_CANDIDATES",
+                "No applicants found for this job_id. Submit applications first, or use candidate_source=explicit.",
+            )
+    elif source == "members_search":
+        filters = req.member_search or MemberSearchFilters()
+        resolved_ids, source_error = _candidate_ids_from_members_search(filters)
+        if source_error:
+            return _error_response(400, "VALIDATION_ERROR", source_error)
+        if not resolved_ids:
+            return _error_response(
+                404,
+                "NO_CANDIDATES",
+                "Member search returned no members for the given filters.",
+            )
+    else:
+        return _error_response(400, "VALIDATION_ERROR", f"Unsupported candidate_source: {source}")
 
     existing = _find_existing_task_by_client_request(req.actor_id, (req.client_request_id or "").strip())
     if existing:
@@ -1588,7 +1720,9 @@ async def submit_task(req: SubmitTaskRequest):
         "trace_id": trace_id,
         "task_type": req.task_type,
         "job_id": req.job_id,
-        "candidate_ids": req.candidate_ids,
+        "candidate_ids": resolved_ids,
+        "candidate_source": source,
+        "member_search": (req.member_search.model_dump(exclude_none=True) if req.member_search else None),
         "actor_id": req.actor_id,
         "client_request_id": (req.client_request_id or "").strip() or None,
         "state": "queued",
@@ -1600,13 +1734,22 @@ async def submit_task(req: SubmitTaskRequest):
         "updated_at": created_at,
     }
     _save_task(task)
-    _append_task_event(task, "ai.task.requested", {"job_id": req.job_id, "candidate_ids": req.candidate_ids}, source="state_transition")
+    _append_task_event(
+        task,
+        "ai.task.requested",
+        {"job_id": req.job_id, "candidate_ids": resolved_ids, "candidate_source": source},
+        source="state_transition",
+    )
 
     _publish_event(
         "ai.requests",
         "ai.requested",
         task,
-        {"task_type": req.task_type, "step": None, "data": {"job_id": req.job_id, "candidate_ids": req.candidate_ids}},
+        {
+            "task_type": req.task_type,
+            "step": None,
+            "data": {"job_id": req.job_id, "candidate_ids": resolved_ids, "candidate_source": source},
+        },
     )
 
     # Fallback for environments where Kafka consumer is unavailable.
@@ -1619,6 +1762,8 @@ async def submit_task(req: SubmitTaskRequest):
         "state": task["state"],
         "created_at": created_at,
         "reused": False,
+        "candidate_source": source,
+        "candidate_ids": resolved_ids,
     }
 
 

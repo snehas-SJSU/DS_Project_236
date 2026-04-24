@@ -16,6 +16,7 @@
   - task approval lifecycle
   - websocket progress updates
   - metrics summary
+- **Candidate sourcing on submit:** `candidate_source` can be `explicit` (caller-supplied IDs), `job_applicants` (load `member_id`s from applications for `job_id`), or `members_search` (load IDs from member search filters). Then the same parse → match → shortlist pipeline ranks that set.
 - Multi-step supervisor pipeline implemented:
   1. Resume parse
   2. Match score
@@ -69,19 +70,47 @@
 
 ### Submit AI task
 `POST /api/ai/tasks/submit`
+
+**A) Explicit candidate list (default)** — you already know `member_id`s:
 ```json
 {
   "task_type": "candidate_shortlist",
   "job_id": "J-LIVE-1",
   "candidate_ids": ["M-102", "M-103"],
   "actor_id": "R-101",
+  "candidate_source": "explicit",
   "trace_id": "demo-run-001"
+}
+```
+(`candidate_source` may be omitted; it defaults to `explicit`.)
+
+**B) Applicants for that job** — AI resolves candidates from Application Service (`POST /applications/byJob` via gateway):
+```json
+{
+  "task_type": "candidate_shortlist",
+  "job_id": "J-LIVE-1",
+  "candidate_ids": [],
+  "actor_id": "R-101",
+  "candidate_source": "job_applicants"
+}
+```
+
+**C) Member directory search** — AI resolves up to `AI_MEMBERS_SEARCH_MAX` members from `POST /members/search` (requires at least one filter):
+```json
+{
+  "task_type": "candidate_shortlist",
+  "job_id": "J-LIVE-1",
+  "candidate_ids": [],
+  "actor_id": "R-101",
+  "candidate_source": "members_search",
+  "member_search": { "keyword": "engineer", "location": "San Jose", "skill": "python" }
 }
 ```
 
 Important:
 - `actor_id` is required.
 - Supported `task_type` currently: `candidate_shortlist`.
+- Env overrides for sourcing URLs: `AI_APPLICATIONS_BY_JOB_URL`, `AI_MEMBERS_SEARCH_URL`, `AI_MEMBERS_SEARCH_MAX` (see `services/ai-service/.env.example`).
 
 ### Approve/Edit/Reject task
 `POST /api/ai/tasks/{task_id}/approve`
