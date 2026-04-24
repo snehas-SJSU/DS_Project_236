@@ -15,6 +15,123 @@ const CACHE_PREFIX = 'member:';
 const CACHE_TTL = 600;
 const AUTH_TOKEN_TTL_HOURS = 24;
 const JWT_SECRET = process.env.JWT_SECRET || 'linkedin-sim-dev-secret';
+const DEFAULT_SETTINGS = {
+  profileVisibility: true,
+  openToWork: true,
+  allowMessages: true,
+  inAppNotificationsEnabled: true,
+  preferredLanguage: 'English'
+};
+const NETWORK_ENTITY_SEED = [
+  {
+    entity_id: 'NE-PAGE-ACME',
+    entity_type: 'pages',
+    title: 'Acme Engineering',
+    subtitle: 'Company page',
+    description: 'Product updates, hiring announcements, and engineering articles from Acme.',
+    route_path: '/company/acme',
+    cta_label: 'Follow',
+    badge: 'Hiring now',
+    members_count: 1842,
+    sort_order: 10
+  },
+  {
+    entity_id: 'NE-PAGE-NOVA',
+    entity_type: 'pages',
+    title: 'Nova Labs Careers',
+    subtitle: 'Company page',
+    description: 'Follow recruiting updates and featured openings from Nova Labs.',
+    route_path: '/jobs',
+    cta_label: 'Follow',
+    badge: 'Featured jobs',
+    members_count: 931,
+    sort_order: 20
+  },
+  {
+    entity_id: 'NE-GROUP-DIST',
+    entity_type: 'groups',
+    title: 'Distributed Systems Group',
+    subtitle: 'Professional group',
+    description: 'Architecture reviews, scalability discussions, and weekly system design prompts.',
+    route_path: '/network',
+    cta_label: 'Join',
+    badge: '12 new posts this week',
+    members_count: 642,
+    sort_order: 30
+  },
+  {
+    entity_id: 'NE-GROUP-DATA',
+    entity_type: 'groups',
+    title: 'Data Engineering Circle',
+    subtitle: 'Professional group',
+    description: 'Warehouse design, streaming pipelines, and analytics engineering conversations.',
+    route_path: '/network',
+    cta_label: 'Join',
+    badge: '4 upcoming events',
+    members_count: 488,
+    sort_order: 40
+  },
+  {
+    entity_id: 'NE-EVENT-KAFKA',
+    entity_type: 'events',
+    title: 'Kafka Best Practices Webinar',
+    subtitle: 'Thu 7:00 PM',
+    description: 'A live session on stream design, topic naming, and scaling consumers.',
+    route_path: '/network/events',
+    cta_label: 'Attend',
+    badge: 'Online event',
+    members_count: 207,
+    sort_order: 50
+  },
+  {
+    entity_id: 'NE-EVENT-FAIR',
+    entity_type: 'events',
+    title: 'Backend Hiring Fair',
+    subtitle: 'Sat 10:00 AM',
+    description: 'Meet recruiting teams and discover open backend and platform roles.',
+    route_path: '/jobs',
+    cta_label: 'Attend',
+    badge: 'Career event',
+    members_count: 319,
+    sort_order: 60
+  },
+  {
+    entity_id: 'NE-NEWS-SDW',
+    entity_type: 'newsletters',
+    title: 'System Design Weekly',
+    subtitle: 'Newsletter',
+    description: 'A weekly digest of architecture case studies and system design patterns.',
+    route_path: '/profile/activity',
+    cta_label: 'Subscribe',
+    badge: 'New issue today',
+    members_count: 1294,
+    sort_order: 70
+  },
+  {
+    entity_id: 'NE-NEWS-CAREER',
+    entity_type: 'newsletters',
+    title: 'Career Growth Notes',
+    subtitle: 'Newsletter',
+    description: 'Hiring trends, networking tips, and interview prep guidance each week.',
+    route_path: '/profile/activity',
+    cta_label: 'Subscribe',
+    badge: 'Weekly edition',
+    members_count: 874,
+    sort_order: 80
+  },
+  {
+    entity_id: 'NE-FOLLOW-CLOUD',
+    entity_type: 'following',
+    title: 'Cloud Native Weekly',
+    subtitle: 'Topic & creator feed',
+    description: 'Follow cloud-native updates, container trends, and platform engineering stories.',
+    route_path: '/network/newsletters',
+    cta_label: 'Follow',
+    badge: 'Weekly updates',
+    members_count: 1510,
+    sort_order: 90
+  }
+];
 const BASELINE_MEMBER = {
   member_id: 'M-123',
   name: 'Sneha Singh',
@@ -140,6 +257,220 @@ async function getSession(token) {
     return null;
   }
   return session;
+}
+
+function normalizeBool(value, fallback) {
+  if (value === undefined || value === null) return fallback;
+  return value === true || value === 1 || value === '1' || value === 'true';
+}
+
+async function ensureMemberSettingsRow(memberId) {
+  await db.query(
+    `INSERT IGNORE INTO member_settings
+      (member_id, profile_visibility, open_to_work, allow_messages, in_app_notifications_enabled, preferred_language)
+     VALUES (?, ?, ?, ?, ?, ?)`,
+    [
+      memberId,
+      DEFAULT_SETTINGS.profileVisibility ? 1 : 0,
+      DEFAULT_SETTINGS.openToWork ? 1 : 0,
+      DEFAULT_SETTINGS.allowMessages ? 1 : 0,
+      DEFAULT_SETTINGS.inAppNotificationsEnabled ? 1 : 0,
+      DEFAULT_SETTINGS.preferredLanguage
+    ]
+  );
+}
+
+async function readMemberSettings(memberId) {
+  await ensureMemberSettingsRow(memberId);
+  const [rows] = await db.query('SELECT * FROM member_settings WHERE member_id = ? LIMIT 1', [memberId]);
+  const row = rows[0] || {};
+  return {
+    member_id: memberId,
+    profileVisibility: normalizeBool(row.profile_visibility, DEFAULT_SETTINGS.profileVisibility),
+    openToWork: normalizeBool(row.open_to_work, DEFAULT_SETTINGS.openToWork),
+    allowMessages: normalizeBool(row.allow_messages, DEFAULT_SETTINGS.allowMessages),
+    inAppNotificationsEnabled: normalizeBool(row.in_app_notifications_enabled, DEFAULT_SETTINGS.inAppNotificationsEnabled),
+    preferredLanguage: row.preferred_language || DEFAULT_SETTINGS.preferredLanguage
+  };
+}
+
+async function seedNetworkEntities() {
+  for (const entity of NETWORK_ENTITY_SEED) {
+    await db.query(
+      `INSERT INTO network_entities
+        (entity_id, entity_type, title, subtitle, description, route_path, cta_label, badge, members_count, sort_order)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+       ON DUPLICATE KEY UPDATE
+        entity_type = VALUES(entity_type),
+        title = VALUES(title),
+        subtitle = VALUES(subtitle),
+        description = VALUES(description),
+        route_path = VALUES(route_path),
+        cta_label = VALUES(cta_label),
+        badge = VALUES(badge),
+        members_count = GREATEST(members_count, VALUES(members_count)),
+        sort_order = VALUES(sort_order)`,
+      [
+        entity.entity_id,
+        entity.entity_type,
+        entity.title,
+        entity.subtitle,
+        entity.description,
+        entity.route_path,
+        entity.cta_label,
+        entity.badge,
+        entity.members_count,
+        entity.sort_order
+      ]
+    );
+  }
+}
+
+async function upsertNotification(memberId, sourceKey, payload) {
+  await db.query(
+    `INSERT INTO notifications
+      (notification_id, member_id, source_key, category, title, body, route_path, created_at, priority)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+     ON DUPLICATE KEY UPDATE
+      category = VALUES(category),
+      title = VALUES(title),
+      body = VALUES(body),
+      route_path = VALUES(route_path),
+      priority = VALUES(priority)`,
+    [
+      `N-${crypto.randomUUID().slice(0, 8)}`,
+      memberId,
+      sourceKey,
+      payload.category,
+      payload.title,
+      payload.body,
+      payload.route_path || null,
+      payload.created_at || new Date(),
+      payload.priority || 0
+    ]
+  );
+}
+
+async function syncNotifications(memberId) {
+  await ensureMemberSettingsRow(memberId);
+  const safeRows = async (sql, params = []) => {
+    try {
+      const [rows] = await db.query(sql, params);
+      return rows;
+    } catch {
+      return [];
+    }
+  };
+
+  const incomingRequests = await safeRows(
+    `SELECT request_id, requester_id, created_at
+     FROM connection_requests
+     WHERE receiver_id = ? AND status = 'pending'
+     ORDER BY created_at DESC
+     LIMIT 10`,
+    [memberId]
+  );
+  for (const row of incomingRequests) {
+    await upsertNotification(memberId, `conn-in-${row.request_id}`, {
+      category: 'mentions',
+      title: 'New connection request',
+      body: `${row.requester_id} sent you a connection request.`,
+      route_path: '/network/invitations',
+      created_at: row.created_at,
+      priority: 2
+    });
+  }
+
+  const applications = await safeRows(
+    `SELECT app_id, job_id, status, applied_at
+     FROM applications
+     WHERE member_id = ?
+     ORDER BY applied_at DESC
+     LIMIT 12`,
+    [memberId]
+  );
+  for (const row of applications) {
+    await upsertNotification(memberId, `app-${row.app_id}`, {
+      category: 'jobs',
+      title: 'Application update',
+      body: `Application ${String(row.status || 'submitted').toLowerCase()} for job ${row.job_id}.`,
+      route_path: '/applications',
+      created_at: row.applied_at,
+      priority: 2
+    });
+  }
+
+  const threads = await safeRows(
+    `SELECT thread_id, participant_a, participant_b, last_activity
+     FROM message_threads
+     WHERE participant_a = ? OR participant_b = ?
+     ORDER BY last_activity DESC
+     LIMIT 8`,
+    [memberId, memberId]
+  );
+  for (const row of threads) {
+    const peerId = row.participant_a === memberId ? row.participant_b : row.participant_a;
+    await upsertNotification(memberId, `thread-${row.thread_id}`, {
+      category: 'mentions',
+      title: 'Message activity',
+      body: `New activity in your conversation with ${peerId}.`,
+      route_path: '/messaging',
+      created_at: row.last_activity,
+      priority: 1
+    });
+  }
+
+  const jobs = await safeRows(
+    `SELECT job_id, title, company, created_at
+     FROM jobs
+     WHERE status = 'open'
+     ORDER BY created_at DESC
+     LIMIT 4`
+  );
+  for (const row of jobs) {
+    await upsertNotification(memberId, `job-alert-${row.job_id}`, {
+      category: 'jobs',
+      title: 'New job alert',
+      body: `${row.title} at ${row.company} is actively hiring.`,
+      route_path: '/jobs',
+      created_at: row.created_at,
+      priority: 0
+    });
+  }
+
+  const posts = await safeRows(
+    `SELECT post_id, created_at
+     FROM posts
+     WHERE member_id = ?
+     ORDER BY created_at DESC
+     LIMIT 4`,
+    [memberId]
+  );
+  for (const row of posts) {
+    await upsertNotification(memberId, `post-${row.post_id}`, {
+      category: 'posts',
+      title: 'Your post is live',
+      body: 'Your recent post is visible in the feed and ready for engagement.',
+      route_path: '/profile/activity',
+      created_at: row.created_at,
+      priority: 0
+    });
+  }
+
+  const premiumRows = await safeRows(
+    'SELECT plan_name, status, expires_at, started_at FROM premium_memberships WHERE member_id = ? LIMIT 1',
+    [memberId]
+  );
+  if (premiumRows.length && premiumRows[0].status === 'active') {
+    await upsertNotification(memberId, 'premium-active', {
+      category: 'mentions',
+      title: `${premiumRows[0].plan_name} Premium active`,
+      body: 'Your premium membership is active and premium-only insights are unlocked.',
+      route_path: '/premium',
+      created_at: premiumRows[0].started_at,
+      priority: 1
+    });
+  }
 }
 
 function envelope(eventType, traceId, actorId, entityType, entityId, payload, idempotencyKey) {
@@ -314,6 +645,258 @@ app.post('/auth/logout', async (req, res) => {
     if (!token) return res.status(200).json({ message: 'Logged out' });
     await db.query('DELETE FROM auth_sessions WHERE token = ?', [token]);
     return res.status(200).json({ message: 'Logged out' });
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ error: 'INTERNAL_ERROR', message: err.message, trace_id: crypto.randomUUID() });
+  }
+});
+
+app.post('/members/settings/get', async (req, res) => {
+  try {
+    const { member_id } = req.body || {};
+    if (!member_id) {
+      return res.status(400).json({ error: 'BAD_REQUEST', message: 'member_id required', trace_id: crypto.randomUUID() });
+    }
+    return res.status(200).json(await readMemberSettings(member_id));
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ error: 'INTERNAL_ERROR', message: err.message, trace_id: crypto.randomUUID() });
+  }
+});
+
+app.post('/members/settings/update', async (req, res) => {
+  try {
+    const { member_id } = req.body || {};
+    if (!member_id) {
+      return res.status(400).json({ error: 'BAD_REQUEST', message: 'member_id required', trace_id: crypto.randomUUID() });
+    }
+    const current = await readMemberSettings(member_id);
+    const next = {
+      profileVisibility: normalizeBool(req.body?.profileVisibility, current.profileVisibility),
+      openToWork: normalizeBool(req.body?.openToWork, current.openToWork),
+      allowMessages: normalizeBool(req.body?.allowMessages, current.allowMessages),
+      inAppNotificationsEnabled: normalizeBool(req.body?.inAppNotificationsEnabled, current.inAppNotificationsEnabled),
+      preferredLanguage: String(req.body?.preferredLanguage || current.preferredLanguage || DEFAULT_SETTINGS.preferredLanguage).trim() || DEFAULT_SETTINGS.preferredLanguage
+    };
+    await db.query(
+      `INSERT INTO member_settings
+        (member_id, profile_visibility, open_to_work, allow_messages, in_app_notifications_enabled, preferred_language)
+       VALUES (?, ?, ?, ?, ?, ?)
+       ON DUPLICATE KEY UPDATE
+        profile_visibility = VALUES(profile_visibility),
+        open_to_work = VALUES(open_to_work),
+        allow_messages = VALUES(allow_messages),
+        in_app_notifications_enabled = VALUES(in_app_notifications_enabled),
+        preferred_language = VALUES(preferred_language)`,
+      [
+        member_id,
+        next.profileVisibility ? 1 : 0,
+        next.openToWork ? 1 : 0,
+        next.allowMessages ? 1 : 0,
+        next.inAppNotificationsEnabled ? 1 : 0,
+        next.preferredLanguage
+      ]
+    );
+    return res.status(200).json({ message: 'Settings saved', settings: { member_id, ...next } });
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ error: 'INTERNAL_ERROR', message: err.message, trace_id: crypto.randomUUID() });
+  }
+});
+
+app.post('/members/premium/status', async (req, res) => {
+  try {
+    const { member_id } = req.body || {};
+    if (!member_id) {
+      return res.status(400).json({ error: 'BAD_REQUEST', message: 'member_id required', trace_id: crypto.randomUUID() });
+    }
+    const [rows] = await db.query(
+      'SELECT member_id, plan_name, status, started_at, expires_at FROM premium_memberships WHERE member_id = ? LIMIT 1',
+      [member_id]
+    );
+    if (!rows.length) {
+      return res.status(200).json({ member_id, status: 'inactive', is_active: false, plan_name: null });
+    }
+    const row = rows[0];
+    const isActive = row.status === 'active' && (!row.expires_at || new Date(row.expires_at).getTime() > Date.now());
+    return res.status(200).json({
+      member_id,
+      plan_name: row.plan_name,
+      status: isActive ? 'active' : row.status,
+      is_active: isActive,
+      started_at: row.started_at,
+      expires_at: row.expires_at
+    });
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ error: 'INTERNAL_ERROR', message: err.message, trace_id: crypto.randomUUID() });
+  }
+});
+
+app.post('/members/premium/activate', async (req, res) => {
+  try {
+    const { member_id, plan_name = 'Career' } = req.body || {};
+    if (!member_id) {
+      return res.status(400).json({ error: 'BAD_REQUEST', message: 'member_id required', trace_id: crypto.randomUUID() });
+    }
+    await db.query(
+      `INSERT INTO premium_memberships (member_id, plan_name, status, started_at, expires_at)
+       VALUES (?, ?, 'active', NOW(), DATE_ADD(NOW(), INTERVAL 30 DAY))
+       ON DUPLICATE KEY UPDATE
+        plan_name = VALUES(plan_name),
+        status = 'active',
+        started_at = NOW(),
+        expires_at = DATE_ADD(NOW(), INTERVAL 30 DAY)`,
+      [member_id, String(plan_name || 'Career')]
+    );
+    await upsertNotification(member_id, 'premium-active', {
+      category: 'mentions',
+      title: `${plan_name} Premium activated`,
+      body: 'Premium-only insights and controls are now available on your account.',
+      route_path: '/premium',
+      created_at: new Date(),
+      priority: 2
+    });
+    return res.status(200).json({ member_id, status: 'active', is_active: true, plan_name: String(plan_name || 'Career') });
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ error: 'INTERNAL_ERROR', message: err.message, trace_id: crypto.randomUUID() });
+  }
+});
+
+app.post('/members/network/catalog', async (req, res) => {
+  try {
+    const { member_id, type } = req.body || {};
+    if (!member_id) {
+      return res.status(400).json({ error: 'BAD_REQUEST', message: 'member_id required', trace_id: crypto.randomUUID() });
+    }
+    await seedNetworkEntities();
+    let sql = `
+      SELECT e.*, r.relation_status, r.joined_at
+      FROM network_entities e
+      LEFT JOIN member_network_relations r
+        ON r.entity_id = e.entity_id AND r.member_id = ?
+    `;
+    const params = [member_id];
+    if (type) {
+      sql += ' WHERE e.entity_type = ?';
+      params.push(String(type));
+    }
+    sql += ' ORDER BY e.sort_order ASC, e.title ASC';
+    const [rows] = await db.query(sql, params);
+    return res.status(200).json(
+      rows.map((row) => ({
+        entity_id: row.entity_id,
+        entity_type: row.entity_type,
+        title: row.title,
+        subtitle: row.subtitle,
+        description: row.description,
+        route_path: row.route_path,
+        badge: row.badge,
+        members_count: Number(row.members_count || 0),
+        is_active: row.relation_status === 'active',
+        action_label:
+          row.entity_type === 'groups' || row.entity_type === 'events'
+            ? row.relation_status === 'active' ? 'Leave' : 'Join'
+            : row.relation_status === 'active' ? 'Following' : 'Follow',
+        joined_at: row.joined_at
+      }))
+    );
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ error: 'INTERNAL_ERROR', message: err.message, trace_id: crypto.randomUUID() });
+  }
+});
+
+app.post('/members/network/update', async (req, res) => {
+  try {
+    const { member_id, entity_id, is_active } = req.body || {};
+    if (!member_id || !entity_id || typeof is_active !== 'boolean') {
+      return res.status(400).json({ error: 'BAD_REQUEST', message: 'member_id, entity_id and is_active required', trace_id: crypto.randomUUID() });
+    }
+    const [entities] = await db.query('SELECT entity_id FROM network_entities WHERE entity_id = ? LIMIT 1', [entity_id]);
+    if (!entities.length) {
+      return res.status(404).json({ error: 'NOT_FOUND', message: 'Network item not found', trace_id: crypto.randomUUID() });
+    }
+    await db.query(
+      `INSERT INTO member_network_relations (member_id, entity_id, relation_status, joined_at)
+       VALUES (?, ?, ?, NOW())
+       ON DUPLICATE KEY UPDATE
+        relation_status = VALUES(relation_status),
+        joined_at = CASE WHEN VALUES(relation_status) = 'active' THEN NOW() ELSE joined_at END`,
+      [member_id, entity_id, is_active ? 'active' : 'inactive']
+    );
+    await db.query(
+      `UPDATE network_entities
+       SET members_count = GREATEST(COALESCE(members_count, 0) + ?, 0)
+       WHERE entity_id = ?`,
+      [is_active ? 1 : -1, entity_id]
+    );
+    return res.status(200).json({ member_id, entity_id, is_active });
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ error: 'INTERNAL_ERROR', message: err.message, trace_id: crypto.randomUUID() });
+  }
+});
+
+app.post('/members/notifications/list', async (req, res) => {
+  try {
+    const { member_id, category = 'all', limit = 50 } = req.body || {};
+    if (!member_id) {
+      return res.status(400).json({ error: 'BAD_REQUEST', message: 'member_id required', trace_id: crypto.randomUUID() });
+    }
+    await syncNotifications(member_id);
+    const params = [member_id];
+    let sql = `
+      SELECT notification_id, category, title, body, route_path, is_read, created_at, priority
+      FROM notifications
+      WHERE member_id = ?
+    `;
+    if (category && category !== 'all') {
+      sql += ' AND category = ?';
+      params.push(String(category));
+    }
+    sql += ' ORDER BY is_read ASC, priority DESC, created_at DESC LIMIT ?';
+    params.push(Math.min(Math.max(Number(limit) || 20, 1), 100));
+    const [rows] = await db.query(sql, params);
+    return res.status(200).json(rows);
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ error: 'INTERNAL_ERROR', message: err.message, trace_id: crypto.randomUUID() });
+  }
+});
+
+app.post('/members/notifications/markRead', async (req, res) => {
+  try {
+    const { member_id, notification_ids } = req.body || {};
+    if (!member_id || !Array.isArray(notification_ids) || !notification_ids.length) {
+      return res.status(400).json({ error: 'BAD_REQUEST', message: 'member_id and notification_ids required', trace_id: crypto.randomUUID() });
+    }
+    await db.query(
+      `UPDATE notifications
+       SET is_read = 1
+       WHERE member_id = ? AND notification_id IN (${notification_ids.map(() => '?').join(',')})`,
+      [member_id, ...notification_ids]
+    );
+    return res.status(200).json({ message: 'Notifications marked as read' });
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ error: 'INTERNAL_ERROR', message: err.message, trace_id: crypto.randomUUID() });
+  }
+});
+
+app.post('/members/notifications/markAllRead', async (req, res) => {
+  try {
+    const { member_id, category = 'all' } = req.body || {};
+    if (!member_id) {
+      return res.status(400).json({ error: 'BAD_REQUEST', message: 'member_id required', trace_id: crypto.randomUUID() });
+    }
+    if (category && category !== 'all') {
+      await db.query('UPDATE notifications SET is_read = 1 WHERE member_id = ? AND category = ?', [member_id, String(category)]);
+    } else {
+      await db.query('UPDATE notifications SET is_read = 1 WHERE member_id = ?', [member_id]);
+    }
+    return res.status(200).json({ message: 'Notifications marked as read' });
   } catch (err) {
     console.error(err);
     return res.status(500).json({ error: 'INTERNAL_ERROR', message: err.message, trace_id: crypto.randomUUID() });
@@ -592,6 +1175,70 @@ async function ensureSchema() {
       INDEX (expires_at)
     )
   `);
+  await db.query(`
+    CREATE TABLE IF NOT EXISTS member_settings (
+      member_id VARCHAR(50) PRIMARY KEY,
+      profile_visibility TINYINT(1) DEFAULT 1,
+      open_to_work TINYINT(1) DEFAULT 1,
+      allow_messages TINYINT(1) DEFAULT 1,
+      in_app_notifications_enabled TINYINT(1) DEFAULT 1,
+      preferred_language VARCHAR(30) DEFAULT 'English',
+      updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+    )
+  `);
+  await db.query(`
+    CREATE TABLE IF NOT EXISTS premium_memberships (
+      member_id VARCHAR(50) PRIMARY KEY,
+      plan_name VARCHAR(50) DEFAULT 'Career',
+      status VARCHAR(20) DEFAULT 'inactive',
+      started_at DATETIME NULL,
+      expires_at DATETIME NULL,
+      updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+    )
+  `);
+  await db.query(`
+    CREATE TABLE IF NOT EXISTS network_entities (
+      entity_id VARCHAR(60) PRIMARY KEY,
+      entity_type VARCHAR(30) NOT NULL,
+      title VARCHAR(160) NOT NULL,
+      subtitle VARCHAR(160) NULL,
+      description TEXT NULL,
+      route_path VARCHAR(255) NULL,
+      cta_label VARCHAR(40) NULL,
+      badge VARCHAR(80) NULL,
+      members_count INT DEFAULT 0,
+      sort_order INT DEFAULT 0,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
+  await db.query(`
+    CREATE TABLE IF NOT EXISTS member_network_relations (
+      member_id VARCHAR(50) NOT NULL,
+      entity_id VARCHAR(60) NOT NULL,
+      relation_status VARCHAR(20) DEFAULT 'active',
+      joined_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      PRIMARY KEY (member_id, entity_id),
+      INDEX idx_network_member_status (member_id, relation_status)
+    )
+  `);
+  await db.query(`
+    CREATE TABLE IF NOT EXISTS notifications (
+      notification_id VARCHAR(50) PRIMARY KEY,
+      member_id VARCHAR(50) NOT NULL,
+      source_key VARCHAR(120) NOT NULL,
+      category VARCHAR(20) NOT NULL DEFAULT 'mentions',
+      title VARCHAR(160) NOT NULL,
+      body TEXT NOT NULL,
+      route_path VARCHAR(255) NULL,
+      is_read TINYINT(1) DEFAULT 0,
+      priority INT DEFAULT 0,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      UNIQUE KEY uk_member_source (member_id, source_key),
+      INDEX idx_notifications_member (member_id, is_read, created_at)
+    )
+  `);
   // JWT tokens are longer than opaque random strings; keep column large enough.
   await db.query('ALTER TABLE auth_sessions MODIFY COLUMN token VARCHAR(512) NOT NULL');
   await ensureColumn('first_name', 'first_name VARCHAR(100)');
@@ -642,6 +1289,8 @@ async function ensureSchema() {
   }
 
   await ensureBaselineMember();
+  await ensureMemberSettingsRow(BASELINE_MEMBER.member_id);
+  await seedNetworkEntities();
 }
 
 const PORT = process.env.PORT || 4001;
