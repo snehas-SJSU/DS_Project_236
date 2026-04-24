@@ -4,7 +4,8 @@
   "main": "api.js",
   "scripts": {
     "start:api": "node api.js",
-    "start:worker": "node worker.js"
+    "start:worker": "node worker.js",
+    "start:outreach-worker": "node outreach-send-worker.js"
   },
   "dependencies": {
     "express": "^4.18.2",

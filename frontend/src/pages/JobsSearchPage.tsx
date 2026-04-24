@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Link, useLocation } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import Navbar from '../components/layout/Navbar';
 import { Job } from '../mockData/jobs';
 import { CheckCircle2, X } from 'lucide-react';
@@ -8,16 +8,17 @@ import { addActivity, readJson, SAVED_JOBS_KEY, writeJson } from '../lib/localDa
 import { companyProfilePath, jobsResultsPath, jobsSearchPath } from '../lib/jobRoutes';
 import { mergeJobDetail, normalizeJobListRows } from '../lib/jobNormalize';
 import { showToast } from '../lib/toast';
+import RecruiterAiJobPanel from '../components/recruiter/RecruiterAiJobPanel';
 
 const chips = ['Date posted', 'Remote', 'Inside Sales', 'Outside Sales', 'Healthcare', 'Biotech', 'Easy Apply', 'Employment type', 'Company', 'Under 10 applicants', 'In my network'];
 type DatePostedFilter = '24h' | 'week' | null;
 
 export default function JobsSearchPage() {
   const location = useLocation();
+  const navigate = useNavigate();
   const [jobs, setJobs] = useState<Job[]>([]);
   const [activeJob, setActiveJob] = useState<Job | null>(null);
   const [loading, setLoading] = useState(true);
-  const [isApplying, setIsApplying] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [saveBannerJob, setSaveBannerJob] = useState<Job | null>(null);
   const [datePostedFilter, setDatePostedFilter] = useState<DatePostedFilter>(null);
@@ -290,64 +291,7 @@ export default function JobsSearchPage() {
 
   const onApply = async () => {
     if (!activeJob) return;
-    if ((activeJob as any).applied) {
-      showToast('You already applied to this job.', 'info');
-      return;
-    }
-    const resumeUrlInput = window.prompt('Resume URL (optional, e.g. Drive/S3 link):', '');
-    if (resumeUrlInput === null) {
-      showToast('Application cancelled.', 'info');
-      return;
-    }
-    const resumeTextInput = window.prompt('Resume text summary (optional):', '');
-    if (resumeTextInput === null) {
-      showToast('Application cancelled.', 'info');
-      return;
-    }
-    const coverLetterInput = window.prompt('Cover letter (optional):', '');
-    if (coverLetterInput === null) {
-      showToast('Application cancelled.', 'info');
-      return;
-    }
-
-    const resumeUrl = resumeUrlInput.trim();
-    const resumeText = resumeTextInput.trim();
-    const coverLetter = coverLetterInput.trim();
-    if (!resumeUrl && !resumeText && !coverLetter) {
-      showToast('Application cancelled. Add resume info or a cover letter to submit.', 'info');
-      return;
-    }
-    setIsApplying(true);
-    try {
-      const res = await fetch('/api/applications/submit', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          job_id: activeJob.id,
-          member_id: MEMBER_ID,
-          resume_url: resumeUrl || undefined,
-          resume_text: resumeText || undefined,
-          cover_letter: coverLetter || undefined
-        })
-      });
-      const data = await res.json().catch(() => ({}));
-      if (res.ok) {
-        setActiveJob((prev) => (prev ? ({ ...prev, applied: true } as any) : prev));
-        addActivity(`Applied to ${activeJob.title} at ${activeJob.company}`);
-        showToast('Application submitted.', 'success');
-      } else {
-        const msg = data.error === 'DUPLICATE_APPLICATION'
-          ? 'You already applied to this job.'
-          : data.error === 'JOB_CLOSED'
-            ? 'This job is closed.'
-            : data.message || 'Unable to apply right now.';
-        showToast(msg, 'error');
-      }
-    } catch {
-      showToast('Unable to apply right now.', 'error');
-    } finally {
-      setIsApplying(false);
-    }
+    navigate(`/jobs/apply?jobId=${encodeURIComponent(activeJob.id)}`);
   };
 
   const onSave = async () => {
@@ -460,10 +404,10 @@ export default function JobsSearchPage() {
               <div className="mt-4 flex gap-2">
                 <button
                   onClick={onApply}
-                  disabled={isApplying || Boolean((activeJob as any).applied)}
+                  disabled={Boolean((activeJob as any).applied)}
                   className="rounded-full bg-[#0a66c2] px-5 py-2 text-sm font-semibold text-white hover:bg-[#004182] disabled:cursor-not-allowed disabled:bg-[#9ec6e5]"
                 >
-                  {(activeJob as any).applied ? 'Applied' : isApplying ? 'Applying...' : 'Apply'}
+                  {(activeJob as any).applied ? 'Applied' : 'Apply'}
                 </button>
                 <button
                   onClick={() => {
@@ -483,6 +427,7 @@ export default function JobsSearchPage() {
                 <h2 className="mb-2 text-[34px] leading-tight font-semibold text-[#191919]">Job description</h2>
                 <p className="text-sm leading-relaxed text-[#333]">{activeJob.description}</p>
               </div>
+              <RecruiterAiJobPanel jobId={activeJob.id} />
             </div>
           ) : (
             <div className="p-6 text-slate-500">Select a job to view details</div>
