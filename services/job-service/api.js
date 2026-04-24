@@ -7,6 +7,28 @@ const redisModule = require('../../shared/redis');
 const app = express();
 app.use(express.json());
 const producer = kafka.producer();
+const MEMBER_SERVICE_URL = process.env.MEMBER_SERVICE_URL || 'http://127.0.0.1:4001';
+
+async function requireAdminAccess(req, res, next) {
+  try {
+    const authHeader = req.headers.authorization || '';
+    if (!authHeader.startsWith('Bearer ')) {
+      return res.status(401).json({ error: 'UNAUTHORIZED', message: 'Admin login required', trace_id: crypto.randomUUID() });
+    }
+    const meRes = await fetch(`${MEMBER_SERVICE_URL}/auth/me`, {
+      headers: { Authorization: authHeader }
+    });
+    const meData = await meRes.json().catch(() => ({}));
+    const email = String(meData?.user?.email || '').toLowerCase();
+    if (!meRes.ok || email !== 'admin@test.com') {
+      return res.status(403).json({ error: 'FORBIDDEN', message: 'Admin access required', trace_id: crypto.randomUUID() });
+    }
+    req.adminUser = meData.user;
+    return next();
+  } catch (err) {
+    return res.status(503).json({ error: 'AUTH_UNAVAILABLE', message: err.message, trace_id: crypto.randomUUID() });
+  }
+}
 
 async function ensureColumn(table, name, ddl) {
   const [rows] = await db.query(
@@ -107,6 +129,26 @@ async function ensureSavedJobsTable() {
       saved_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
       PRIMARY KEY (job_id, member_id),
       INDEX idx_saved_jobs_member_saved (member_id, saved_at)
+    )
+  `);
+}
+
+async function ensureJobTrackerTables() {
+  await db.query(`
+    CREATE TABLE IF NOT EXISTS job_tracker_notes (
+      member_id VARCHAR(50) NOT NULL,
+      job_id VARCHAR(50) NOT NULL,
+      note TEXT,
+      updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      PRIMARY KEY (member_id, job_id)
+    )
+  `);
+  await db.query(`
+    CREATE TABLE IF NOT EXISTS job_tracker_archives (
+      member_id VARCHAR(50) NOT NULL,
+      job_id VARCHAR(50) NOT NULL,
+      archived_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      PRIMARY KEY (member_id, job_id)
     )
   `);
 }
@@ -401,6 +443,139 @@ app.post('/jobs/saved', async (req, res) => {
   }
 });
 
+app.post('/jobs/tracker', async (req, res) => {
+  try {
+    await ensureJobsSchema();
+    await ensureSavedJobsTable();
+    await ensureJobTrackerTables();
+    const { member_id } = req.body || {};
+    if (!member_id) {
+      return res.status(400).json({ error: 'BAD_REQUEST', message: 'member_id required', trace_id: crypto.randomUUID() });
+    }
+
+    const safeRows = async (sql, params = []) => {
+      try {
+        const [rows] = await db.query(sql, params);
+        return rows;
+      } catch {
+        return [];
+      }
+    };
+
+    const savedRows = await safeRows(
+      'SELECT job_id, saved_at FROM saved_jobs WHERE member_id = ? ORDER BY saved_at DESC LIMIT 200',
+      [member_id]
+    );
+    const applicationRows = await safeRows(
+      'SELECT app_id, job_id, status, applied_at, recruiter_note FROM applications WHERE member_id = ? ORDER BY applied_at DESC LIMIT 200',
+      [member_id]
+    );
+    const noteRows = await safeRows(
+      'SELECT job_id, note, updated_at FROM job_tracker_notes WHERE member_id = ?',
+      [member_id]
+    );
+    const archivedRows = await safeRows(
+      'SELECT job_id, archived_at FROM job_tracker_archives WHERE member_id = ?',
+      [member_id]
+    );
+
+    const savedMap = new Map(savedRows.map((row) => [String(row.job_id), row]));
+    const appMap = new Map(applicationRows.map((row) => [String(row.job_id), row]));
+    const noteMap = new Map(noteRows.map((row) => [String(row.job_id), row]));
+    const archivedSet = new Set(archivedRows.map((row) => String(row.job_id)));
+
+    const jobIds = Array.from(new Set([...savedMap.keys(), ...appMap.keys()]));
+    if (!jobIds.length) return res.status(200).json([]);
+
+    const jobs = await safeRows(
+      `SELECT job_id, title, company, company_id, location, salary, type, employment_type, status, recruiter_id, created_at
+       FROM jobs WHERE job_id IN (${jobIds.map(() => '?').join(',')})`,
+      jobIds
+    );
+    const jobMap = new Map(jobs.map((row) => [String(row.job_id), row]));
+
+    const rows = jobIds
+      .map((jobId) => {
+        const job = jobMap.get(jobId);
+        if (!job) return null;
+        const saved = savedMap.get(jobId);
+        const app = appMap.get(jobId);
+        const note = noteMap.get(jobId);
+        return {
+          id: jobId,
+          job_id: jobId,
+          title: job.title,
+          company: job.company,
+          company_id: job.company_id || null,
+          location: job.location || '',
+          salary: job.salary || '',
+          type: job.type || job.employment_type || '',
+          status: job.status || 'open',
+          recruiter_id: job.recruiter_id || null,
+          created_at: job.created_at,
+          saved_at: saved?.saved_at || null,
+          applied_at: app?.applied_at || null,
+          application_id: app?.app_id || null,
+          stage: String(app?.status || 'saved').toLowerCase(),
+          note: note?.note || '',
+          note_updated_at: note?.updated_at || null,
+          archived: archivedSet.has(jobId),
+          source: saved ? 'saved' : 'applied'
+        };
+      })
+      .filter(Boolean)
+      .sort((a, b) => {
+        const aTime = new Date(a.saved_at || a.applied_at || a.created_at || 0).getTime();
+        const bTime = new Date(b.saved_at || b.applied_at || b.created_at || 0).getTime();
+        return bTime - aTime;
+      });
+
+    res.status(200).json(rows);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'INTERNAL_ERROR', message: err.message, trace_id: crypto.randomUUID() });
+  }
+});
+
+app.post('/jobs/tracker/note', async (req, res) => {
+  try {
+    await ensureJobTrackerTables();
+    const { member_id, job_id, note = '' } = req.body || {};
+    if (!member_id || !job_id) {
+      return res.status(400).json({ error: 'BAD_REQUEST', message: 'member_id and job_id required', trace_id: crypto.randomUUID() });
+    }
+    await db.query(
+      `INSERT INTO job_tracker_notes (member_id, job_id, note)
+       VALUES (?, ?, ?)
+       ON DUPLICATE KEY UPDATE note = VALUES(note)`,
+      [member_id, job_id, String(note)]
+    );
+    res.status(200).json({ message: 'Note saved', member_id, job_id });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'INTERNAL_ERROR', message: err.message, trace_id: crypto.randomUUID() });
+  }
+});
+
+app.post('/jobs/tracker/archive', async (req, res) => {
+  try {
+    await ensureJobTrackerTables();
+    const { member_id, job_id, archived } = req.body || {};
+    if (!member_id || !job_id || typeof archived !== 'boolean') {
+      return res.status(400).json({ error: 'BAD_REQUEST', message: 'member_id, job_id and archived required', trace_id: crypto.randomUUID() });
+    }
+    if (archived) {
+      await db.query('INSERT IGNORE INTO job_tracker_archives (member_id, job_id) VALUES (?, ?)', [member_id, job_id]);
+    } else {
+      await db.query('DELETE FROM job_tracker_archives WHERE member_id = ? AND job_id = ?', [member_id, job_id]);
+    }
+    res.status(200).json({ message: archived ? 'Archived' : 'Restored', member_id, job_id, archived });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'INTERNAL_ERROR', message: err.message, trace_id: crypto.randomUUID() });
+  }
+});
+
 app.post('/jobs/update', async (req, res) => {
   try {
     const { job_id, ...fields } = req.body;
@@ -483,7 +658,7 @@ async function ensureRecruitersTable() {
   `);
 }
 
-app.post('/recruiters/create', async (req, res) => {
+app.post('/recruiters/create', requireAdminAccess, async (req, res) => {
   try {
     await ensureRecruitersTable();
     const {
@@ -530,7 +705,7 @@ app.post('/recruiters/get', async (req, res) => {
   }
 });
 
-app.post('/recruiters/update', async (req, res) => {
+app.post('/recruiters/update', requireAdminAccess, async (req, res) => {
   try {
     await ensureRecruitersTable();
     const { recruiter_id, ...fields } = req.body;
@@ -557,7 +732,7 @@ app.post('/recruiters/update', async (req, res) => {
   }
 });
 
-app.post('/recruiters/delete', async (req, res) => {
+app.post('/recruiters/delete', requireAdminAccess, async (req, res) => {
   try {
     await ensureRecruitersTable();
     const { recruiter_id } = req.body;

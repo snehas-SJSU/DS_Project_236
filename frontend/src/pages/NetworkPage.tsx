@@ -105,6 +105,7 @@ export default function NetworkPage() {
   >('All');
   const [memberPhoto, setMemberPhoto] = useState<string>(resolveViewerAvatarUrl(undefined, 'Me'));
   const [catchUpRows, setCatchUpRows] = useState<CatchUpRow[]>([]);
+  const [networkCounts, setNetworkCounts] = useState<Record<string, number>>({});
   const memberId = MEMBER_ID;
   const avatarFor = (seed: string) => `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(seed)}`;
   const displayNameFor = (id: string) => memberNameMap[id] || id;
@@ -222,6 +223,20 @@ export default function NetworkPage() {
 
   useEffect(() => {
     refreshAll().catch(() => undefined);
+    fetch('/api/members/network/catalog', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ member_id: memberId })
+    })
+      .then((res) => res.json())
+      .then((data) => {
+        const counts: Record<string, number> = {};
+        (Array.isArray(data) ? data : []).forEach((item: any) => {
+          if (item?.is_active && item?.entity_type) counts[item.entity_type] = (counts[item.entity_type] || 0) + 1;
+        });
+        setNetworkCounts(counts);
+      })
+      .catch(() => setNetworkCounts({}));
     fetch('/api/members/get', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -259,11 +274,11 @@ export default function NetworkPage() {
               <div className="divide-y divide-[#f0efec] text-[15px]">
                 <Link to="/network/invitations" className="flex items-center justify-between px-4 py-3 text-[#444] hover:bg-[#f7f7f7]"><span className="flex items-center gap-2"><UserRoundPlus size={16} />Invitations</span><span>{incoming.length}</span></Link>
                 <Link to="/network/connections" className="flex items-center justify-between px-4 py-3 text-[#444] hover:bg-[#f7f7f7]"><span className="flex items-center gap-2"><Users size={16} />Connections</span><span>{connections.length}</span></Link>
-                <Link to="/network/following" className="flex items-center justify-between px-4 py-3 text-[#444] hover:bg-[#f7f7f7]"><span className="flex items-center gap-2"><UsersRound size={16} />Following & followers</span><span>0</span></Link>
-                <Link to="/network/groups" className="flex items-center justify-between px-4 py-3 text-[#444] hover:bg-[#f7f7f7]"><span className="flex items-center gap-2"><Users size={16} />Groups</span><span>0</span></Link>
-                <Link to="/network/events" className="flex items-center justify-between px-4 py-3 text-[#444] hover:bg-[#f7f7f7]"><span className="flex items-center gap-2"><CalendarDays size={16} />Events</span><span>0</span></Link>
-                <Link to="/network/pages" className="flex items-center justify-between px-4 py-3 text-[#444] hover:bg-[#f7f7f7]"><span className="flex items-center gap-2"><FileText size={16} />Pages</span><span>0</span></Link>
-                <Link to="/network/newsletters" className="flex items-center justify-between px-4 py-3 text-[#444] hover:bg-[#f7f7f7]"><span className="flex items-center gap-2"><Rss size={16} />Newsletters</span><span>0</span></Link>
+                <Link to="/network/following" className="flex items-center justify-between px-4 py-3 text-[#444] hover:bg-[#f7f7f7]"><span className="flex items-center gap-2"><UsersRound size={16} />Following & followers</span><span>{networkCounts.following || 0}</span></Link>
+                <Link to="/network/groups" className="flex items-center justify-between px-4 py-3 text-[#444] hover:bg-[#f7f7f7]"><span className="flex items-center gap-2"><Users size={16} />Groups</span><span>{networkCounts.groups || 0}</span></Link>
+                <Link to="/network/events" className="flex items-center justify-between px-4 py-3 text-[#444] hover:bg-[#f7f7f7]"><span className="flex items-center gap-2"><CalendarDays size={16} />Events</span><span>{networkCounts.events || 0}</span></Link>
+                <Link to="/network/pages" className="flex items-center justify-between px-4 py-3 text-[#444] hover:bg-[#f7f7f7]"><span className="flex items-center gap-2"><FileText size={16} />Pages</span><span>{networkCounts.pages || 0}</span></Link>
+                <Link to="/network/newsletters" className="flex items-center justify-between px-4 py-3 text-[#444] hover:bg-[#f7f7f7]"><span className="flex items-center gap-2"><Rss size={16} />Newsletters</span><span>{networkCounts.newsletters || 0}</span></Link>
               </div>
             </section>
             <section className="li-card p-4">
