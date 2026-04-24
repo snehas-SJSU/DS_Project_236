@@ -14,7 +14,7 @@ except ImportError:
 
 from fastapi import FastAPI
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 app = FastAPI(title="LinkedIn AI Skills Service")
 
@@ -66,12 +66,13 @@ class MatchScoreBody(BaseModel):
 class ShortlistBody(BaseModel):
     job_id: str
     scores: list
-    top_k: Optional[int] = 3
+    top_k: Optional[int] = 5
 
 
 class OutreachDraftBody(BaseModel):
     job_id: str
-    shortlist: list
+    shortlist: list = Field(default_factory=list)
+    candidate_ids: Optional[list] = None
     actor_id: Optional[str] = None
 
 

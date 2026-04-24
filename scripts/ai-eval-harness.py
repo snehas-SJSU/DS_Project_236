@@ -39,7 +39,7 @@ def poll_task(base: str, task_id: str, timeout_s: float = 120.0, interval: float
                 raise
             last = {"error": str(e)}
         state = last.get("state")
-        if state in ("awaiting_approval", "completed", "failed"):
+        if state in ("awaiting_approval", "completed", "failed", "rejected"):
             return last
         time.sleep(interval)
     last["_poll_timeout"] = True
@@ -91,15 +91,45 @@ def main() -> int:
         state = final.get("state")
         entry: Dict[str, Any] = {"run": i, "task_id": task_id, "trace_id": trace_id, "state_after_poll": state}
 
-        if state == "awaiting_approval":
+        approval_task_id = task_id
+        approval_final = final
+
+        if state == "completed":
+            shortlist = (final.get("result") or {}).get("shortlist") or []
+            top = shortlist[0] if isinstance(shortlist, list) and shortlist else {}
+            cid = (top.get("member_id") or top.get("candidate_id") or "").strip() if isinstance(top, dict) else ""
+            if cid:
+                try:
+                    sub2 = post_json(
+                        submit_url,
+                        {
+                            "task_type": "generate_outreach",
+                            "job_id": args.job_id,
+                            "candidate_ids": [cid],
+                            "actor_id": args.actor_id,
+                            "trace_id": trace_id + "-outreach",
+                        },
+                    )
+                    task2 = sub2.get("task_id")
+                    if task2:
+                        approval_task_id = task2
+                        approval_final = poll_task(base, task2)
+                        entry["outreach_task_id"] = task2
+                        entry["state_after_poll"] = approval_final.get("state")
+                except Exception as exc:
+                    entry["outreach_submit_error"] = str(exc)
+
+        appr_state = approval_final.get("state")
+        if appr_state == "awaiting_approval":
             decision = random.choices(["approve", "edit", "reject"], weights=[0.55, 0.25, 0.2], k=1)[0]
             body: Dict[str, Any] = {"decision": decision, "reviewer_id": args.actor_id}
             if decision == "edit":
                 body["edited_text"] = (
-                    (final.get("result") or {}).get("outreach_draft") or "Thanks for connecting — small edit for eval."
+                    (approval_final.get("result") or {}).get("outreach_draft")
+                    or "Thanks for connecting — small edit for eval."
                 )
             try:
-                appr = post_json(f"{base}/ai/tasks/{task_id}/approve", body)
+                appr = post_json(f"{base}/ai/tasks/{approval_task_id}/approve", body)
                 entry["approval"] = appr
             except Exception as exc:
                 entry["approval_error"] = str(exc)

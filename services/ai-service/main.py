@@ -23,7 +23,7 @@ except ImportError:
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 app = FastAPI(title="LinkedIn AgenticAI Service")
 
@@ -35,7 +35,7 @@ try:
         global _producer
         if _producer is None:
             _producer = KafkaProducer(
-                bootstrap_servers=["127.0.0.1:9092"],
+                bootstrap_servers=["127.0.0.1:9093"],
                 value_serializer=lambda v: json.dumps(v).encode("utf-8"),
                 acks="all",
                 retries=3,
@@ -65,9 +65,13 @@ except Exception:
 
 
 TASK_TYPE_CANDIDATE_SHORTLIST = "candidate_shortlist"
+TASK_TYPE_GENERATE_OUTREACH = "generate_outreach"
 VALID_DECISIONS = {"approve", "edit", "reject"}
-VALID_STATES = {"queued", "processing", "awaiting_approval", "completed", "failed"}
-STEP_SEQUENCE = ["resume_parse", "match_score", "shortlist", "outreach_draft"]
+VALID_STATES = {"queued", "processing", "awaiting_approval", "approved", "rejected", "completed", "failed"}
+STEP_SEQUENCE_SHORTLIST = ["discover_candidates", "resume_parse", "match_score", "shortlist"]
+STEP_SEQUENCE_OUTREACH = ["outreach_draft"]
+# Kept for tests / older references; shortlist flow no longer includes outreach in one task.
+STEP_SEQUENCE = STEP_SEQUENCE_SHORTLIST
 _consumer_thread: Optional[threading.Thread] = None
 _consumer_running = False
 FAILED_TOPIC = "ai.failed.events"
@@ -260,6 +264,115 @@ def _member_api_url() -> str:
 
 def _job_api_url() -> str:
     return os.getenv("AI_JOB_API_URL", "http://127.0.0.1:4000/api/jobs/get")
+
+
+def _applications_by_job_url() -> str:
+    return os.getenv("AI_APPLICATIONS_API_URL", "http://127.0.0.1:4000/api/applications/byJob")
+
+
+def _threads_open_url() -> str:
+    return os.getenv("AI_THREADS_OPEN_URL", "http://127.0.0.1:4000/api/threads/open")
+
+
+def _messages_send_url() -> str:
+    return os.getenv("AI_MESSAGES_SEND_URL", "http://127.0.0.1:4000/api/messages/send")
+
+
+def _direct_send_enabled() -> bool:
+    return os.getenv("AI_DIRECT_SEND_ENABLED", "true").strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _deliver_outreach_direct(actor_id: str, job_id: str, messages: List[Dict[str, str]]) -> Dict[str, Any]:
+    delivered = 0
+    failed: List[Dict[str, str]] = []
+    for row in messages:
+        candidate_id = (row.get("candidate_id") or row.get("member_id") or "").strip()
+        text = (row.get("text") or row.get("outreach_text") or "").strip()
+        if not actor_id or not candidate_id or not text:
+            failed.append({"candidate_id": candidate_id or "?", "reason": "missing_fields"})
+            continue
+        thread = _post_json(
+            _threads_open_url(),
+            {"participant_a": actor_id, "participant_b": candidate_id},
+            timeout_seconds=5.0,
+        )
+        thread_id = (thread or {}).get("thread_id") if isinstance(thread, dict) else None
+        if not thread_id:
+            failed.append({"candidate_id": candidate_id, "reason": "thread_open_failed"})
+            continue
+        sent = _post_json(
+            _messages_send_url(),
+            {"thread_id": thread_id, "sender_id": actor_id, "text": f"[AI outreach | job {job_id}] {text}"},
+            timeout_seconds=5.0,
+        )
+        if isinstance(sent, dict) and sent.get("message_id"):
+            delivered += 1
+        else:
+            failed.append({"candidate_id": candidate_id, "reason": "message_send_failed"})
+    return {"delivered": delivered, "failed": failed}
+
+
+def _shortlist_top_k() -> int:
+    raw = (os.getenv("AI_SHORTLIST_TOP_K", "5") or "5").strip()
+    try:
+        return max(1, min(50, int(raw)))
+    except ValueError:
+        return 5
+
+
+def _fetch_applicant_rows(job_id: str) -> List[Dict[str, Any]]:
+    """Load raw applicant rows for a job via application-service (through gateway)."""
+    job_id = (job_id or "").strip()
+    if not job_id:
+        return []
+
+    # NOTE: /applications/byJob returns a JSON array in this codebase.
+    # _post_json() only returns dict payloads, so we do a raw request here.
+    body = json.dumps({"job_id": job_id}).encode("utf-8")
+    req = urlrequest.Request(
+        _applications_by_job_url(),
+        data=body,
+        headers=_outbound_request_headers({"Content-Type": "application/json"}),
+        method="POST",
+    )
+    try:
+        with urlrequest.urlopen(req, timeout=8.0) as response:
+            raw = response.read().decode("utf-8")
+            data = json.loads(raw) if raw else []
+    except (urlerror.URLError, TimeoutError, ValueError, json.JSONDecodeError):
+        return []
+
+    if data is None:
+        return []
+    rows: List[Any]
+    if isinstance(data, list):
+        rows = data
+    elif isinstance(data, dict):
+        inner = data.get("applications") or data.get("rows") or data.get("data")
+        rows = inner if isinstance(inner, list) else []
+    else:
+        rows = []
+    typed_rows: List[Dict[str, Any]] = []
+    for row in rows:
+        if isinstance(row, dict):
+            typed_rows.append(row)
+    return typed_rows
+
+
+def _fetch_applicant_member_ids(job_id: str) -> List[str]:
+    rows = _fetch_applicant_rows(job_id)
+    out: List[str] = []
+    for row in rows:
+        mid = row.get("member_id") or row.get("memberId")
+        if isinstance(mid, str) and mid.strip():
+            out.append(mid.strip())
+    deduped: List[str] = []
+    seen = set()
+    for mid in out:
+        if mid not in seen:
+            seen.add(mid)
+            deduped.append(mid)
+    return deduped
 
 
 def _outbound_request_headers(extra: Optional[Dict[str, str]] = None) -> Dict[str, str]:
@@ -672,7 +785,12 @@ def _public_task(task: Dict[str, Any], compact: bool = False) -> Dict[str, Any]:
         approval = dict(out["approval"])
         if "original_text" not in approval or approval.get("original_text") is None:
             if approval.get("target") == "outreach_draft":
-                approval["original_text"] = (out.get("result") or {}).get("outreach_draft")
+                res_preview = out.get("result") or {}
+                approval["original_text"] = res_preview.get("outreach_draft") or (
+                    json.dumps(res_preview.get("outreach_drafts") or [])[:2000]
+                    if res_preview.get("outreach_drafts")
+                    else None
+                )
         out["approval"] = approval
 
     out["error_details"] = task.get("error")
@@ -891,7 +1009,7 @@ def _match_score_skill(body: Dict[str, Any]) -> Dict[str, Any]:
 def _shortlist_skill(body: Dict[str, Any]) -> Dict[str, Any]:
     job_id = body.get("job_id", "")
     scores = body.get("scores") or []
-    top_k = int(body.get("top_k") or 3)
+    top_k = int(body.get("top_k") or _shortlist_top_k())
     ranked = sorted(scores, key=lambda entry: entry.get("score", 0), reverse=True)
     candidates: List[Dict[str, Any]] = []
     for entry in ranked[:top_k]:
@@ -913,10 +1031,76 @@ def _shortlist_skill(body: Dict[str, Any]) -> Dict[str, Any]:
     return {"job_id": job_id, "candidates": candidates}
 
 
+def _one_outreach_message(job_id: str, job_profile: Dict[str, Any], member_id: str, candidate_hint: str):
+    """Returns (draft_text, provider)."""
+    lines = [
+        f"Job: {job_profile.get('title', '')} ({job_id})",
+        f"Location: {job_profile.get('location', '')}; Seniority: {job_profile.get('seniority', '')}",
+        f"Required skills: {', '.join(str(s) for s in (job_profile.get('required_skills') or [])[:20])}",
+        f"Candidate {member_id}:",
+        candidate_hint,
+    ]
+    context = "\n".join(lines)
+    draft: Optional[str] = None
+    draft_provider = "template"
+
+    if _groq_api_key():
+        system = (
+            "You write concise, professional recruiter outreach messages (LinkedIn style). "
+            "2–4 sentences. No placeholders. Do not invent company names if missing. "
+            "Address this one candidate by name if provided, otherwise use a neutral greeting."
+        )
+        user = f"{context}\n\nWrite one outreach message to this candidate only."
+        raw = _groq_chat(
+            [{"role": "system", "content": system}, {"role": "user", "content": user}],
+            max_tokens=400,
+            temperature=0.35,
+            json_object=False,
+            timeout_seconds=35.0,
+        )
+        if raw and raw.strip():
+            draft = raw.strip()
+            draft_provider = "groq"
+
+    if not draft:
+        draft = (
+            f"Hi — your background looks like a strong match for our {job_profile.get('title', 'open role')} "
+            f"({job_id}). Would you be open to a brief chat this week?"
+        )
+    return draft, draft_provider
+
+
 def _outreach_draft_skill(body: Dict[str, Any]) -> Dict[str, Any]:
+    """Supports targeted `candidate_ids` (personalized drafts) or legacy `shortlist` ranking context."""
     job_id = body.get("job_id") or ""
-    shortlist_candidates = body.get("shortlist") or []
     job_profile = _job_profile_for(job_id)
+    candidate_ids = body.get("candidate_ids") or []
+    if isinstance(candidate_ids, str):
+        candidate_ids = [candidate_ids]
+    candidate_ids = [str(x).strip() for x in candidate_ids if str(x).strip()]
+
+    if candidate_ids:
+        drafts: List[Dict[str, Any]] = []
+        providers: List[str] = []
+        for mid in candidate_ids:
+            profile = _load_member_profile(mid) or _get_candidate_profiles().get(mid, {})
+            hint_parts = [
+                f"name={profile.get('name') or mid}",
+                f"headline={profile.get('headline') or profile.get('title', '')}",
+                f"skills={profile.get('skills', [])}",
+                f"resume_excerpt={(profile.get('resume_text') or '')[:800]}",
+            ]
+            text, prov = _one_outreach_message(job_id, job_profile, mid, "\n".join(hint_parts))
+            drafts.append({"member_id": mid, "name": (profile.get("name") or mid), "draft": text})
+            providers.append(prov)
+        single = drafts[0]["draft"] if len(drafts) == 1 else None
+        return {
+            "draft": single,
+            "drafts": drafts,
+            "draft_provider": providers[0] if len(providers) == 1 else "mixed",
+        }
+
+    shortlist_candidates = body.get("shortlist") or []
     top_id = "candidate"
     if shortlist_candidates and isinstance(shortlist_candidates[0], dict):
         top_id = shortlist_candidates[0].get("member_id") or shortlist_candidates[0].get("candidate_id") or "candidate"
@@ -1127,7 +1311,11 @@ def _load_task(task_id: str) -> Optional[Dict[str, Any]]:
         return None
 
 
-def _step_template() -> List[Dict[str, Any]]:
+def _step_template_for_type(task_type: str) -> List[Dict[str, Any]]:
+    if task_type == TASK_TYPE_GENERATE_OUTREACH:
+        seq = STEP_SEQUENCE_OUTREACH
+    else:
+        seq = STEP_SEQUENCE_SHORTLIST
     return [
         {
             "step_name": step,
@@ -1139,7 +1327,7 @@ def _step_template() -> List[Dict[str, Any]]:
             "attempt": 0,
             "error": None,
         }
-        for step in STEP_SEQUENCE
+        for step in seq
     ]
 
 
@@ -1160,14 +1348,17 @@ def _run_pipeline(task: Dict[str, Any]):
     _append_task_event(task, "ai.task.processing", {"step": None}, source="state_transition")
 
     outputs = {
+        "discover_candidates": "Resolved candidate pool for this job",
         "resume_parse": "Parsed candidate profiles from resume text",
         "match_score": "Computed embedding-plus-rules match scores",
         "shortlist": "Generated ranked shortlist",
-        "outreach_draft": "Prepared outreach draft",
+        "outreach_draft": "Prepared outreach draft(s)",
     }
     parsed_profiles: List[Dict[str, Any]] = []
     score_cards: List[Dict[str, Any]] = []
     shortlist_candidates: List[Dict[str, Any]] = []
+    last_outreach_bundle: Optional[Dict[str, Any]] = None
+    task_type = task.get("task_type") or TASK_TYPE_CANDIDATE_SHORTLIST
 
     for step in task["steps"]:
         step_name = step["step_name"]
@@ -1205,12 +1396,52 @@ def _run_pipeline(task: Dict[str, Any]):
                 if not summary:
                     raise RuntimeError(f"Unknown pipeline step: {step_name}")
 
-                if step_name == "resume_parse":
+                if step_name == "discover_candidates":
+                    existing = [str(x).strip() for x in (task.get("candidate_ids") or []) if str(x).strip()]
+                    source = "request"
+                    ids = list(existing)
+                    application_resume_text_by_member: Dict[str, str] = {}
+                    if not ids:
+                        applicant_rows = _fetch_applicant_rows(task["job_id"])
+                        for row in applicant_rows:
+                            mid = str(row.get("member_id") or row.get("memberId") or "").strip()
+                            if not mid:
+                                continue
+                            resume_text = str(row.get("resume_text") or "").strip()
+                            if resume_text:
+                                application_resume_text_by_member[mid] = resume_text
+                        ids = []
+                        seen_ids = set()
+                        for row in applicant_rows:
+                            mid = str(row.get("member_id") or row.get("memberId") or "").strip()
+                            if not mid or mid in seen_ids:
+                                continue
+                            seen_ids.add(mid)
+                            ids.append(mid)
+                        source = "applications"
+                    if not ids:
+                        demo = (os.getenv("AI_FALLBACK_DEMO_CANDIDATES", "") or "").strip()
+                        if demo:
+                            ids = [s.strip() for s in demo.split(",") if s.strip()]
+                            source = "demo_fallback"
+                    if not ids:
+                        raise RuntimeError(
+                            "No applicants found for this job. Ask candidates to apply, or set AI_FALLBACK_DEMO_CANDIDATES for local demos."
+                        )
+                    task["candidate_ids"] = ids
+                    task["application_resume_text_by_member"] = application_resume_text_by_member
+                    step["output_data"] = {"candidate_ids": ids, "source": source}
+                    step["output_summary"] = f"Discovered {len(ids)} candidate(s) ({source})"
+                elif step_name == "resume_parse":
                     parsed_profiles = []
+                    app_resume_map = task.get("application_resume_text_by_member") or {}
                     for candidate_id in task["candidate_ids"]:
+                        fallback_text = ""
+                        if isinstance(app_resume_map, dict):
+                            fallback_text = str(app_resume_map.get(candidate_id) or "").strip()
                         parsed = _invoke_skill(
                             "/resume/parse",
-                            {"member_id": candidate_id},
+                            {"member_id": candidate_id, "text": fallback_text},
                             _resume_parse_skill,
                         )
                         if not parsed.get("member_id"):
@@ -1245,7 +1476,7 @@ def _run_pipeline(task: Dict[str, Any]):
                 elif step_name == "shortlist":
                     shortlist_response = _invoke_skill(
                         "/shortlist",
-                        {"job_id": task["job_id"], "scores": score_cards, "top_k": 3},
+                        {"job_id": task["job_id"], "scores": score_cards, "top_k": _shortlist_top_k()},
                         _shortlist_skill,
                     )
                     shortlist_candidates = shortlist_response.get("candidates", [])
@@ -1254,11 +1485,17 @@ def _run_pipeline(task: Dict[str, Any]):
                 elif step_name == "outreach_draft":
                     draft_response = _invoke_skill(
                         "/outreach/draft",
-                        {"job_id": task["job_id"], "shortlist": shortlist_candidates, "actor_id": task["actor_id"]},
+                        {
+                            "job_id": task["job_id"],
+                            "candidate_ids": task.get("candidate_ids") or [],
+                            "actor_id": task["actor_id"],
+                        },
                         _outreach_draft_skill,
                     )
+                    last_outreach_bundle = draft_response
                     step["output_data"] = draft_response
-                    step["output_summary"] = "Prepared outreach draft"
+                    n_drafts = len(draft_response.get("drafts") or []) or (1 if draft_response.get("draft") else 0)
+                    step["output_summary"] = f"Prepared {n_drafts or 1} outreach draft(s)"
                 else:
                     step["output_summary"] = summary
 
@@ -1310,31 +1547,57 @@ def _run_pipeline(task: Dict[str, Any]):
             _publish_failed_envelope(task, task["error"]["reason"])
             return
 
-    if _shortlist_hitl_required():
-        task["state"] = "awaiting_approval"
-        task["approval_target"] = "shortlist"
+    if task_type == TASK_TYPE_CANDIDATE_SHORTLIST:
+        if _shortlist_hitl_required():
+            task["state"] = "awaiting_approval"
+            task["approval_target"] = "shortlist"
+            task["current_step"] = None
+            task["result"] = {"shortlist": shortlist_candidates, "outreach_draft": None, "outreach_drafts": None}
+            task["updated_at"] = _now_iso()
+            _save_task(task)
+            _append_task_event(task, "ai.task.awaiting_approval", {"approval_target": "shortlist"}, source="state_transition")
+            _publish_event(
+                "ai.results",
+                "ai.awaiting_approval",
+                task,
+                {
+                    "task_type": task["task_type"],
+                    "step": "shortlist",
+                    "data": {"status": "awaiting_approval", "approval_target": "shortlist"},
+                },
+            )
+            return
+
+        task["state"] = "completed"
+        task["approval_target"] = None
         task["current_step"] = None
-        task["result"] = {"shortlist": shortlist_candidates, "outreach_draft": None}
+        task["result"] = {
+            "shortlist": shortlist_candidates,
+            "candidate_ids": task.get("candidate_ids") or [],
+        }
         task["updated_at"] = _now_iso()
         _save_task(task)
-        _append_task_event(task, "ai.task.awaiting_approval", {"approval_target": "shortlist"}, source="state_transition")
+        _append_task_event(task, "ai.task.completed", {"phase": "shortlist"}, source="state_transition")
         _publish_event(
             "ai.results",
-            "ai.awaiting_approval",
+            "ai.completed",
             task,
-            {
-                "task_type": task["task_type"],
-                "step": "shortlist",
-                "data": {"status": "awaiting_approval", "approval_target": "shortlist"},
-            },
+            {"task_type": task["task_type"], "step": "shortlist", "data": {"status": "completed"}},
         )
         return
 
+    # generate_outreach — pipeline already ran outreach_draft step
+    draft_bundle = last_outreach_bundle or {}
+    drafts = draft_bundle.get("drafts") or []
+    single = draft_bundle.get("draft")
     task["state"] = "awaiting_approval"
     task["approval_target"] = "outreach_draft"
     task["current_step"] = None
-    outreach = _outreach_draft_skill({"job_id": task["job_id"], "shortlist": shortlist_candidates, "actor_id": task["actor_id"]})
-    task["result"] = {"shortlist": shortlist_candidates, "outreach_draft": outreach["draft"]}
+    task["result"] = {
+        "shortlist": [],
+        "outreach_draft": single,
+        "outreach_drafts": drafts if drafts else ([{"member_id": task["candidate_ids"][0], "name": task["candidate_ids"][0], "draft": single}] if single and task.get("candidate_ids") else []),
+    }
     task["updated_at"] = _now_iso()
     _save_task(task)
     _append_task_event(task, "ai.task.awaiting_approval", {"approval_target": "outreach_draft"}, source="state_transition")
@@ -1366,7 +1629,7 @@ def _consume_ai_requests():
     try:
         consumer = KafkaConsumer(
             "ai.requests",
-            bootstrap_servers=["127.0.0.1:9092"],
+            bootstrap_servers=["127.0.0.1:9093"],
             group_id=os.getenv("AI_CONSUMER_GROUP", "ai-service-supervisor"),
             auto_offset_reset="latest",
             enable_auto_commit=False,
@@ -1424,7 +1687,7 @@ def _recover_inflight_tasks():
 class SubmitTaskRequest(BaseModel):
     task_type: str
     job_id: str
-    candidate_ids: List[str]
+    candidate_ids: Optional[List[str]] = None
     actor_id: str
     trace_id: Optional[str] = None
     client_request_id: Optional[str] = None
@@ -1433,6 +1696,7 @@ class SubmitTaskRequest(BaseModel):
 class ApproveBody(BaseModel):
     decision: str  # approve | edit | reject
     edited_text: Optional[str] = None
+    edited_drafts: Optional[Dict[str, str]] = None
     reviewer_id: str
 
 
@@ -1450,12 +1714,13 @@ class MatchScoreBody(BaseModel):
 class ShortlistBody(BaseModel):
     job_id: str
     scores: List[Dict[str, Any]]
-    top_k: Optional[int] = 3
+    top_k: Optional[int] = 5
 
 
 class OutreachDraftBody(BaseModel):
     job_id: str
-    shortlist: List[Dict[str, Any]]
+    shortlist: List[Dict[str, Any]] = Field(default_factory=list)
+    candidate_ids: Optional[List[str]] = None
     actor_id: Optional[str] = None
 
 
@@ -1497,19 +1762,24 @@ def startup_supervisor_consumer():
 
 @app.post("/ai/tasks/submit", status_code=202)
 async def submit_task(req: SubmitTaskRequest):
-    if req.task_type != TASK_TYPE_CANDIDATE_SHORTLIST:
+    if req.task_type not in {TASK_TYPE_CANDIDATE_SHORTLIST, TASK_TYPE_GENERATE_OUTREACH}:
         return _error_response(
             400,
             "VALIDATION_ERROR",
-            "Unsupported task_type. Only 'candidate_shortlist' is currently supported.",
+            "Unsupported task_type. Use candidate_shortlist or generate_outreach.",
             details={"task_type": req.task_type},
         )
     if not req.job_id.strip():
         return _error_response(400, "VALIDATION_ERROR", "job_id is required.")
     if not req.actor_id.strip():
         return _error_response(400, "VALIDATION_ERROR", "actor_id is required.")
-    if not req.candidate_ids:
-        return _error_response(400, "VALIDATION_ERROR", "candidate_ids must contain at least one ID.")
+    candidate_ids = [str(x).strip() for x in (req.candidate_ids or []) if str(x).strip()]
+    if req.task_type == TASK_TYPE_GENERATE_OUTREACH and not candidate_ids:
+        return _error_response(
+            400,
+            "VALIDATION_ERROR",
+            "candidate_ids must contain at least one ID for generate_outreach.",
+        )
     if req.client_request_id and len(req.client_request_id) > 128:
         return _error_response(400, "VALIDATION_ERROR", "client_request_id must be <= 128 chars.")
 
@@ -1531,26 +1801,35 @@ async def submit_task(req: SubmitTaskRequest):
         "task_id": task_id,
         "trace_id": trace_id,
         "task_type": req.task_type,
-        "job_id": req.job_id,
-        "candidate_ids": req.candidate_ids,
-        "actor_id": req.actor_id,
+        "job_id": req.job_id.strip(),
+        "candidate_ids": candidate_ids,
+        "actor_id": req.actor_id.strip(),
         "client_request_id": (req.client_request_id or "").strip() or None,
         "state": "queued",
         "current_step": None,
-        "steps": _step_template(),
+        "steps": _step_template_for_type(req.task_type),
         "result": None,
         "error": None,
         "created_at": created_at,
         "updated_at": created_at,
     }
     _save_task(task)
-    _append_task_event(task, "ai.task.requested", {"job_id": req.job_id, "candidate_ids": req.candidate_ids}, source="state_transition")
+    _append_task_event(
+        task,
+        "ai.task.requested",
+        {"job_id": task["job_id"], "candidate_ids": candidate_ids, "task_type": req.task_type},
+        source="state_transition",
+    )
 
     _publish_event(
         "ai.requests",
         "ai.requested",
         task,
-        {"task_type": req.task_type, "step": None, "data": {"job_id": req.job_id, "candidate_ids": req.candidate_ids}},
+        {
+            "task_type": req.task_type,
+            "step": None,
+            "data": {"job_id": task["job_id"], "candidate_ids": candidate_ids or None},
+        },
     )
 
     # Fallback for environments where Kafka consumer is unavailable.
@@ -1646,8 +1925,18 @@ async def approve_task(task_id: str, body: ApproveBody):
     try:
         if body.decision not in VALID_DECISIONS:
             return _error_response(400, "INVALID_DECISION", "decision must be one of approve|edit|reject.", task["trace_id"])
-        if body.decision == "edit" and not (body.edited_text or "").strip():
-            return _error_response(400, "EDIT_TEXT_REQUIRED", "edited_text is required when decision is edit.", task["trace_id"])
+        if body.decision == "edit":
+            has_single = bool((body.edited_text or "").strip())
+            has_map = bool(
+                body.edited_drafts and any((v or "").strip() for v in (body.edited_drafts or {}).values())
+            )
+            if not has_single and not has_map:
+                return _error_response(
+                    400,
+                    "EDIT_TEXT_REQUIRED",
+                    "edited_text or edited_drafts is required when decision is edit.",
+                    task["trace_id"],
+                )
         if task["state"] != "awaiting_approval":
             return _error_response(
                 409,
@@ -1663,12 +1952,16 @@ async def approve_task(task_id: str, body: ApproveBody):
             task["result"]["shortlist"] = []
 
         approval_target = task.get("approval_target") or "outreach_draft"
+        res_block = task.get("result") if isinstance(task.get("result"), dict) else {}
         original_text = None
         if approval_target == "outreach_draft":
-            original_text = (task.get("result") or {}).get("outreach_draft")
+            original_text = res_block.get("outreach_draft") or (
+                json.dumps(res_block.get("outreach_drafts") or [])[:2000] if res_block.get("outreach_drafts") else None
+            )
         task["approval"] = {
             "decision": body.decision,
             "edited_text": body.edited_text,
+            "edited_drafts": body.edited_drafts,
             "original_text": original_text,
             "reviewer_id": body.reviewer_id,
             "target": approval_target,
@@ -1677,42 +1970,94 @@ async def approve_task(task_id: str, body: ApproveBody):
         task["updated_at"] = _now_iso()
 
         if body.decision == "reject":
-            task["state"] = "failed"
-            task["error"] = "Rejected by reviewer"
+            task["state"] = "rejected"
+            task["error"] = None
             _append_task_event(task, "ai.task.rejected", {"target": approval_target}, source="state_transition")
             _publish_event(
                 "ai.results",
-                "ai.failed",
+                "ai.rejected",
                 task,
-                {"task_type": task["task_type"], "step": None, "data": {"reason": "rejected"}},
+                {"task_type": task["task_type"], "step": None, "data": {"reason": "reviewer_rejected"}},
             )
         elif approval_target == "shortlist":
             if body.decision == "edit":
-                task["result"]["shortlist_reviewer_note"] = body.edited_text
-            outreach = _invoke_skill(
-                "/outreach/draft",
-                {"job_id": task["job_id"], "shortlist": task.get("result", {}).get("shortlist", []), "actor_id": task["actor_id"]},
-                _outreach_draft_skill,
-            )
-            task["result"]["outreach_draft"] = outreach["draft"]
-            task["approval_target"] = "outreach_draft"
-            task["state"] = "awaiting_approval"
+                task["result"]["shortlist_reviewer_note"] = body.edited_text or json.dumps(body.edited_drafts or {})
+            task["state"] = "completed"
+            task["approval_target"] = None
+            task["current_step"] = None
             task["updated_at"] = _now_iso()
-            _append_task_event(task, "ai.task.awaiting_approval", {"approval_target": "outreach_draft"}, source="state_transition")
+            _append_task_event(task, "ai.task.completed", {"phase": "shortlist_review"}, source="state_transition")
             _publish_event(
                 "ai.results",
-                "ai.awaiting_approval",
+                "ai.completed",
                 task,
-                {
-                    "task_type": task["task_type"],
-                    "step": "outreach_draft",
-                    "data": {"status": "awaiting_approval", "approval_target": "outreach_draft"},
-                },
+                {"task_type": task["task_type"], "step": "shortlist", "data": {"decision": body.decision}},
             )
         else:
-            task["state"] = "completed"
+            res = dict(task.get("result") or {})
+            if body.edited_drafts:
+                edits = {
+                    str(k).strip(): str(v).strip()
+                    for k, v in (body.edited_drafts or {}).items()
+                    if str(k).strip() and str(v).strip()
+                }
+                if edits:
+                    merged: List[Dict[str, Any]] = []
+                    for d in list(res.get("outreach_drafts") or []):
+                        if not isinstance(d, dict):
+                            continue
+                        mid = d.get("member_id")
+                        if mid and mid in edits:
+                            merged.append({"member_id": mid, "name": d.get("name") or mid, "draft": edits[mid]})
+                        else:
+                            merged.append(d)
+                    res["outreach_drafts"] = merged
+                    if len(merged) == 1:
+                        res["outreach_draft"] = merged[0].get("draft")
+                    task["result"] = res
+
+            res = dict(task.get("result") or {})
+            drafts = list(res.get("outreach_drafts") or [])
+            mids = list(task.get("candidate_ids") or [])
+
             if body.decision == "edit":
-                task["result"]["outreach_draft"] = body.edited_text
+                edited_map = dict(body.edited_drafts or {})
+                if edited_map:
+                    merged: List[Dict[str, Any]] = []
+                    for d in drafts:
+                        if not isinstance(d, dict):
+                            continue
+                        mid = d.get("member_id")
+                        if mid and mid in edited_map and str(edited_map[mid]).strip():
+                            merged.append({"member_id": mid, "name": d.get("name") or mid, "draft": str(edited_map[mid]).strip()})
+                        else:
+                            merged.append(d)
+                    res["outreach_drafts"] = merged
+                    if len(merged) == 1:
+                        res["outreach_draft"] = merged[0].get("draft")
+                    task["result"] = res
+                elif (body.edited_text or "").strip():
+                    text = body.edited_text.strip()
+                    res["outreach_draft"] = text
+                    if len(mids) <= 1:
+                        res["outreach_drafts"] = [{"member_id": mids[0], "name": mids[0], "draft": text}] if mids else drafts
+                    else:
+                        res["outreach_drafts"] = [{"member_id": mid, "name": mid, "draft": text} for mid in mids]
+                    task["result"] = res
+
+            res = dict(task.get("result") or {})
+            drafts = list(res.get("outreach_drafts") or [])
+            by_id = {d.get("member_id"): (d.get("draft") or "").strip() for d in drafts if isinstance(d, dict)}
+            messages: List[Dict[str, str]] = []
+            for mid in mids:
+                text = (by_id.get(mid) or "").strip()
+                if not text and (res.get("outreach_draft") or "").strip():
+                    text = str(res.get("outreach_draft")).strip()
+                if text:
+                    messages.append({"candidate_id": mid, "text": text})
+
+            task["state"] = "completed"
+            task["error"] = None
             _append_task_event(task, "ai.task.completed", {"decision": body.decision}, source="state_transition")
             _publish_event(
                 "ai.results",
@@ -1720,10 +2065,6 @@ async def approve_task(task_id: str, body: ApproveBody):
                 task,
                 {"task_type": task["task_type"], "step": None, "data": {"decision": body.decision}},
             )
-            shortlist = (task.get("result") or {}).get("shortlist") or []
-            from_shortlist = [c.get("candidate_id") or c.get("member_id") for c in shortlist if isinstance(c, dict)]
-            from_shortlist = [x for x in from_shortlist if x]
-            send_ids = from_shortlist if from_shortlist else list(task.get("candidate_ids") or [])
             _publish_event(
                 _send_topic_name(),
                 SEND_REQUESTED_EVENT,
@@ -1733,11 +2074,16 @@ async def approve_task(task_id: str, body: ApproveBody):
                     "step": "send",
                     "data": {
                         "job_id": task["job_id"],
-                        "candidate_ids": send_ids,
-                        "outreach_text": (task.get("result") or {}).get("outreach_draft"),
+                        "messages": messages,
                     },
                 },
             )
+            if _direct_send_enabled():
+                direct_result = _deliver_outreach_direct(task.get("actor_id", ""), task.get("job_id", ""), messages)
+                task.setdefault("result", {})
+                if isinstance(task["result"], dict):
+                    task["result"]["direct_send"] = direct_result
+                _append_task_event(task, "ai.send.direct", direct_result, source="ai_service")
         _save_task(task)
 
         return {
@@ -1760,7 +2106,7 @@ async def approve_task(task_id: str, body: ApproveBody):
 async def ws_task(websocket: WebSocket, task_id: str):
     await websocket.accept()
     try:
-        terminal_states = {"completed", "failed"}
+        terminal_states = {"completed", "failed", "rejected"}
         seen_signatures = set()
 
         for _ in range(240):

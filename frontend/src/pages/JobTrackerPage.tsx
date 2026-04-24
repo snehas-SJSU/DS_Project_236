@@ -37,7 +37,6 @@ export default function JobTrackerPage() {
   const [jobNotes, setJobNotes] = useState<Record<string, string>>(() => readJson<Record<string, string>>(JOB_NOTES_KEY, {}));
   const [noteEditorJob, setNoteEditorJob] = useState<SavedJob | null>(null);
   const [noteDraft, setNoteDraft] = useState('');
-  const [applyBusyJobId, setApplyBusyJobId] = useState<string | null>(null);
   const [dateFilterOpen, setDateFilterOpen] = useState(false);
   const [dateFilterDraft, setDateFilterDraft] = useState<DateFilter>(null);
   const [dateFilter, setDateFilter] = useState<DateFilter>(null);
@@ -266,34 +265,7 @@ export default function JobTrackerPage() {
       showToast('Already applied to this job.', 'info');
       return;
     }
-    setApplyBusyJobId(job.id);
-    try {
-      const res = await fetch('/api/applications/submit', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ job_id: job.id, member_id: MEMBER_ID })
-      });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        const msg =
-          data.error === 'DUPLICATE_APPLICATION'
-            ? 'Already applied to this job.'
-            : data.error === 'JOB_CLOSED'
-              ? 'This job is closed.'
-              : 'Unable to apply right now.';
-        showToast(msg, 'error');
-        return;
-      }
-      setApplications((prev) => [
-        ...prev,
-        { job_id: job.id, member_id: MEMBER_ID, status: 'submitted' }
-      ]);
-      showToast('Application submitted.', 'success');
-    } catch {
-      showToast('Unable to apply right now.', 'error');
-    } finally {
-      setApplyBusyJobId(null);
-    }
+    navigate(`/jobs/apply?jobId=${encodeURIComponent(job.id)}`);
   };
 
   const persistSavedJobs = (next: SavedJob[]) => {
@@ -531,10 +503,10 @@ export default function JobTrackerPage() {
                     <button
                       type="button"
                       onClick={() => applyFromTracker(job)}
-                      disabled={applyBusyJobId === job.id || appliedSet.has(job.id)}
+                      disabled={appliedSet.has(job.id)}
                       className="rounded-full border border-[#0a66c2] px-3 py-1 text-xs font-semibold text-[#0a66c2] hover:bg-[#edf3f8] disabled:cursor-not-allowed disabled:border-[#9ec6e5] disabled:text-[#9ec6e5]"
                     >
-                      {appliedSet.has(job.id) ? 'Applied' : applyBusyJobId === job.id ? 'Applying...' : 'Apply'}
+                      {appliedSet.has(job.id) ? 'Applied' : 'Apply'}
                     </button>
                     <button
                       type="button"

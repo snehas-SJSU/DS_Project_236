@@ -5,7 +5,7 @@ const https = require('https');
 const { URL } = require('url');
 const { Kafka } = require('kafkajs');
 
-const brokers = (process.env.KAFKA_BROKERS || '127.0.0.1:9092').split(',').map((s) => s.trim());
+const brokers = (process.env.KAFKA_BROKERS || '127.0.0.1:9093').split(',').map((s) => s.trim());
 const topic = process.env.OUTREACH_REQUESTS_TOPIC || 'outreach.requests';
 const groupId = process.env.OUTREACH_SEND_GROUP || 'outreach-send-worker';
 const gatewayBase = (process.env.GATEWAY_API_BASE || 'http://127.0.0.1:4000/api').replace(/\/$/, '');
@@ -114,10 +114,38 @@ async function handleEnvelope(value) {
   const payload = env.payload || {};
   const inner = payload.data || payload;
   const jobId = inner.job_id || '';
+  const messages = Array.isArray(inner.messages)
+    ? inner.messages.filter((m) => m && (m.candidate_id || m.member_id) && (m.text || m.outreach_text))
+    : [];
   const candidateIds = Array.isArray(inner.candidate_ids) ? inner.candidate_ids.filter(Boolean) : [];
   const outreachText = inner.outreach_text || '';
 
-  if (!actorId || !candidateIds.length) {
+  if (!actorId) {
+    console.warn(JSON.stringify({ level: 'warn', msg: 'skip_missing_actor', actor_id: actorId }));
+    return;
+  }
+
+  if (messages.length) {
+    for (const m of messages) {
+      const candidateId = m.candidate_id || m.member_id;
+      const text = m.text || m.outreach_text || '';
+      try {
+        await deliverOutreach(actorId, candidateId, text, jobId, traceId);
+      } catch (e) {
+        console.error(
+          JSON.stringify({
+            level: 'error',
+            msg: 'deliver_failed',
+            candidate_id: candidateId,
+            error: e.message,
+          }),
+        );
+      }
+    }
+    return;
+  }
+
+  if (!candidateIds.length) {
     console.warn(JSON.stringify({ level: 'warn', msg: 'skip_missing_fields', actor_id: actorId, candidateIds }));
     return;
   }

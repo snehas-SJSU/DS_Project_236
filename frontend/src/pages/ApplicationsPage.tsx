@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { MEMBER_ID } from '../lib/memberProfile';
 
 const normalizeStatus = (value: string) => {
@@ -9,6 +9,7 @@ const normalizeStatus = (value: string) => {
 };
 
 export default function ApplicationsPage() {
+  const [searchParams] = useSearchParams();
   const [memberApps, setMemberApps] = useState<any[]>([]);
   const [jobId, setJobId] = useState('');
   const [jobApps, setJobApps] = useState<any[]>([]);
@@ -26,6 +27,13 @@ export default function ApplicationsPage() {
   useEffect(() => {
     loadMemberApps().catch(() => undefined);
   }, []);
+
+  useEffect(() => {
+    const fromUrl = searchParams.get('jobId');
+    if (fromUrl) {
+      setJobId(fromUrl);
+    }
+  }, [searchParams]);
 
   return (
     <div className="space-y-3">
@@ -86,6 +94,10 @@ export default function ApplicationsPage() {
             Post new job
           </Link>
         </div>
+        <p className="mt-3 text-xs text-slate-500">
+          AI ranking/outreach now starts from the Job Details page so job context is preloaded.
+        </p>
+
         <div className="mt-3 space-y-2">
           {jobApps.map((app) => (
             <div key={app.app_id} className="rounded-md border border-[#e0dfdc] p-3">
