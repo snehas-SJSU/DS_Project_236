@@ -78,26 +78,6 @@ graph TD
     Data_Stores --> AWS
 ```
 
-### 0.0.1 AI Architecture (clean)
-
-```mermaid
-graph TD
-  FE[Frontend UI] --> GW[API Gateway]
-  GW --> AI[FastAPI Agent Layer]
-
-  AI -->|REST| SK[AI Skills Service]
-  AI <--> K[(Kafka: ai.requests / ai.results)]
-  AI --> M[(MongoDB: task traces / step results / events)]
-  AI --> R[(Redis: cache / idempotency)]
-  AI -->|WebSocket / progress updates| FE
-
-  AI --> MEM[Member Service API]
-  AI --> JOB[Job Service API]
-
-  MEM --> SQL1[(MySQL: members / applications)]
-  JOB --> SQL2[(MySQL: jobs)]
-```
-
 ---
 
 <!-- ====================== 0.1 PORTS / GATEWAY / SWAGGER ====================== -->
@@ -260,85 +240,6 @@ Note: if `3000` is occupied, Vite will run on the next free port and print it in
 3. API docs (proxied — same host as the React app): [http://localhost:3000/docs](http://localhost:3000/docs) when the Vite dev server is running (`npm run dev` in `frontend/`).
 
 `docker compose up -d` starts Zookeeper, Kafka, MySQL, MongoDB, Redis (see **§6.0** for ports).
-
-### 2.9 AI Backend Quickstart (required)
-
-Ports:
-
-1. Gateway: `4000`
-2. AI service: `8001`
-
-Start:
-
-```bash
-npm run dev:gateway
-npm run dev:ai-service
-```
-
-Health:
-
-```bash
-curl -sS http://127.0.0.1:4000/api/ai/health
-```
-
-Submit task (`POST /api/ai/tasks/submit`):
-
-```json
-{
-  "task_type": "candidate_shortlist",
-  "job_id": "J-LIVE-1",
-  "candidate_ids": ["M-102", "M-103"],
-  "actor_id": "R-101",
-  "trace_id": "demo-run-001"
-}
-```
-
-Approve task (`POST /api/ai/tasks/{task_id}/approve`):
-
-```json
-{
-  "decision": "approve",
-  "reviewer_id": "R-101"
-}
-```
-
-Check:
-
-1. `GET /api/ai/tasks/{task_id}`
-2. `GET /api/ai/metrics/summary`
-
-Notes:
-
-1. `actor_id` is required in submit body.
-2. Supported `task_type`: `candidate_shortlist`.
-
-### 2.9.1 AI Workflow (clean)
-
-```mermaid
-flowchart LR
-  UI[Recruiter UI] -->|Submit AI Task| GW[API Gateway]
-  GW --> AI[FastAPI AI Agent Service]
-
-  AI -->|Publish ai.requested| KReq[(Kafka: ai.requests)]
-  KReq --> SUP[Hiring Assistant Supervisor]
-
-  SUP --> RP[Resume Parser Skill]
-  SUP --> MS[Job-Candidate Matching Skill]
-  SUP --> SL[Shortlist Generator]
-  SUP --> OD[Outreach Draft Generator]
-
-  SUP -->|Publish progress / final result| KRes[(Kafka: ai.results)]
-  SUP --> OBS[(MongoDB Task Trace Store)]
-
-  AI -->|WebSocket / Server Push| UI
-  SUP --> REV[Human Review Checkpoint]
-  REV -->|Approve / Edit / Reject| AI
-  AI --> DONE[Workflow Completed]
-
-  N1[Shared trace_id + idempotency_key across workflow]
-  KReq -.-> N1
-  KRes -.-> N1
-```
 
 ---
 

@@ -1,59 +1,29 @@
-# =========================
-# Dependencies (Node)
-# =========================
+# Dependencies
 node_modules/
 
-# =========================
-# Environment & secrets
-# =========================
+# Environment and secrets
 .env
 .env.*
 !.env.example
 
-# =========================
-# Logs & OS
-# =========================
+# Logs and OS
 *.log
 .DS_Store
 
-# =========================
 # Build / cache
-# =========================
 dist/
 build/
 .cache/
 *.tsbuildinfo
 
-# =========================
 # Python
-# =========================
-# Virtual environments
 venv/
 .venv/
-.aienv311/
-env/
 **/venv/
+# Added by code-review-graph
+.code-review-graph/
 
-# Python cache
-__pycache__/
-*.py[cod]
-*$py.class
-
-# Packaging
-*.egg-info/
-.eggs/
-dist/
-build/
-
-# =========================
-# Editor / IDE
-# =========================
-.vscode/
-.idea/
-
-# =========================
-# Local AI/editor tooling
-# =========================
+# Local AI/editor tooling files
 .agents/
 skills-lock.json
 .cursor/
@@ -63,8 +33,3 @@ skills-lock.json
 .windsurfrules
 .mcp.json
 .opencode.json
-
-# =========================
-# Misc
-# =========================
-.code-review-graph/

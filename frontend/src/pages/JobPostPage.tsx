@@ -1,6 +1,5 @@
 import { useState } from 'react';
 import { showToast } from '../lib/toast';
-import { RECRUITER_ID } from '../lib/memberProfile';
 
 export default function JobPostPage() {
   const [form, setForm] = useState({
@@ -32,7 +31,7 @@ export default function JobPostPage() {
           type: form.type,
           description: form.description,
           skills: form.skills.split(',').map((s) => s.trim()).filter(Boolean),
-          recruiter_id: RECRUITER_ID
+          recruiter_id: 'R-123'
         })
       });
       if (!res.ok) {

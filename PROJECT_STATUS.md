@@ -57,18 +57,18 @@ Last updated: Apr 2026 (connections, feed/share UX, smoke hardening, same-origin
 
 ## Pending note (AI section)
 
-- AI backend scope is implemented and validated end-to-end.
-- Completed (backend AI core):
-  - FastAPI AI service integrated behind gateway `/api/ai/*`.
-  - Kafka orchestration with `ai.requests` (consume) and `ai.results` (publish).
-  - Supervisor multi-step pipeline: resume parse -> match score -> shortlist -> outreach draft.
-  - Human-in-the-loop checkpoint with approve/edit/reject lifecycle.
-  - WebSocket task progress endpoint.
-  - Mongo persistence for task traces, step results, and status transitions.
-  - Metrics endpoint for approval outcomes and shortlist quality.
-  - DB-backed validation confirmed using MySQL-persisted member/job records.
-- Remaining (non-blocking polish):
-  - Final packaging of AI evidence in report/slides.
+- Section 7 remains intentionally pending/in-progress for final grading scope.
+- Current AI baseline exists: FastAPI service, gateway `/api/ai/*` proxy, task submit/status endpoints, approval endpoint, and WebSocket progress stub.
+- Remaining AI items (Section 7 core functionality checklist):
+  - **AI orchestrator/supervisor consume loop** — pending (`ai.requests` consumer not implemented end-to-end).
+  - **`ai.results` topic publish flow** — pending (intermediate/final outputs not Kafka-published).
+  - **Multi-step skill chaining by supervisor** — pending (resume parse -> match -> shortlist -> outreach not orchestrated via Kafka pipeline).
+  - **Persistent AI task store** — pending (task state/trace/results currently in-memory, not DB-backed).
+  - **Trace continuity across full AI chain** — pending (`trace_id` starts at submit, but full persisted lineage is incomplete).
+  - **Human-in-loop approval wired into orchestrated lifecycle** — partial/pending (approval endpoint exists but not integrated with full supervisor/results lifecycle).
+  - **Failure/retry/idempotency strategy for AI workflow** — pending (core services have idempotency; AI pipeline strategy not fully implemented/documented).
+  - **AI evaluation metrics/report** — pending (matching quality + HITL approval-rate evidence not yet produced).
+  - **AI deliverables package** — pending (workflow diagram, topic design, per-skill I/O spec, evaluation results, failure handling write-up, end-to-end demo evidence).
 
 ## Database requirements (Section 10)
 

@@ -1,9 +1,4 @@
 export const MEMBER_ID = 'M-123';
-
-/** Logged-in recruiter for hiring / AI workflows (override with VITE_RECRUITER_ID). */
-export const RECRUITER_ID =
-  (typeof import.meta !== 'undefined' && import.meta.env?.VITE_RECRUITER_ID) || MEMBER_ID;
-
 export const LOCAL_AVATAR_KEY = 'li_sim_profile_avatar';
 
 export function defaultAvatarUrl(name?: string) {

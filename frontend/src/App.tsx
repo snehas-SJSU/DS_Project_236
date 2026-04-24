@@ -32,12 +32,10 @@ import HelpCenterPage from './pages/HelpCenterPage';
 import PremiumPage from './pages/PremiumPage';
 import LanguagePage from './pages/LanguagePage';
 import JobPostPage from './pages/JobPostPage';
-import JobApplyPage from './pages/JobApplyPage';
 import CompanyPage from './pages/CompanyPage';
 import { isAuthenticated } from './lib/auth';
 import { MEMBER_ID, resolveAvatarUrl, resolveViewerAvatarUrl } from './lib/memberProfile';
 import { showToast, ToastViewport } from './lib/toast';
-import AIAssistantPage from './pages/AIAssistantPage';
 /** Original post embedded in “Repost with your thoughts” */
 type FeedQuotedPost = {
   post_id: string;
@@ -1262,7 +1260,6 @@ function App() {
           <Route path="/analytics/member" element={<RequireAuth><AppShell><MemberAnalyticsPage /></AppShell></RequireAuth>} />
           <Route path="/recruiter" element={<RequireAuth><AppShell><RecruiterDashboard /></AppShell></RequireAuth>} />
           <Route path="/recruiter/admin" element={<RequireAuth><AppShell><RecruiterAdminPage /></AppShell></RequireAuth>} />
-          <Route path="/recruiter/ai" element={<RequireAuth><AppShell><AIAssistantPage /></AppShell></RequireAuth>} />
           <Route path="/messaging" element={<RequireAuth><MessagingPage /></RequireAuth>} />
           <Route path="/messaging/compose" element={<RequireAuth><MessagingPage /></RequireAuth>} />
           <Route path="/messaging/filter/focused" element={<RequireAuth><MessagingPage /></RequireAuth>} />
@@ -1300,7 +1297,6 @@ function App() {
           <Route path="/jobs/tracker" element={<RequireAuth><JobsTrackerShell><JobTrackerPage /></JobsTrackerShell></RequireAuth>} />
           <Route path="/jobs/insights" element={<RequireAuth><AppShell><JobInsightsPage /></AppShell></RequireAuth>} />
           <Route path="/jobs/post" element={<RequireAuth><AppShell><JobPostPage /></AppShell></RequireAuth>} />
-          <Route path="/jobs/apply" element={<RequireAuth><AppShell><JobApplyPage /></AppShell></RequireAuth>} />
           <Route
             path="/company/acme"
             element={<Navigate to={`/company/${encodeURIComponent('Acme Company')}`} replace />}

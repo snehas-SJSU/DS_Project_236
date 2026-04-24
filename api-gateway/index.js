@@ -7,7 +7,6 @@ const path = require('path');
 
 const app = express();
 app.use(cors());
-const AI_SERVICE_PORT = process.env.AI_SERVICE_PORT || 8001;
 
 // Load the Swagger Document
 const swaggerDocument = YAML.load(path.join(__dirname, 'swagger.yaml'));
@@ -65,12 +64,9 @@ app.use(
 );
 
 const aiWsProxy = createProxyMiddleware({
-  target: local(AI_SERVICE_PORT),
+  target: local(8001),
   changeOrigin: true,
-  pathRewrite: (path) => {
-    if (path.startsWith('/api/ai/ws')) return path.replace(/^\/api\/ai\/ws/, '/ws');
-    return '/ws' + (path.startsWith('/') ? path : `/${path}`);
-  },
+  pathRewrite: { '^/api/ai/ws': '/ws' },
   ws: true,
   proxyTimeout: 60_000,
   timeout: 60_000
@@ -79,7 +75,7 @@ app.use('/api/ai/ws', aiWsProxy);
 app.use(
   '/api/ai',
   createProxyMiddleware({
-    target: local(AI_SERVICE_PORT),
+    target: local(8001),
     changeOrigin: true,
     pathRewrite: { '^/api/ai': '/ai' },
     proxyTimeout: 60_000,
