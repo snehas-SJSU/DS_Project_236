@@ -453,7 +453,7 @@ paths:
           application/json:
             schema:
               type: object
-              required: [task_type, job_id, actor_id]
+              required: [task_type, job_id]
               properties:
                 task_type:
                   type: string
@@ -478,6 +478,10 @@ paths:
                     skill: { type: string }
                 actor_id:
                   type: string
+                  description: Recruiter / hiring user id (use this or recruiter_id).
+                recruiter_id:
+                  type: string
+                  description: Alias of actor_id for recruiter workflows; exactly one of actor_id or recruiter_id is required.
                 trace_id:
                   type: string
                 client_request_id:
@@ -514,10 +518,17 @@ paths:
                   items:
                     type: string
                   description: One or more member_ids from the ranked shortlist
+                actor_id:
+                  type: string
+                  description: Optional; if set, must match the task submitter (recruiter actor_id).
+                recruiter_id:
+                  type: string
+                  description: Optional alias of actor_id for auditing.
                 reviewer_id:
                   type: string
             example:
               candidate_ids: [M-101]
+              actor_id: R-5001
               reviewer_id: R-5001
       responses:
         '202':

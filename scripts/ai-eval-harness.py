@@ -114,7 +114,7 @@ def main() -> int:
                 try:
                     gen = post_json(
                         f"{base}/ai/tasks/{task_id}/outreach/generate",
-                        {"candidate_ids": pick, "reviewer_id": args.actor_id},
+                        {"candidate_ids": pick, "actor_id": args.actor_id, "reviewer_id": args.actor_id},
                     )
                     entry["outreach_generate"] = gen
                     final = poll_task(base, task_id, stop_states=("awaiting_approval", "completed", "failed", "rejected"))
@@ -127,9 +127,13 @@ def main() -> int:
             decision = random.choices(["approve", "edit", "reject"], weights=[0.55, 0.25, 0.2], k=1)[0]
             body: Dict[str, Any] = {"decision": decision, "reviewer_id": args.actor_id}
             if decision == "edit":
-                body["edited_text"] = (
-                    (final.get("result") or {}).get("outreach_draft") or "Thanks for connecting — small edit for eval."
-                )
+                res = final.get("result") or {}
+                base_text = res.get("outreach_draft")
+                if not base_text and isinstance(res.get("outreach_drafts"), list) and res["outreach_drafts"]:
+                    d0 = res["outreach_drafts"][0]
+                    if isinstance(d0, dict):
+                        base_text = d0.get("text")
+                body["edited_text"] = base_text or "Thanks for connecting — small edit for eval."
             try:
                 appr = post_json(f"{base}/ai/tasks/{task_id}/approve", body)
                 entry["approval"] = appr

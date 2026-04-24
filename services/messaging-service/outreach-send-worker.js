@@ -116,6 +116,10 @@ async function handleEnvelope(value) {
   const jobId = inner.job_id || '';
   const candidateIds = Array.isArray(inner.candidate_ids) ? inner.candidate_ids.filter(Boolean) : [];
   const outreachText = inner.outreach_text || '';
+  const byCandidate =
+    inner.outreach_by_candidate && typeof inner.outreach_by_candidate === 'object' && !Array.isArray(inner.outreach_by_candidate)
+      ? inner.outreach_by_candidate
+      : null;
 
   if (!actorId || !candidateIds.length) {
     console.warn(JSON.stringify({ level: 'warn', msg: 'skip_missing_fields', actor_id: actorId, candidateIds }));
@@ -124,7 +128,11 @@ async function handleEnvelope(value) {
 
   for (const candidateId of candidateIds) {
     try {
-      await deliverOutreach(actorId, candidateId, outreachText, jobId, traceId);
+      const text =
+        byCandidate && Object.prototype.hasOwnProperty.call(byCandidate, candidateId)
+          ? byCandidate[candidateId] || ''
+          : outreachText;
+      await deliverOutreach(actorId, candidateId, text, jobId, traceId);
     } catch (e) {
       console.error(
         JSON.stringify({

@@ -21,7 +21,9 @@
   1. Resume parse
   2. Match score
   3. Shortlist generation (top **k** from `AI_SHORTLIST_TOP_K`, default **5**)
-- After ranking, the task moves to **`shortlist_ready`**. The recruiter selects one or more ranked members, then calls **`POST /api/ai/tasks/{task_id}/outreach/generate`** to draft outreach only for those IDs. The task then enters **`awaiting_approval`** as before.
+- After ranking, the task moves to **`shortlist_ready`**. The recruiter selects one or more ranked members, then calls **`POST /api/ai/tasks/{task_id}/outreach/generate`** to draft outreach **per selected member**. The task then enters **`awaiting_approval`**.
+- **`result.outreach_drafts`** is the canonical list: `[{ "member_id", "text" }, ...]`. **`result.outreach_draft`** is set only when exactly one candidate was selected (backward compatibility).
+- On **approve**, the service briefly enters **`approved`**, publishes **`ai.approved`**, emits **`ai.send.requested`** with **`outreach_by_candidate`** (member_id → text) for the outreach worker, then **`completed`** with **`ai.completed`**.
 - **Reject** from the approval UI sets terminal state **`rejected`** (Kafka `ai.rejected`), not `failed`.
 - Pipeline is Kafka-connected using:
   - `ai.requests` (task intake)
@@ -107,7 +109,7 @@
 ```
 
 Important:
-- `actor_id` is required.
+- Submit requires **`actor_id` or `recruiter_id`** (same value; both may not disagree).
 - Supported `task_type` currently: `candidate_shortlist`.
 - Env overrides for sourcing URLs: `AI_APPLICATIONS_BY_JOB_URL`, `AI_MEMBERS_SEARCH_URL`, `AI_MEMBERS_SEARCH_MAX` (see `services/ai-service/.env.example`).
 
@@ -117,9 +119,12 @@ Important:
 ```json
 {
   "candidate_ids": ["M-101"],
+  "actor_id": "R-101",
   "reviewer_id": "R-101"
 }
 ```
+
+Optional **`actor_id` / `recruiter_id`**: if provided, must match the task’s submitter (`actor_id`) or the API returns **403**.
 
 ### Approve/Edit/Reject task
 `POST /api/ai/tasks/{task_id}/approve`
@@ -140,6 +145,8 @@ Edit:
   "edited_text": "Updated outreach text..."
 }
 ```
+
+When **`outreach_drafts`** has multiple entries, the same **`edited_text`** is applied to **every** draft (single review box); adjust later if you need per-candidate edits.
 
 Reject:
 ```json
@@ -162,9 +169,9 @@ Reject:
 ## Task State + UI Behavior
 
 Expected lifecycle:
-- `queued` → `processing` → **`shortlist_ready`** → (recruiter picks IDs) → **`awaiting_approval`** → `completed`
+- `queued` → `processing` → **`shortlist_ready`** → (recruiter picks IDs) → **`awaiting_approval`** → **`approved`** (brief) → **`completed`**
 - Recruiter reject (approval decision): terminal **`rejected`**
-- Unrecoverable pipeline errors: `failed`
+- Unrecoverable pipeline errors: **`failed`** only for real system/step failures
 
 Frontend integration flow:
 1. Submit task (`job_id` + `actor_id`; empty `candidate_ids` uses job applicants by default)
@@ -178,7 +185,8 @@ Fields to render from task response:
 - `state`
 - `steps[]`
 - `result.shortlist`
-- `result.outreach_draft`
+- `result.outreach_drafts` (per-candidate messages)
+- `result.outreach_draft` (single-candidate shortcut; may be null when multiple)
 - `approval` block after decision
 
 Metrics to render:
