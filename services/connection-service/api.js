@@ -118,12 +118,29 @@ app.post('/connections/accept', async (req, res) => {
 
 app.post('/connections/reject', async (req, res) => {
   try {
+    await ensureSchema();
     const { request_id } = req.body;
     if (!request_id) {
       return res.status(400).json({ error: 'BAD_REQUEST', message: 'request_id required', trace_id: crypto.randomUUID() });
     }
+    const [rows] = await db.query('SELECT * FROM connection_requests WHERE request_id = ?', [request_id]);
+    if (!rows.length) {
+      return res.status(404).json({ error: 'NOT_FOUND', message: 'Request not found', trace_id: crypto.randomUUID() });
+    }
+    const { requester_id, receiver_id } = rows[0];
     await db.query('UPDATE connection_requests SET status = ? WHERE request_id = ?', ['rejected', request_id]);
-    res.status(200).json({ message: 'Rejected', request_id });
+
+    const traceId = crypto.randomUUID();
+    await producer.connect();
+    await producer.send({
+      topic: 'connection.events',
+      messages: [{
+        key: request_id,
+        value: JSON.stringify(envelope('connection.rejected', traceId, receiver_id, request_id, { requester_id, receiver_id }, crypto.randomUUID()))
+      }]
+    });
+
+    res.status(200).json({ message: 'Rejected', request_id, trace_id: traceId });
   } catch (err) {
     res.status(500).json({ error: 'INTERNAL_ERROR', message: err.message, trace_id: crypto.randomUUID() });
   }

@@ -10,6 +10,7 @@
     "dev:member-api": "cd services/member-service && node api.js",
     "dev:member-worker": "cd services/member-service && node worker.js",
     "dev:connection-api": "cd services/connection-service && node api.js",
+    "dev:connection-worker": "cd services/connection-service && npm run start:worker",
     "dev:job-api": "cd services/job-service && npm run start:api",
     "dev:job-worker": "cd services/job-service && npm run start:worker",
     "dev:app-api": "cd services/application-service && npm run start:api",
@@ -20,6 +21,6 @@
     "dev:analytics-worker": "cd services/analytics-service && npm run start:worker",
     "dev:post-api": "cd services/post-service && node api.js",
     "test:smoke": "bash scripts/smoke-test.sh",
-    "start:all": "npx concurrently \"npm run dev:gateway\" \"npm run dev:member-api\" \"npm run dev:member-worker\" \"npm run dev:connection-api\" \"npm run dev:job-api\" \"npm run dev:job-worker\" \"npm run dev:app-api\" \"npm run dev:app-worker\" \"npm run dev:msg-api\" \"npm run dev:msg-worker\" \"npm run dev:analytics-api\" \"npm run dev:analytics-worker\" \"npm run dev:post-api\""
+    "start:all": "npx concurrently \"npm run dev:gateway\" \"npm run dev:member-api\" \"npm run dev:member-worker\" \"npm run dev:connection-api\" \"npm run dev:connection-worker\" \"npm run dev:job-api\" \"npm run dev:job-worker\" \"npm run dev:app-api\" \"npm run dev:app-worker\" \"npm run dev:msg-api\" \"npm run dev:msg-worker\" \"npm run dev:analytics-api\" \"npm run dev:analytics-worker\" \"npm run dev:post-api\""
   }
 }
