@@ -464,11 +464,11 @@ paths:
                   type: array
                   items:
                     type: string
-                  description: Required when candidate_source is explicit (default). Ignored for job_applicants / members_search.
+                  description: If non-empty, candidates are explicit. If empty, use candidate_source (default job_applicants).
                 candidate_source:
                   type: string
                   enum: [explicit, job_applicants, members_search]
-                  default: explicit
+                  default: job_applicants
                 member_search:
                   type: object
                   description: Required filters when candidate_source is members_search (at least one field).
@@ -485,8 +485,40 @@ paths:
             example:
               task_type: candidate_shortlist
               job_id: J-LIVE-1
-              candidate_ids: [M-101, M-202, M-303]
+              candidate_ids: []
               actor_id: R-5001
+              candidate_source: job_applicants
+      responses:
+        '202':
+          description: Accepted
+  /ai/tasks/{task_id}/outreach/generate:
+    post:
+      tags: [Agentic AI Service]
+      summary: Generate outreach draft for selected shortlist members (after shortlist_ready)
+      parameters:
+        - name: task_id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [candidate_ids]
+              properties:
+                candidate_ids:
+                  type: array
+                  items:
+                    type: string
+                  description: One or more member_ids from the ranked shortlist
+                reviewer_id:
+                  type: string
+            example:
+              candidate_ids: [M-101]
+              reviewer_id: R-5001
       responses:
         '202':
           description: Accepted

@@ -17,11 +17,12 @@
   - websocket progress updates
   - metrics summary
 - **Candidate sourcing on submit:** `candidate_source` can be `explicit` (caller-supplied IDs), `job_applicants` (load `member_id`s from applications for `job_id`), or `members_search` (load IDs from member search filters). Then the same parse → match → shortlist pipeline ranks that set.
-- Multi-step supervisor pipeline implemented:
+- Multi-step supervisor pipeline (ranking):
   1. Resume parse
   2. Match score
-  3. Shortlist generation
-  4. Outreach draft generation
+  3. Shortlist generation (top **k** from `AI_SHORTLIST_TOP_K`, default **5**)
+- After ranking, the task moves to **`shortlist_ready`**. The recruiter selects one or more ranked members, then calls **`POST /api/ai/tasks/{task_id}/outreach/generate`** to draft outreach only for those IDs. The task then enters **`awaiting_approval`** as before.
+- **Reject** from the approval UI sets terminal state **`rejected`** (Kafka `ai.rejected`), not `failed`.
 - Pipeline is Kafka-connected using:
   - `ai.requests` (task intake)
   - `ai.results` (progress/final outputs)
@@ -71,7 +72,7 @@
 ### Submit AI task
 `POST /api/ai/tasks/submit`
 
-**A) Explicit candidate list (default)** — you already know `member_id`s:
+**A) Explicit candidate list** — you already know `member_id`s (any non-empty `candidate_ids` is treated as explicit, regardless of `candidate_source`):
 ```json
 {
   "task_type": "candidate_shortlist",
@@ -82,9 +83,7 @@
   "trace_id": "demo-run-001"
 }
 ```
-(`candidate_source` may be omitted; it defaults to `explicit`.)
-
-**B) Applicants for that job** — AI resolves candidates from Application Service (`POST /applications/byJob` via gateway):
+**B) Applicants for that job (default when `candidate_ids` is empty)** — AI resolves candidates from Application Service (`POST /applications/byJob` via gateway). Omit `candidate_source` or set `job_applicants`:
 ```json
 {
   "task_type": "candidate_shortlist",
@@ -95,7 +94,7 @@
 }
 ```
 
-**C) Member directory search** — AI resolves up to `AI_MEMBERS_SEARCH_MAX` members from `POST /members/search` (requires at least one filter):
+**C) Member directory search** — AI resolves up to `AI_MEMBERS_SEARCH_MAX` members from `POST /members/search` (requires at least one filter). Use only when `candidate_ids` is empty and `candidate_source` is `members_search`:
 ```json
 {
   "task_type": "candidate_shortlist",
@@ -111,6 +110,16 @@ Important:
 - `actor_id` is required.
 - Supported `task_type` currently: `candidate_shortlist`.
 - Env overrides for sourcing URLs: `AI_APPLICATIONS_BY_JOB_URL`, `AI_MEMBERS_SEARCH_URL`, `AI_MEMBERS_SEARCH_MAX` (see `services/ai-service/.env.example`).
+
+### Generate outreach (after shortlist_ready)
+`POST /api/ai/tasks/{task_id}/outreach/generate`
+
+```json
+{
+  "candidate_ids": ["M-101"],
+  "reviewer_id": "R-101"
+}
+```
 
 ### Approve/Edit/Reject task
 `POST /api/ai/tasks/{task_id}/approve`
@@ -153,15 +162,17 @@ Reject:
 ## Task State + UI Behavior
 
 Expected lifecycle:
-- `queued` -> `processing` -> `awaiting_approval` -> `completed`
-- Failure path: `failed`
+- `queued` → `processing` → **`shortlist_ready`** → (recruiter picks IDs) → **`awaiting_approval`** → `completed`
+- Recruiter reject (approval decision): terminal **`rejected`**
+- Unrecoverable pipeline errors: `failed`
 
 Frontend integration flow:
-1. Submit task
+1. Submit task (`job_id` + `actor_id`; empty `candidate_ids` uses job applicants by default)
 2. Poll task state (or subscribe to WS)
-3. On `awaiting_approval`, show review action UI
-4. Send decision (`approve` / `edit` / `reject`)
-5. Refresh task and metrics
+3. On **`shortlist_ready`**, show ranked shortlist; recruiter selects one or more `member_id`s, then **`POST .../outreach/generate`**
+4. On `awaiting_approval`, show review action UI for the drafted outreach
+5. Send decision (`approve` / `edit` / `reject`)
+6. Refresh task and metrics
 
 Fields to render from task response:
 - `state`
