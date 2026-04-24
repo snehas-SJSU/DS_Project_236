@@ -6,6 +6,7 @@
     "bootstrap": "npm install --prefix shared && npm install --prefix api-gateway && npm install --prefix frontend && npm install --prefix services/member-service && npm install --prefix services/job-service && npm install --prefix services/application-service && npm install --prefix services/messaging-service && npm install --prefix services/analytics-service && npm install --prefix services/connection-service && npm install --prefix services/post-service",
     "seed:member": "node services/member-service/seed.js",
     "seed:connections": "node scripts/seed-demo-connections.js",
+    "seed:ai-applicants": "node scripts/seed-ai-applicants.js",
     "dev:gateway": "cd api-gateway && npm run start",
     "dev:member-api": "cd services/member-service && node api.js",
     "dev:member-worker": "cd services/member-service && node worker.js",
