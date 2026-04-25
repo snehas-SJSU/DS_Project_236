@@ -182,32 +182,38 @@ app.post('/jobs/search', async (req, res) => {
   try {
     await ensureJobsSchema();
     const { keyword, location, type, industry, remote, company } = req.body;
+    const normalizedKeyword = String(keyword || '').trim().toLowerCase();
+    const normalizedType = String(type || '').trim();
+    const normalizedLocation = String(location || '').trim();
+    const normalizedIndustry = String(industry || '').trim();
+    const normalizedRemote = String(remote || '').trim();
+    const normalizedCompany = String(company || '').trim();
     let sql = "SELECT * FROM jobs WHERE status = 'open'";
     const params = [];
-    if (company) {
+    if (normalizedCompany) {
       sql += ' AND company = ?';
-      params.push(String(company).trim());
+      params.push(normalizedCompany);
     }
-    if (keyword) {
-      sql += ' AND (title LIKE ? OR description LIKE ? OR company LIKE ?)';
-      const k = `%${keyword}%`;
-      params.push(k, k, k);
+    if (normalizedKeyword) {
+      sql += ' AND (LOWER(title) LIKE ? OR LOWER(description) LIKE ? OR LOWER(company) LIKE ? OR LOWER(location) LIKE ? OR LOWER(CAST(skills AS CHAR)) LIKE ?)';
+      const k = `%${normalizedKeyword}%`;
+      params.push(k, k, k, k, k);
     }
-    if (location) {
+    if (normalizedLocation) {
       sql += ' AND location LIKE ?';
-      params.push(`%${location}%`);
+      params.push(`%${normalizedLocation}%`);
     }
-    if (type) {
+    if (normalizedType) {
       sql += ' AND (type = ? OR employment_type = ?)';
-      params.push(type, type);
+      params.push(normalizedType, normalizedType);
     }
-    if (industry) {
+    if (normalizedIndustry) {
       sql += ' AND industry LIKE ?';
-      params.push(`%${industry}%`);
+      params.push(`%${normalizedIndustry}%`);
     }
-    if (remote) {
+    if (normalizedRemote) {
       sql += ' AND remote_mode = ?';
-      params.push(remote);
+      params.push(normalizedRemote);
     }
     sql += ' ORDER BY created_at DESC LIMIT 50';
     const [rows] = await db.query(sql, params);
@@ -236,6 +242,42 @@ app.post('/jobs/search', async (req, res) => {
   } catch (err) {
     console.error('Search error:', err.message);
     res.status(200).json([]);
+  }
+});
+
+app.post('/jobs/suggest', async (req, res) => {
+  try {
+    await ensureJobsSchema();
+    const rawKeyword = String(req.body?.keyword || '').trim().toLowerCase();
+    if (!rawKeyword || rawKeyword.length < 2) return res.status(200).json([]);
+    const limit = Math.min(Math.max(Number(req.body?.limit) || 8, 1), 20);
+    const like = `%${rawKeyword}%`;
+    const [rows] = await db.query(
+      `SELECT title, company, location
+       FROM jobs
+       WHERE status = 'open'
+         AND (LOWER(title) LIKE ? OR LOWER(company) LIKE ? OR LOWER(location) LIKE ? OR LOWER(CAST(skills AS CHAR)) LIKE ?)
+       ORDER BY created_at DESC
+       LIMIT 100`,
+      [like, like, like, like]
+    );
+    const out = [];
+    const seen = new Set();
+    for (const row of rows) {
+      const values = [row?.title, row?.company, row?.location];
+      for (const value of values) {
+        const text = String(value || '').trim();
+        const key = text.toLowerCase();
+        if (!text || seen.has(key)) continue;
+        seen.add(key);
+        out.push({ value: text, label: text });
+        if (out.length >= limit) return res.status(200).json(out);
+      }
+    }
+    return res.status(200).json(out);
+  } catch (err) {
+    console.error('Suggest error:', err.message);
+    return res.status(200).json([]);
   }
 });
 

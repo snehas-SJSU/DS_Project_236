@@ -1063,20 +1063,23 @@ app.post('/members/delete', async (req, res) => {
 app.post('/members/search', async (req, res) => {
   try {
     const { keyword, location, skill } = req.body;
+    const normalizedKeyword = String(keyword || '').trim().toLowerCase();
+    const normalizedLocation = String(location || '').trim().toLowerCase();
+    const normalizedSkill = String(skill || '').trim().toLowerCase();
     let sql = 'SELECT * FROM members WHERE status != ?';
     const params = ['deleted'];
-    if (keyword) {
-      sql += ' AND (name LIKE ? OR about LIKE ? OR title LIKE ?)';
-      const kw = `%${keyword}%`;
-      params.push(kw, kw, kw);
+    if (normalizedKeyword) {
+      sql += ' AND (LOWER(name) LIKE ? OR LOWER(about) LIKE ? OR LOWER(title) LIKE ? OR LOWER(headline) LIKE ?)';
+      const kw = `%${normalizedKeyword}%`;
+      params.push(kw, kw, kw, kw);
     }
-    if (location) {
-      sql += ' AND location LIKE ?';
-      params.push(`%${location}%`);
+    if (normalizedLocation) {
+      sql += ' AND LOWER(location) LIKE ?';
+      params.push(`%${normalizedLocation}%`);
     }
-    if (skill) {
-      sql += ' AND CAST(skills AS CHAR) LIKE ?';
-      params.push(`%${skill}%`);
+    if (normalizedSkill) {
+      sql += ' AND LOWER(CAST(skills AS CHAR)) LIKE ?';
+      params.push(`%${normalizedSkill}%`);
     }
     sql += ' LIMIT 50';
     const [rows] = await db.query(sql, params);
@@ -1086,6 +1089,51 @@ app.post('/members/search', async (req, res) => {
       skills: typeof m.skills === 'string' ? JSON.parse(m.skills || '[]') : m.skills
     }));
     res.status(200).json(formatted);
+  } catch (err) {
+    console.error(err);
+    res.status(200).json([]);
+  }
+});
+
+app.post('/members/suggest', async (req, res) => {
+  try {
+    const keyword = String(req.body?.keyword || '').trim().toLowerCase();
+    const skill = String(req.body?.skill || '').trim().toLowerCase();
+    const location = String(req.body?.location || '').trim().toLowerCase();
+    const limit = Math.min(Math.max(Number(req.body?.limit) || 8, 1), 20);
+    if (!keyword && !skill && !location) return res.status(200).json([]);
+
+    let sql = `
+      SELECT member_id, name, headline, title, location
+      FROM members
+      WHERE status != ?
+    `;
+    const params = ['deleted'];
+    if (keyword) {
+      sql += ' AND (LOWER(name) LIKE ? OR LOWER(headline) LIKE ? OR LOWER(title) LIKE ?)';
+      const kw = `%${keyword}%`;
+      params.push(kw, kw, kw);
+    }
+    if (location) {
+      sql += ' AND LOWER(location) LIKE ?';
+      params.push(`%${location}%`);
+    }
+    if (skill) {
+      sql += ' AND LOWER(CAST(skills AS CHAR)) LIKE ?';
+      params.push(`%${skill}%`);
+    }
+    sql += ' ORDER BY created_at DESC LIMIT ?';
+    params.push(limit);
+    const [rows] = await db.query(sql, params);
+    res.status(200).json(
+      rows.map((row) => ({
+        type: 'member',
+        member_id: row.member_id,
+        value: row.name || row.member_id,
+        label: row.name || row.member_id,
+        subtitle: row.headline || row.title || row.location || 'Member'
+      }))
+    );
   } catch (err) {
     console.error(err);
     res.status(200).json([]);
