@@ -33,6 +33,10 @@ export default function JobsSearchPage() {
   const [underTenApplicantsOnly, setUnderTenApplicantsOnly] = useState(false);
   const [networkOnly, setNetworkOnly] = useState(false);
   const [networkCompanies, setNetworkCompanies] = useState<string[]>([]);
+  const [searchKeywordInput, setSearchKeywordInput] = useState('');
+  const [searchLocationInput, setSearchLocationInput] = useState('');
+  const [keywordSuggestions, setKeywordSuggestions] = useState<Array<{ value: string; label: string }>>([]);
+  const [showKeywordSuggestions, setShowKeywordSuggestions] = useState(false);
 
   const keyword = useMemo(() => {
     const q = new URLSearchParams(location.search);
@@ -48,20 +52,102 @@ export default function JobsSearchPage() {
     const q = new URLSearchParams(location.search);
     return q.get('jobId') || '';
   }, [location.search]);
+  const typeParam = useMemo(() => {
+    const q = new URLSearchParams(location.search);
+    return q.get('type') || '';
+  }, [location.search]);
+  const industryParam = useMemo(() => {
+    const q = new URLSearchParams(location.search);
+    return q.get('industry') || '';
+  }, [location.search]);
+  const remoteParam = useMemo(() => {
+    const q = new URLSearchParams(location.search);
+    return q.get('remote') || '';
+  }, [location.search]);
+  const [searchTypeInput, setSearchTypeInput] = useState('');
+  const [searchIndustryInput, setSearchIndustryInput] = useState('');
+  const [searchRemoteInput, setSearchRemoteInput] = useState('');
+
+  useEffect(() => {
+    setSearchKeywordInput(keyword);
+  }, [keyword]);
+
+  useEffect(() => {
+    setSearchLocationInput(locationParam);
+  }, [locationParam]);
+  useEffect(() => {
+    setSearchTypeInput(typeParam);
+  }, [typeParam]);
+  useEffect(() => {
+    setSearchIndustryInput(industryParam);
+  }, [industryParam]);
+  useEffect(() => {
+    setSearchRemoteInput(remoteParam);
+  }, [remoteParam]);
+
+  useEffect(() => {
+    const q = searchKeywordInput.trim();
+    if (q.length < 2) {
+      setKeywordSuggestions([]);
+      return;
+    }
+    let cancelled = false;
+    const timer = window.setTimeout(() => {
+      fetch('/api/jobs/suggest', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ keyword: q, limit: 8 })
+      })
+        .then((res) => res.json())
+        .then((data) => {
+          if (cancelled) return;
+          setKeywordSuggestions(Array.isArray(data) ? data : []);
+        })
+        .catch(() => {
+          if (cancelled) return;
+          setKeywordSuggestions([]);
+        });
+    }, 180);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, [searchKeywordInput]);
 
   useEffect(() => {
     setLoading(true);
+    const basePayload = {
+      keyword: keyword || undefined,
+      location: locationParam || undefined,
+      type: typeParam || undefined,
+      industry: industryParam || undefined,
+      remote: remoteParam || undefined
+    };
     fetch('/api/jobs/search', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        keyword: keyword || undefined,
-        location: locationParam || undefined
-      })
+      body: JSON.stringify(basePayload)
     })
       .then((res) => res.json())
-      .then((data) => {
-        const rows = normalizeJobListRows(Array.isArray(data) ? data : []);
+      .then(async (data) => {
+        let rows = normalizeJobListRows(Array.isArray(data) ? data : []);
+        const shouldRetryAsLocation =
+          !rows.length &&
+          !locationParam.trim() &&
+          Boolean(keyword.trim());
+        if (shouldRetryAsLocation) {
+          const retryRes = await fetch('/api/jobs/search', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              ...basePayload,
+              keyword: undefined,
+              location: keyword.trim()
+            })
+          });
+          const retryData = await retryRes.json().catch(() => []);
+          rows = normalizeJobListRows(Array.isArray(retryData) ? retryData : []);
+        }
         setJobs(rows);
         if (rows.length) {
           const selected = selectedJobId ? rows.find((j) => j.id === selectedJobId) : null;
@@ -75,7 +161,7 @@ export default function JobsSearchPage() {
         setJobs([]);
         setLoading(false);
       });
-  }, [keyword, locationParam, selectedJobId]);
+  }, [keyword, locationParam, selectedJobId, typeParam, industryParam, remoteParam]);
 
   useEffect(() => {
     fetch('/api/connections/list', {
@@ -341,6 +427,17 @@ export default function JobsSearchPage() {
     }
   };
 
+  const submitSearch = () => {
+    const q = new URLSearchParams();
+    if (searchKeywordInput.trim()) q.set('keywords', searchKeywordInput.trim());
+    if (searchLocationInput.trim()) q.set('location', searchLocationInput.trim());
+    if (searchTypeInput.trim()) q.set('type', searchTypeInput.trim());
+    if (searchIndustryInput.trim()) q.set('industry', searchIndustryInput.trim());
+    if (searchRemoteInput.trim()) q.set('remote', searchRemoteInput.trim());
+    const next = q.toString() ? `/jobs/search-results?${q.toString()}` : '/jobs/search-results';
+    navigate(next);
+  };
+
   return (
     <div className="min-h-screen bg-white">
       <Navbar />
@@ -361,6 +458,90 @@ export default function JobsSearchPage() {
             </button>
           ))}
           <Link to="/jobs" className="ml-auto text-sm font-semibold text-[#0a66c2] hover:underline">Jobs home</Link>
+        </div>
+        <div className="mx-auto flex max-w-[1128px] flex-wrap items-start gap-2 px-3 pb-3">
+          <div className="relative min-w-[260px] flex-1">
+            <input
+              value={searchKeywordInput}
+              onChange={(e) => {
+                setSearchKeywordInput(e.target.value);
+                setShowKeywordSuggestions(true);
+              }}
+              onFocus={() => setShowKeywordSuggestions(true)}
+              onBlur={() => window.setTimeout(() => setShowKeywordSuggestions(false), 120)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') submitSearch();
+              }}
+              placeholder="Search by title, skill, company"
+              className="w-full rounded-md border border-[#d0d7de] px-3 py-2 text-sm"
+            />
+            {showKeywordSuggestions && searchKeywordInput.trim().length >= 2 ? (
+              <div className="absolute left-0 right-0 top-10 z-20 rounded-md border border-[#e0dfdc] bg-white py-1 shadow-lg">
+                {keywordSuggestions.length ? (
+                  keywordSuggestions.map((item) => (
+                    <button
+                      key={item.value}
+                      type="button"
+                      onMouseDown={(e) => {
+                        e.preventDefault();
+                        setSearchKeywordInput(item.value);
+                        setShowKeywordSuggestions(false);
+                        navigate(`/jobs/search-results?keywords=${encodeURIComponent(item.value)}`);
+                      }}
+                      className="block w-full px-3 py-2 text-left text-sm hover:bg-[#f3f2ef]"
+                    >
+                      {item.label}
+                    </button>
+                  ))
+                ) : (
+                  <p className="px-3 py-2 text-sm text-[#64748b]">No results found</p>
+                )}
+              </div>
+            ) : null}
+          </div>
+          <input
+            value={searchLocationInput}
+            onChange={(e) => setSearchLocationInput(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') submitSearch();
+            }}
+            placeholder="Location"
+            className="min-w-[220px] flex-1 rounded-md border border-[#d0d7de] px-3 py-2 text-sm"
+          />
+          <select
+            value={searchTypeInput}
+            onChange={(e) => setSearchTypeInput(e.target.value)}
+            className="min-w-[160px] rounded-md border border-[#d0d7de] px-3 py-2 text-sm"
+          >
+            <option value="">Type</option>
+            <option value="Full-time">Full-time</option>
+            <option value="Part-time">Part-time</option>
+            <option value="Contract">Contract</option>
+            <option value="Internship">Internship</option>
+          </select>
+          <input
+            value={searchIndustryInput}
+            onChange={(e) => setSearchIndustryInput(e.target.value)}
+            placeholder="Industry"
+            className="min-w-[160px] rounded-md border border-[#d0d7de] px-3 py-2 text-sm"
+          />
+          <select
+            value={searchRemoteInput}
+            onChange={(e) => setSearchRemoteInput(e.target.value)}
+            className="min-w-[140px] rounded-md border border-[#d0d7de] px-3 py-2 text-sm"
+          >
+            <option value="">Remote</option>
+            <option value="remote">Remote</option>
+            <option value="hybrid">Hybrid</option>
+            <option value="onsite">On-site</option>
+          </select>
+          <button
+            type="button"
+            onClick={submitSearch}
+            className="rounded-md bg-[#0a66c2] px-4 py-2 text-sm font-semibold text-white hover:bg-[#004182]"
+          >
+            Search
+          </button>
         </div>
       </div>
       <div className="mx-auto grid max-w-[1128px] grid-cols-1 gap-0 px-3 py-3 lg:grid-cols-12">

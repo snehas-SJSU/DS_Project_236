@@ -12,6 +12,9 @@ export default function ApplicationsPage() {
   const [searchParams] = useSearchParams();
   const [memberApps, setMemberApps] = useState<any[]>([]);
   const [jobId, setJobId] = useState('');
+  const [jobKeyword, setJobKeyword] = useState('');
+  const [jobSuggestions, setJobSuggestions] = useState<Array<{ id: string; title: string; company: string }>>([]);
+  const [applicantKeyword, setApplicantKeyword] = useState('');
   const [jobApps, setJobApps] = useState<any[]>([]);
 
   async function loadMemberApps() {
@@ -34,6 +37,42 @@ export default function ApplicationsPage() {
       setJobId(fromUrl);
     }
   }, [searchParams]);
+
+  useEffect(() => {
+    const k = jobKeyword.trim();
+    if (k.length < 2) {
+      setJobSuggestions([]);
+      return;
+    }
+    const t = window.setTimeout(() => {
+      fetch('/api/jobs/search', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ keyword: k })
+      })
+        .then((res) => res.json())
+        .then((data) => {
+          const rows = (Array.isArray(data) ? data : []).slice(0, 8).map((j: any) => ({
+            id: String(j.job_id || j.id || ''),
+            title: String(j.title || ''),
+            company: String(j.company || '')
+          }));
+          setJobSuggestions(rows.filter((r) => r.id));
+        })
+        .catch(() => setJobSuggestions([]));
+    }, 180);
+    return () => window.clearTimeout(t);
+  }, [jobKeyword]);
+
+  const filteredJobApps = jobApps.filter((app) => {
+    const kw = applicantKeyword.trim().toLowerCase();
+    if (!kw) return true;
+    return (
+      String(app.member_id || '').toLowerCase().includes(kw) ||
+      String(app.status || '').toLowerCase().includes(kw) ||
+      String(app.resume_text || '').toLowerCase().includes(kw)
+    );
+  });
 
   return (
     <div className="space-y-3">
@@ -67,10 +106,37 @@ export default function ApplicationsPage() {
       <section className="li-card p-5">
         <h2 className="li-section-title">Recruiter review panel</h2>
         <div className="mt-3 flex gap-2">
+          <div className="relative flex-1">
+            <input
+              value={jobKeyword}
+              onChange={(e) => setJobKeyword(e.target.value)}
+              placeholder="Search jobs by keyword"
+              className="w-full rounded-md border border-[#d0d7de] px-3 py-2 text-sm"
+            />
+            {jobSuggestions.length ? (
+              <div className="absolute left-0 right-0 top-10 z-20 rounded-md border border-[#e0dfdc] bg-white py-1 shadow-lg">
+                {jobSuggestions.map((job) => (
+                  <button
+                    key={job.id}
+                    type="button"
+                    onClick={() => {
+                      setJobId(job.id);
+                      setJobKeyword(`${job.title} · ${job.company}`);
+                      setJobSuggestions([]);
+                    }}
+                    className="block w-full px-3 py-2 text-left hover:bg-[#f3f2ef]"
+                  >
+                    <p className="text-sm text-[#191919]">{job.title}</p>
+                    <p className="text-xs text-[#666]">{job.company}</p>
+                  </button>
+                ))}
+              </div>
+            ) : null}
+          </div>
           <input
             value={jobId}
             onChange={(e) => setJobId(e.target.value)}
-            placeholder="Enter job_id (e.g., J-xxxx)"
+            placeholder="Job ID (e.g., J-xxxx)"
             className="flex-1 rounded-md border border-[#d0d7de] px-3 py-2 text-sm"
           />
           <button
@@ -97,9 +163,17 @@ export default function ApplicationsPage() {
         <p className="mt-3 text-xs text-slate-500">
           AI ranking/outreach now starts from the Job Details page so job context is preloaded.
         </p>
+        <div className="mt-3">
+          <input
+            value={applicantKeyword}
+            onChange={(e) => setApplicantKeyword(e.target.value)}
+            placeholder="Filter applicants by member id, status, resume keyword"
+            className="w-full rounded-md border border-[#d0d7de] px-3 py-2 text-sm"
+          />
+        </div>
 
         <div className="mt-3 space-y-2">
-          {jobApps.map((app) => (
+          {filteredJobApps.map((app) => (
             <div key={app.app_id} className="rounded-md border border-[#e0dfdc] p-3">
               <p className="text-sm font-medium text-slate-900">
                 <Link to="/profile" className="text-[#0a66c2] hover:underline">{app.member_id}</Link> - {normalizeStatus(app.status)}

@@ -1,5 +1,5 @@
 import { FormEvent, useEffect, useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import Navbar from '../components/layout/Navbar';
 import { MEMBER_ID, resolveAvatarUrl } from '../lib/memberProfile';
 import { addActivity } from '../lib/localData';
@@ -14,6 +14,7 @@ type MemberResult = {
 };
 
 export default function MemberSearchPage() {
+  const [searchParams] = useSearchParams();
   const memberId = MEMBER_ID;
   const [keyword, setKeyword] = useState('');
   const [location, setLocation] = useState('');
@@ -81,6 +82,41 @@ export default function MemberSearchPage() {
     }, 4000);
     return () => window.clearInterval(timer);
   }, []);
+
+  useEffect(() => {
+    const qpKeyword = searchParams.get('keyword') || '';
+    const qpLocation = searchParams.get('location') || '';
+    const qpSkill = searchParams.get('skill') || '';
+    setKeyword(qpKeyword);
+    setLocation(qpLocation);
+    setSkill(qpSkill);
+    const hasAny = qpKeyword || qpLocation || qpSkill;
+    if (hasAny) {
+      fetch('/api/members/search', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          keyword: qpKeyword.trim(),
+          location: qpLocation.trim(),
+          skill: qpSkill.trim()
+        })
+      })
+        .then((res) => res.json())
+        .then((data) => {
+          const normalized = (Array.isArray(data) ? data : [])
+            .filter((m: any) => m.member_id && m.member_id !== memberId)
+            .map((m: any) => ({
+              id: m.member_id,
+              name: m.name || `${m.first_name || ''} ${m.last_name || ''}`.trim() || m.member_id,
+              headline: m.headline || m.title || 'LinkedIn member',
+              location: m.location || [m.city, m.state, m.country].filter(Boolean).join(', '),
+              photo: resolveAvatarUrl(m.profile_photo_url, m.name || m.member_id)
+            }));
+          setResults(normalized);
+        })
+        .catch(() => undefined);
+    }
+  }, [searchParams]);
 
   const buttonStateFor = useMemo(
     () => (targetId: string): 'connected' | 'pending' | 'incoming' | 'connect' => {
