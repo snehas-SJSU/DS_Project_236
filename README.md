@@ -281,17 +281,19 @@ Health:
 curl -sS http://127.0.0.1:4000/api/ai/health
 ```
 
-Submit task (`POST /api/ai/tasks/submit`):
+Submit task (`POST /api/ai/tasks/submit`) — job-first (empty `candidate_ids` loads applicants):
 
 ```json
 {
   "task_type": "candidate_shortlist",
   "job_id": "J-LIVE-1",
-  "candidate_ids": ["M-102", "M-103"],
+  "candidate_ids": [],
   "actor_id": "R-101",
   "trace_id": "demo-run-001"
 }
 ```
+
+(`recruiter_id` is accepted as an alias of `actor_id`.) After **`shortlist_ready`**, call **`POST /api/ai/tasks/{task_id}/outreach/generate`** with selected `candidate_ids`, then approve. Per-candidate drafts are in **`result.outreach_drafts`**.
 
 Approve task (`POST /api/ai/tasks/{task_id}/approve`):
 
@@ -309,8 +311,9 @@ Check:
 
 Notes:
 
-1. `actor_id` is required in submit body.
+1. Submit requires **`actor_id` or `recruiter_id`** (recruiter identity).
 2. Supported `task_type`: `candidate_shortlist`.
+3. Outreach send uses Kafka field **`outreach_by_candidate`** (see `outreach-send-worker.js`).
 
 ### 2.9.1 AI Workflow (clean)
 
