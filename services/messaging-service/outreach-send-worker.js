@@ -119,10 +119,6 @@ async function handleEnvelope(value) {
     : [];
   const candidateIds = Array.isArray(inner.candidate_ids) ? inner.candidate_ids.filter(Boolean) : [];
   const outreachText = inner.outreach_text || '';
-  const byCandidate =
-    inner.outreach_by_candidate && typeof inner.outreach_by_candidate === 'object' && !Array.isArray(inner.outreach_by_candidate)
-      ? inner.outreach_by_candidate
-      : null;
 
   if (!actorId) {
     console.warn(JSON.stringify({ level: 'warn', msg: 'skip_missing_actor', actor_id: actorId }));
@@ -156,11 +152,7 @@ async function handleEnvelope(value) {
 
   for (const candidateId of candidateIds) {
     try {
-      const text =
-        byCandidate && Object.prototype.hasOwnProperty.call(byCandidate, candidateId)
-          ? byCandidate[candidateId] || ''
-          : outreachText;
-      await deliverOutreach(actorId, candidateId, text, jobId, traceId);
+      await deliverOutreach(actorId, candidateId, outreachText, jobId, traceId);
     } catch (e) {
       console.error(
         JSON.stringify({
