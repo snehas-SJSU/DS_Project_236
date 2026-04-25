@@ -21,22 +21,37 @@ export default function JobsBoard() {
 
   const fetchJobs = () => {
     setLoading(true);
+    const basePayload = {
+      keyword: keyword || undefined,
+      location: locationFilter || undefined,
+      type: typeFilter || undefined
+    };
     fetch('/api/jobs/search', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        keyword: keyword || undefined,
-        location: locationFilter || undefined,
-        type: typeFilter || undefined
-      })
+      body: JSON.stringify(basePayload)
     })
       .then(res => res.json())
-      .then(data => {
-        if (Array.isArray(data)) {
-          setJobs(normalizeJobListRows(data));
-        } else {
-          setJobs([]);
+      .then(async data => {
+        let rows = normalizeJobListRows(Array.isArray(data) ? data : []);
+        const shouldRetryAsLocation =
+          !rows.length &&
+          !locationFilter.trim() &&
+          Boolean(keyword.trim());
+        if (shouldRetryAsLocation) {
+          const retry = await fetch('/api/jobs/search', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              ...basePayload,
+              keyword: undefined,
+              location: keyword.trim()
+            })
+          });
+          const retryData = await retry.json().catch(() => []);
+          rows = normalizeJobListRows(Array.isArray(retryData) ? retryData : []);
         }
+        setJobs(rows);
         setLoading(false);
       })
       .catch(err => {

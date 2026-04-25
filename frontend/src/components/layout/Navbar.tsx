@@ -1,13 +1,20 @@
 import { Bell, Briefcase, Building2, ChevronDown, CircleDollarSign, Compass, Crown, Grid3X3, Handshake, Home, MessageSquare, Network, Search, Settings, Sparkles } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
-import { Link, NavLink, useNavigate } from 'react-router-dom';
+import { Link, NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { LOCAL_AVATAR_KEY, MEMBER_ID, resolveViewerAvatarUrl } from '../../lib/memberProfile';
 
+type SearchSuggestion =
+  | { type: 'job'; value: string; label: string; subtitle?: string }
+  | { type: 'member'; member_id: string; value: string; label: string; subtitle?: string };
+
 export default function Navbar() {
+  const location = useLocation();
   const navigate = useNavigate();
   const [isMeMenuOpen, setIsMeMenuOpen] = useState(false);
   const [isBusinessMenuOpen, setIsBusinessMenuOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
+  const [suggestions, setSuggestions] = useState<SearchSuggestion[]>([]);
+  const [showSuggestions, setShowSuggestions] = useState(false);
   const [meProfile, setMeProfile] = useState<{ name: string; headline: string; photo?: string }>({
     name: 'Sneha Singh',
     headline: 'MS in Applied Data Intelligence | Distributed Systems',
@@ -15,6 +22,7 @@ export default function Navbar() {
   });
   const menuRef = useRef<HTMLDivElement | null>(null);
   const businessMenuRef = useRef<HTMLDivElement | null>(null);
+  const searchWrapRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     const onClickOutside = (event: MouseEvent) => {
@@ -24,10 +32,81 @@ export default function Navbar() {
       if (businessMenuRef.current && !businessMenuRef.current.contains(event.target as Node)) {
         setIsBusinessMenuOpen(false);
       }
+      if (searchWrapRef.current && !searchWrapRef.current.contains(event.target as Node)) {
+        setShowSuggestions(false);
+      }
     };
     document.addEventListener('mousedown', onClickOutside);
     return () => document.removeEventListener('mousedown', onClickOutside);
   }, []);
+
+  useEffect(() => {
+    const q = new URLSearchParams(location.search);
+    const routeKeyword = q.get('keywords') || q.get('keyword') || '';
+    if (location.pathname.startsWith('/jobs/search')) {
+      setSearchTerm(routeKeyword);
+      return;
+    }
+    if (location.pathname.startsWith('/network/search')) {
+      setSearchTerm(q.get('keyword') || '');
+    }
+  }, [location.pathname, location.search]);
+
+  useEffect(() => {
+    const keyword = searchTerm.trim();
+    if (keyword.length < 2) {
+      setSuggestions([]);
+      return;
+    }
+    let cancelled = false;
+    const timer = window.setTimeout(() => {
+      Promise.all([
+        fetch('/api/jobs/suggest', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ keyword, limit: 6 })
+        })
+          .then((res) => res.json())
+          .catch(() => []),
+        fetch('/api/members/suggest', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ keyword, limit: 6 })
+        })
+          .then((res) => res.json())
+          .catch(() => [])
+      ])
+        .then(([jobsData, membersData]) => {
+          if (cancelled) return;
+          const jobItems: SearchSuggestion[] = (Array.isArray(jobsData) ? jobsData : [])
+            .map((x: any) => ({
+              type: 'job' as const,
+              value: String(x?.value || ''),
+              label: String(x?.label || x?.value || ''),
+              subtitle: 'Job'
+            }))
+            .filter((x) => x.value);
+          const memberItems: SearchSuggestion[] = (Array.isArray(membersData) ? membersData : [])
+            .map((x: any) => ({
+              type: 'member' as const,
+              member_id: String(x?.member_id || ''),
+              value: String(x?.value || ''),
+              label: String(x?.label || x?.value || ''),
+              subtitle: String(x?.subtitle || 'Member')
+            }))
+            .filter((x) => x.value && (x as any).member_id);
+          setSuggestions([...jobItems.slice(0, 4), ...memberItems.slice(0, 4)]);
+        })
+        .catch(() => {
+          if (cancelled) return;
+          setSuggestions([]);
+        });
+    }, 180);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, [searchTerm]);
 
   useEffect(() => {
     fetch('/api/members/get', {
@@ -67,17 +146,51 @@ export default function Navbar() {
                 e.preventDefault();
                 const keywords = searchTerm.trim();
                 if (!keywords) return;
+                setShowSuggestions(false);
                 navigate(`/jobs/search?keywords=${encodeURIComponent(keywords)}`);
               }}
             >
-              <Search size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[#526a6e]" />
-              <input
-                type="text"
-                placeholder="Search jobs, profiles..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="li-soft-input h-9 w-56 pl-9 pr-3 focus:w-72"
-              />
+              <div className="relative" ref={searchWrapRef}>
+                <Search size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[#526a6e]" />
+                <input
+                  type="text"
+                  placeholder="Search jobs, members, skills, locations..."
+                  value={searchTerm}
+                  onChange={(e) => {
+                    setSearchTerm(e.target.value);
+                    setShowSuggestions(true);
+                  }}
+                  onFocus={() => setShowSuggestions(true)}
+                  className="li-soft-input h-9 w-56 pl-9 pr-3 focus:w-72"
+                />
+                {showSuggestions && searchTerm.trim().length >= 2 ? (
+                  <div className="absolute left-0 top-10 z-50 w-[340px] rounded-md border border-[#e0dfdc] bg-white py-1 shadow-lg">
+                    {suggestions.length ? (
+                      suggestions.map((s) => (
+                        <button
+                          key={`${s.type}-${s.value}-${(s as any).member_id || ''}`}
+                          type="button"
+                          onClick={() => {
+                            setSearchTerm(s.value);
+                            setShowSuggestions(false);
+                            if (s.type === 'member') {
+                              navigate(`/profile/${encodeURIComponent(s.member_id)}`);
+                              return;
+                            }
+                            navigate(`/jobs/search?keywords=${encodeURIComponent(s.value)}`);
+                          }}
+                          className="block w-full px-3 py-2 text-left hover:bg-[#f3f2ef]"
+                        >
+                          <p className="text-sm text-[#191919]">{s.label}</p>
+                          {s.subtitle ? <p className="text-xs text-[#64748b]">{s.subtitle}</p> : null}
+                        </button>
+                      ))
+                    ) : (
+                      <p className="px-3 py-2 text-sm text-[#64748b]">No results found</p>
+                    )}
+                  </div>
+                ) : null}
+              </div>
             </form>
           </div>
 
