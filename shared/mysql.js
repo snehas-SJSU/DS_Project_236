@@ -1,8 +1,6 @@
 const mysql = require('mysql2/promise');
 
-// Create a connection pool instead of a single connection for high-throughput
 const pool = mysql.createPool({
-  // Use 127.0.0.1 (not "localhost") on macOS+Docker to avoid IPv6 ::1 hangs → gateway 504
   host: process.env.MYSQL_HOST || '127.0.0.1',
   port: Number(process.env.MYSQL_PORT) || 3307,
   user: process.env.MYSQL_USER || 'linkedin_user',
@@ -11,7 +9,7 @@ const pool = mysql.createPool({
   waitForConnections: true,
   connectionLimit: 10,
   queueLimit: 0,
-  connectTimeout: 15000 // fail fast; avoids gateway 504 when MySQL is down/slow
+  connectTimeout: 15000
 });
 
 module.exports = pool;
