@@ -11,6 +11,7 @@
     "dev:member-api": "cd services/member-service && node api.js",
     "dev:member-worker": "cd services/member-service && node worker.js",
     "dev:connection-api": "cd services/connection-service && node api.js",
+    "dev:connection-worker": "cd services/connection-service && npm run start:worker",
     "dev:job-api": "cd services/job-service && npm run start:api",
     "dev:job-worker": "cd services/job-service && npm run start:worker",
     "dev:app-api": "cd services/application-service && npm run start:api",
@@ -25,7 +26,7 @@
     "dev:outreach-worker": "cd services/messaging-service && npm run start:outreach-worker",
     "start:ai-stack": "npx concurrently \"npm run dev:ai-service\" \"npm run dev:ai-skills-service\" \"npm run dev:outreach-worker\"",
     "test:smoke": "bash scripts/smoke-test.sh",
-    "start:all": "npx concurrently \"npm run dev:gateway\" \"npm run dev:member-api\" \"npm run dev:member-worker\" \"npm run dev:connection-api\" \"npm run dev:job-api\" \"npm run dev:job-worker\" \"npm run dev:app-api\" \"npm run dev:app-worker\" \"npm run dev:msg-api\" \"npm run dev:msg-worker\" \"npm run dev:analytics-api\" \"npm run dev:analytics-worker\" \"npm run dev:post-api\" \"npm run dev:outreach-worker\" \"npm run dev:ai-service\" \"npm run dev:ai-skills-service\""
+    "start:all": "npx concurrently \"npm run dev:gateway\" \"npm run dev:member-api\" \"npm run dev:member-worker\" \"npm run dev:connection-api\" \"npm run dev:connection-worker\" \"npm run dev:job-api\" \"npm run dev:job-worker\" \"npm run dev:app-api\" \"npm run dev:app-worker\" \"npm run dev:msg-api\" \"npm run dev:msg-worker\" \"npm run dev:analytics-api\" \"npm run dev:analytics-worker\" \"npm run dev:post-api\" \"npm run dev:outreach-worker\" \"npm run dev:ai-service\" \"npm run dev:ai-skills-service\""
   },
   "dependencies": {
     "csv-parse": "^6.2.1",

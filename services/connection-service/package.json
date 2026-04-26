@@ -3,7 +3,8 @@
   "version": "1.0.0",
   "main": "api.js",
   "scripts": {
-    "start:api": "node api.js"
+    "start:api": "node api.js",
+    "start:worker": "node worker.js"
   },
   "dependencies": {
     "express": "^4.18.2",
