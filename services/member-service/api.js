@@ -527,6 +527,41 @@ function normalizeMemberPayload(body, partial = false) {
   };
 }
 
+async function ensureAuthUserMember(user) {
+  const memberId = `M-${String(user.user_id || '').replace(/^U-/, '')}`;
+  const email = String(user.email || '').trim().toLowerCase();
+
+  const [rows] = await db.query(
+    'SELECT member_id FROM members WHERE member_id = ? LIMIT 1',
+    [memberId]
+  );
+
+  if (!rows.length) {
+    const fullName = String(user.name || '').trim();
+    const firstName = fullName ? fullName.split(' ')[0] : null;
+    const lastName = fullName ? fullName.split(' ').slice(1).join(' ') || null : null;
+
+    await db.query(
+      `INSERT INTO members (
+        member_id, name, first_name, last_name, email, title, headline, location, status
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'active')`,
+      [
+        memberId,
+        fullName || email,
+        firstName,
+        lastName,
+        email,
+        'LinkedIn Member',
+        'LinkedIn Member',
+        null
+      ]
+    );
+  }
+
+  await ensureMemberSettingsRow(memberId);
+  return memberId;
+}
+
 // Auth: Signup
 app.post('/auth/signup', async (req, res) => {
   try {
@@ -562,9 +597,20 @@ app.post('/auth/signup', async (req, res) => {
       [token, userId, emailNorm, AUTH_TOKEN_TTL_HOURS]
     );
 
+    const memberId = await ensureAuthUserMember({
+      user_id: userId,
+      email: emailNorm,
+      name: name || null
+    });
+
     return res.status(201).json({
       token,
-      user: { user_id: userId, email: emailNorm, name: name || null },
+      user: {
+        user_id: userId,
+        member_id: memberId,
+        email: emailNorm,
+        name: name || null
+      },
       message: 'Signup successful'
     });
   } catch (err) {
@@ -599,9 +645,16 @@ app.post('/auth/login', async (req, res) => {
       'INSERT INTO auth_sessions (token, user_id, email, expires_at) VALUES (?, ?, ?, DATE_ADD(NOW(), INTERVAL ? HOUR))',
       [token, user.user_id, user.email, AUTH_TOKEN_TTL_HOURS]
     );
+    const memberId = await ensureAuthUserMember(user);
+
     return res.status(200).json({
       token,
-      user: { user_id: user.user_id, email: user.email, name: user.name || null },
+      user: {
+        user_id: user.user_id,
+        member_id: memberId,
+        email: user.email,
+        name: user.name || null
+      },
       message: 'Login successful'
     });
   } catch (err) {
@@ -630,7 +683,13 @@ app.get('/auth/me', async (req, res) => {
     if (!users.length) {
       return res.status(404).json({ error: 'NOT_FOUND', message: 'User not found', trace_id: crypto.randomUUID() });
     }
-    return res.status(200).json({ user: users[0] });
+    const memberId = await ensureAuthUserMember(users[0]);
+    return res.status(200).json({
+      user: {
+        ...users[0],
+        member_id: memberId
+      }
+    });
   } catch (err) {
     console.error(err);
     return res.status(500).json({ error: 'INTERNAL_ERROR', message: err.message, trace_id: crypto.randomUUID() });

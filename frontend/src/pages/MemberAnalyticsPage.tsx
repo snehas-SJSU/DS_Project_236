@@ -1,6 +1,9 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
+import { getCurrentMemberId } from '../lib/auth';
 import { MEMBER_ID } from '../lib/memberProfile';
+
+const viewerMemberId = getCurrentMemberId() || MEMBER_ID;
 
 export default function MemberAnalyticsPage() {
   const [dashboard, setDashboard] = useState<any>(null);
@@ -9,7 +12,7 @@ export default function MemberAnalyticsPage() {
     fetch('/api/analytics/member/dashboard', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ member_id: MEMBER_ID })
+      body: JSON.stringify({ member_id: viewerMemberId })
     })
       .then((res) => res.json())
       .then((data) => setDashboard(data))

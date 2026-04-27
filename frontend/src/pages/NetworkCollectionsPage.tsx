@@ -1,7 +1,10 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
+import { getCurrentMemberId } from '../lib/auth';
 import { MEMBER_ID } from '../lib/memberProfile';
 import { showToast } from '../lib/toast';
+
+const viewerMemberId = getCurrentMemberId() || MEMBER_ID;
 
 type CollectionItem = {
   entity_id: string;
@@ -28,7 +31,7 @@ export default function NetworkCollectionsPage() {
       const res = await fetch('/api/members/network/catalog', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ member_id: MEMBER_ID, type: slug })
+        body: JSON.stringify({ member_id: viewerMemberId, type: slug })
       });
       const data = await res.json().catch(() => []);
       setItems(Array.isArray(data) ? data : []);
@@ -49,7 +52,7 @@ export default function NetworkCollectionsPage() {
       const res = await fetch('/api/members/network/update', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ member_id: MEMBER_ID, entity_id: item.entity_id, is_active: nextActive })
+        body: JSON.stringify({ member_id: viewerMemberId, entity_id: item.entity_id, is_active: nextActive })
       });
       if (!res.ok) {
         showToast('Unable to update this item right now.', 'error');
