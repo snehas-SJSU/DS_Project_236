@@ -1,10 +1,13 @@
 import { FormEvent, useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
+import { getCurrentMemberId } from '../lib/auth';
 import { MEMBER_ID } from '../lib/memberProfile';
 import { jobFromGetPayload, mergeJobDetail, normalizeJobListRows } from '../lib/jobNormalize';
 import { companyProfilePath, jobsResultsPath, jobsSearchPath } from '../lib/jobRoutes';
 import { showToast } from '../lib/toast';
 import type { Job } from '../mockData/jobs';
+
+const viewerMemberId = getCurrentMemberId() || MEMBER_ID;
 
 export default function JobApplyPage() {
   const [searchParams] = useSearchParams();
@@ -35,7 +38,7 @@ export default function JobApplyPage() {
     fetch('/api/jobs/get', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ job_id: jobId, member_id: MEMBER_ID })
+      body: JSON.stringify({ job_id: jobId, member_id: viewerMemberId })
     })
       .then((res) => res.json().then((data) => ({ ok: res.ok, data })))
       .then(({ ok, data }) => {
@@ -85,7 +88,7 @@ export default function JobApplyPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           job_id: job.id,
-          member_id: MEMBER_ID,
+          member_id: viewerMemberId,
           resume_text: text,
           resume_url: resumeUrl.trim() || undefined,
           cover_letter: coverLetter.trim() || undefined

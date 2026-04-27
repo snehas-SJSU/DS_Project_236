@@ -35,7 +35,7 @@ try:
         global _producer
         if _producer is None:
             _producer = KafkaProducer(
-                bootstrap_servers=["127.0.0.1:9093"],
+                bootstrap_servers=["127.0.0.1:9092"],
                 value_serializer=lambda v: json.dumps(v).encode("utf-8"),
                 acks="all",
                 retries=3,
@@ -1629,7 +1629,7 @@ def _consume_ai_requests():
     try:
         consumer = KafkaConsumer(
             "ai.requests",
-            bootstrap_servers=["127.0.0.1:9093"],
+            bootstrap_servers=["127.0.0.1:9092"],
             group_id=os.getenv("AI_CONSUMER_GROUP", "ai-service-supervisor"),
             auto_offset_reset="latest",
             enable_auto_commit=False,

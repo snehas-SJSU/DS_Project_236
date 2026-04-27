@@ -1,11 +1,14 @@
 import { BookmarkCheck, ExternalLink, MapPin, Trash2 } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
+import { getCurrentMemberId } from '../lib/auth';
 import { MEMBER_ID } from '../lib/memberProfile';
 import { jobsResultsPath } from '../lib/jobRoutes';
 import { readJson, SAVED_JOBS_KEY, writeJson } from '../lib/localData';
 import { normalizeJobListRows } from '../lib/jobNormalize';
 import { showToast } from '../lib/toast';
+
+const viewerMemberId = getCurrentMemberId() || MEMBER_ID;
 
 type SavedJob = {
   id: string;
@@ -33,7 +36,7 @@ export default function SavedItemsPage() {
       const res = await fetch('/api/jobs/saved', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ member_id: MEMBER_ID, limit: 100 })
+        body: JSON.stringify({ member_id: viewerMemberId, limit: 100 })
       });
       const data = await res.json().catch(() => []);
       if (!res.ok) {
@@ -76,7 +79,7 @@ export default function SavedItemsPage() {
       const res = await fetch('/api/jobs/unsave', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ job_id: jobId, member_id: MEMBER_ID })
+        body: JSON.stringify({ job_id: jobId, member_id: viewerMemberId })
       });
       if (!res.ok) {
         showToast('Unable to remove this saved job right now.', 'error');

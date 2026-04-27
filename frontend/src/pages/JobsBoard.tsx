@@ -3,8 +3,11 @@ import { Job } from '../mockData/jobs';
 import JobCard from '../components/shared/JobCard';
 import Navbar from '../components/layout/Navbar';
 import { Link } from 'react-router-dom';
+import { getCurrentMemberId } from '../lib/auth';
 import { MEMBER_ID, resolveViewerAvatarUrl } from '../lib/memberProfile';
 import { normalizeJobListRows } from '../lib/jobNormalize';
+
+const viewerMemberId = getCurrentMemberId() || MEMBER_ID;
 
 export default function JobsBoard() {
   const [jobs, setJobs] = useState<Job[]>([]);
@@ -65,7 +68,7 @@ export default function JobsBoard() {
     fetch('/api/members/get', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ member_id: MEMBER_ID })
+      body: JSON.stringify({ member_id: viewerMemberId })
     })
       .then((res) => res.json())
       .then((data) => {
@@ -90,12 +93,12 @@ export default function JobsBoard() {
             <div className="h-14 bg-gradient-to-r from-[#9ec6e5] to-[#c9def0]" />
             <div className="px-4 pb-4">
               <Link
-                to={`/profile/${encodeURIComponent(MEMBER_ID)}`}
+                to={`/profile/${encodeURIComponent(viewerMemberId)}`}
                 className="-mt-6 mb-2 block h-12 w-12 overflow-hidden rounded-full border-2 border-white bg-slate-300"
               >
                 <img src={member.photo} alt="Profile" className="h-full w-full object-cover" />
               </Link>
-              <Link to={`/profile/${encodeURIComponent(MEMBER_ID)}`} className="text-lg font-semibold text-[#191919] hover:text-[#0a66c2] hover:underline">
+              <Link to={`/profile/${encodeURIComponent(viewerMemberId)}`} className="text-lg font-semibold text-[#191919] hover:text-[#0a66c2] hover:underline">
                 {member.name}
               </Link>
               <p className="text-xs text-[#666666]">{member.location}</p>

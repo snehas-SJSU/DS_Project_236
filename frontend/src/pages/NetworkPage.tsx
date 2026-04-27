@@ -1,10 +1,13 @@
 import { useEffect, useMemo, useState } from 'react';
+import { getCurrentMemberId } from '../lib/auth';
 import { MEMBER_ID, resolveAvatarUrl, resolveViewerAvatarUrl } from '../lib/memberProfile';
 import Navbar from '../components/layout/Navbar';
 import { CalendarDays, FileText, MessageCircle, MoreHorizontal, Rss, ThumbsUp, UserRoundPlus, Users, UsersRound } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { addActivity } from '../lib/localData';
 import { showToast } from '../lib/toast';
+
+const viewerMemberId = getCurrentMemberId() || MEMBER_ID;
 
 type Suggestion = {
   id: string;
@@ -106,7 +109,7 @@ export default function NetworkPage() {
   const [memberPhoto, setMemberPhoto] = useState<string>(resolveViewerAvatarUrl(undefined, 'Me'));
   const [catchUpRows, setCatchUpRows] = useState<CatchUpRow[]>([]);
   const [networkCounts, setNetworkCounts] = useState<Record<string, number>>({});
-  const memberId = MEMBER_ID;
+  const memberId = viewerMemberId;
   const avatarFor = (seed: string) => `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(seed)}`;
   const displayNameFor = (id: string) => memberNameMap[id] || id;
   const catchUpPills = ['All', 'Job changes', 'Birthdays', 'Work anniversaries', 'Education'] as const;

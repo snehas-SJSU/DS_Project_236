@@ -3,12 +3,15 @@ import { Link, useLocation, useNavigate } from 'react-router-dom';
 import Navbar from '../components/layout/Navbar';
 import { Job } from '../mockData/jobs';
 import { CheckCircle2, X } from 'lucide-react';
+import { getCurrentMemberId } from '../lib/auth';
 import { MEMBER_ID } from '../lib/memberProfile';
 import { addActivity, readJson, SAVED_JOBS_KEY, writeJson } from '../lib/localData';
 import { companyProfilePath, jobsResultsPath, jobsSearchPath } from '../lib/jobRoutes';
 import { mergeJobDetail, normalizeJobListRows } from '../lib/jobNormalize';
 import { showToast } from '../lib/toast';
 import RecruiterAiJobPanel from '../components/recruiter/RecruiterAiJobPanel';
+
+const viewerMemberId = getCurrentMemberId() || MEMBER_ID;
 
 const chips = ['Date posted', 'Remote', 'Inside Sales', 'Outside Sales', 'Healthcare', 'Biotech', 'Easy Apply', 'Employment type', 'Company', 'Under 10 applicants', 'In my network'];
 type DatePostedFilter = '24h' | 'week' | null;
@@ -167,7 +170,7 @@ export default function JobsSearchPage() {
     fetch('/api/connections/list', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ user_id: MEMBER_ID })
+      body: JSON.stringify({ user_id: viewerMemberId })
     })
       .then((res) => res.json())
       .then(async (ids) => {
@@ -365,7 +368,7 @@ export default function JobsSearchPage() {
     fetch('/api/jobs/get', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ job_id: activeJob.id, member_id: MEMBER_ID })
+      body: JSON.stringify({ job_id: activeJob.id, member_id: viewerMemberId })
     })
       .then((res) => res.json().then((data) => ({ ok: res.ok, data })))
       .then(({ ok, data }) => {
@@ -388,7 +391,7 @@ export default function JobsSearchPage() {
       const res = await fetch(isAlreadySaved ? '/api/jobs/unsave' : '/api/jobs/save', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ job_id: activeJob.id, member_id: MEMBER_ID })
+        body: JSON.stringify({ job_id: activeJob.id, member_id: viewerMemberId })
       });
       if (!res.ok) {
         showToast(`Unable to ${isAlreadySaved ? 'unsave' : 'save'} right now.`, 'error');
