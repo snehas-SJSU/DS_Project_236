@@ -11,10 +11,16 @@ node_modules/
 !.env.example
 
 # =========================
-# Logs & OS
+# Logs / runtime
 # =========================
 *.log
+*.pid
+
+# =========================
+# OS files
+# =========================
 .DS_Store
+__MACOSX/
 
 # =========================
 # Build / cache
@@ -22,28 +28,28 @@ node_modules/
 dist/
 build/
 .cache/
+coverage/
 *.tsbuildinfo
 
 # =========================
 # Python
 # =========================
-# Virtual environments
 venv/
 .venv/
-.aienv311/
 env/
 **/venv/
+.aienv/
+.aienv311/
+.pdfenv/
 
-# Python cache
 __pycache__/
 *.py[cod]
 *$py.class
+.pytest_cache/
+htmlcov/
 
-# Packaging
 *.egg-info/
 .eggs/
-dist/
-build/
 
 # =========================
 # Editor / IDE
@@ -68,3 +74,5 @@ skills-lock.json
 # Misc
 # =========================
 .code-review-graph/
+tmp/
+temp/

@@ -15,11 +15,14 @@ services:
     container_name: linkedin-kafka
     ports:
       - "9092:9092"
+      - "29092:29092"
     environment:
       KAFKA_BROKER_ID: 1
       KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
-      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9092
-      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://localhost:9092
+      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9092,PLAINTEXT_HOST://0.0.0.0:29092
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://linkedin-kafka:9092,PLAINTEXT_HOST://localhost:29092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
     depends_on:
       - zookeeper
@@ -29,7 +32,6 @@ services:
   mysql:
     image: mysql:8.0
     container_name: linkedin-mysql
-    # Large base64 profile/cover images need packets > default on some hosts (fixes “Data too long” / silent failures).
     command: --max_allowed_packet=67108864 --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci
     ports:
       - "3306:3306"
@@ -61,9 +63,42 @@ services:
     networks:
       - linkedin-net
 
+  # =========================
+  # AI SERVICE (kept for submission)
+  # =========================
+  # ai-service:
+  #   build:
+  #     context: ./services/ai-service
+  #     dockerfile: Dockerfile
+  #   container_name: linkedin-ai-service
+  #   ports:
+  #     - "8001:8001"
+  #   environment:
+  #     - GROQ_API_KEY=${GROQ_API_KEY}
+  #     - MONGO_URL=mongodb://linkedin-mongo:27017
+  #     - MONGO_DB=linkedin_sim
+  #     - REDIS_URL=redis://linkedin-redis:6379/0
+  #     - KAFKA_BROKERS=linkedin-kafka:9092
+  #     - AI_EMBEDDING_PROVIDER=local
+  #     - AI_SHORTLIST_HITL_REQUIRED=true
+  #     - AI_MEMBER_API_URL=http://linkedin-gateway:4000/api/members/get
+  #     - AI_JOB_API_URL=http://linkedin-gateway:4000/api/jobs/get
+  #     - AI_APPLICATIONS_API_URL=http://linkedin-gateway:4000/api/applications/byJob
+  #     - AI_THREADS_OPEN_URL=http://linkedin-gateway:4000/api/threads/open
+  #     - AI_MESSAGES_SEND_URL=http://linkedin-gateway:4000/api/messages/send
+  #   depends_on:
+  #     - kafka
+  #     - mongodb
+  #     - redis
+  #   networks:
+  #     - linkedin-net
+  #   restart: unless-stopped
+
+
 networks:
   linkedin-net:
     driver: bridge
+
 
 volumes:
   mysql-data:

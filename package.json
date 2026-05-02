@@ -4,27 +4,50 @@
   "private": true,
   "scripts": {
     "bootstrap": "npm install --prefix shared && npm install --prefix api-gateway && npm install --prefix frontend && npm install --prefix services/member-service && npm install --prefix services/job-service && npm install --prefix services/application-service && npm install --prefix services/messaging-service && npm install --prefix services/analytics-service && npm install --prefix services/connection-service && npm install --prefix services/post-service",
+
     "seed:member": "node services/member-service/seed.js",
     "seed:connections": "node scripts/seed-demo-connections.js",
     "seed:ai-applicants": "node scripts/seed-ai-applicants.js",
+
     "dev:gateway": "cd api-gateway && npm run start",
+
     "dev:member-api": "cd services/member-service && node api.js",
     "dev:member-worker": "cd services/member-service && node worker.js",
+
     "dev:connection-api": "cd services/connection-service && node api.js",
+
     "dev:job-api": "cd services/job-service && npm run start:api",
     "dev:job-worker": "cd services/job-service && npm run start:worker",
+
     "dev:app-api": "cd services/application-service && npm run start:api",
     "dev:app-worker": "cd services/application-service && npm run start:worker",
+
     "dev:msg-api": "cd services/messaging-service && npm run start:api",
-    "dev:msg-worker": "cd services/messaging-service && npm run start:worker",
+
+    "dev:msg-worker": "cd services/messaging-service && node outreach-send-worker.js",
+
     "dev:analytics-api": "cd services/analytics-service && npm run start:api",
     "dev:analytics-worker": "cd services/analytics-service && npm run start:worker",
+
     "dev:post-api": "cd services/post-service && node api.js",
-    "dev:ai-service": "cd services/ai-service && AI_SKILLS_BASE_URL=${AI_SKILLS_BASE_URL:-http://127.0.0.1:${AI_SKILLS_SERVICE_PORT:-8018}} ../../.aienv311/bin/python -m uvicorn main:app --reload --host 127.0.0.1 --port ${AI_SERVICE_PORT:-8001}",
-    "dev:ai-skills-service": "cd services/ai-skills-service && AI_SERVICE_BASE_URL=${AI_SERVICE_BASE_URL:-http://127.0.0.1:${AI_SERVICE_PORT:-8001}/ai} ../../.aienv311/bin/python -m uvicorn main:app --reload --host 127.0.0.1 --port ${AI_SKILLS_SERVICE_PORT:-8018}",
-    "dev:outreach-worker": "cd services/messaging-service && npm run start:outreach-worker",
-    "start:ai-stack": "npx concurrently \"npm run dev:ai-service\" \"npm run dev:ai-skills-service\" \"npm run dev:outreach-worker\"",
+
+    "dev:ai-service": "cd services/ai-service && conda run -n ai-env uvicorn main:app --reload --host 127.0.0.1 --port 8001",
+
     "test:smoke": "bash scripts/smoke-test.sh",
-    "start:all": "npx concurrently \"npm run dev:gateway\" \"npm run dev:member-api\" \"npm run dev:member-worker\" \"npm run dev:connection-api\" \"npm run dev:job-api\" \"npm run dev:job-worker\" \"npm run dev:app-api\" \"npm run dev:app-worker\" \"npm run dev:msg-api\" \"npm run dev:msg-worker\" \"npm run dev:analytics-api\" \"npm run dev:analytics-worker\" \"npm run dev:post-api\" \"npm run dev:outreach-worker\" \"npm run dev:ai-service\" \"npm run dev:ai-skills-service\""
+
+    "start:all": "npx concurrently \"npm run dev:gateway\" \"npm run dev:member-api\" \"npm run dev:member-worker\" \"npm run dev:connection-api\" \"npm run dev:job-api\" \"npm run dev:job-worker\" \"npm run dev:app-api\" \"npm run dev:app-worker\" \"npm run dev:msg-api\" \"npm run dev:msg-worker\" \"npm run dev:analytics-api\" \"npm run dev:analytics-worker\" \"npm run dev:post-api\" \"npm run dev:ai-service\""
+  },
+  "dependencies": {
+    "cors": "^2.8.6",
+    "dotenv": "^17.4.2",
+    "express": "^5.2.1",
+    "http-proxy-middleware": "^3.0.5",
+    "jsonwebtoken": "^9.0.3",
+    "kafkajs": "^2.2.4",
+    "mongodb": "^7.2.0",
+    "mysql2": "^3.22.2",
+    "redis": "^5.12.1",
+    "swagger-ui-express": "^5.0.1",
+    "yamljs": "^0.3.0"
   }
 }
