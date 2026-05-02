@@ -1,9 +1,12 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Briefcase, GraduationCap, MapPin } from 'lucide-react';
 import { Link, Navigate, useParams } from 'react-router-dom';
+import { getCurrentMemberId } from '../lib/auth';
 import { MEMBER_ID, resolveAvatarUrl } from '../lib/memberProfile';
 import { addActivity } from '../lib/localData';
 import { showToast } from '../lib/toast';
+
+const viewerMemberId = getCurrentMemberId() || MEMBER_ID;
 
 type ProfileData = {
   member_id: string;
@@ -44,7 +47,7 @@ const fallbackProfiles: Record<string, ProfileData> = {
 
 export default function MemberPublicProfilePage() {
   const { memberId = '' } = useParams();
-  const viewerId = MEMBER_ID;
+  const viewerId = viewerMemberId;
   const [member, setMember] = useState<ProfileData | null>(null);
   const [loading, setLoading] = useState(true);
   const [connections, setConnections] = useState<string[]>([]);

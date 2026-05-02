@@ -1,5 +1,8 @@
 import { useEffect, useState } from 'react';
+import { getCurrentMemberId } from '../lib/auth';
 import { MEMBER_ID } from '../lib/memberProfile';
+
+const viewerMemberId = getCurrentMemberId() || MEMBER_ID;
 
 type Settings = {
   profileVisibility: boolean;
@@ -26,7 +29,7 @@ export default function SettingsPage() {
     fetch('/api/members/settings/get', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ member_id: MEMBER_ID })
+      body: JSON.stringify({ member_id: viewerMemberId })
     })
       .then((res) => res.json())
       .then((data) => {
@@ -49,7 +52,7 @@ export default function SettingsPage() {
     const res = await fetch('/api/members/settings/update', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ member_id: MEMBER_ID, ...settings })
+      body: JSON.stringify({ member_id: viewerMemberId, ...settings })
     });
     setStatus(res.ok ? 'Settings saved.' : 'Unable to save settings right now.');
   };

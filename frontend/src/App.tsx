@@ -34,7 +34,7 @@ import LanguagePage from './pages/LanguagePage';
 import JobPostPage from './pages/JobPostPage';
 import JobApplyPage from './pages/JobApplyPage';
 import CompanyPage from './pages/CompanyPage';
-import { isAuthenticated } from './lib/auth';
+import { getCurrentMemberId, isAuthenticated } from './lib/auth';
 import { MEMBER_ID, resolveAvatarUrl, resolveViewerAvatarUrl } from './lib/memberProfile';
 import { showToast, ToastViewport } from './lib/toast';
 import AIAssistantPage from './pages/AIAssistantPage';
@@ -88,8 +88,9 @@ type PostComment = {
 function FeedPlaceholder() {
   const navigate = useNavigate();
   const location = useLocation();
+  const viewerMemberId = getCurrentMemberId() || MEMBER_ID;
   const [apiPosts, setApiPosts] = useState<ApiPostRow[]>([]);
-  const [memberDisplayName, setMemberDisplayName] = useState('Sneha Singh');
+  const [memberDisplayName, setMemberDisplayName] = useState('');
   const [feedLoading, setFeedLoading] = useState(true);
   const [composerOpen, setComposerOpen] = useState(false);
   const [draftPost, setDraftPost] = useState('');
@@ -112,12 +113,12 @@ function FeedPlaceholder() {
   const [commentSort, setCommentSort] = useState<'recent' | 'relevant'>('relevant');
 
   const feedAuthorAvatarSrc = (p: ApiPostRow) =>
-    p.member_id === MEMBER_ID
+    p.member_id === viewerMemberId
       ? resolveViewerAvatarUrl(p.author_profile_photo_url, p.author_name || p.member_id)
       : resolveAvatarUrl(p.author_profile_photo_url, p.author_name || p.member_id);
 
   const feedQuotedAvatarSrc = (q: FeedQuotedPost) =>
-    q.member_id === MEMBER_ID
+    q.member_id === viewerMemberId
       ? resolveViewerAvatarUrl(q.author_profile_photo_url, q.author_name || q.member_id)
       : resolveAvatarUrl(q.author_profile_photo_url, q.author_name || q.member_id);
 
@@ -126,7 +127,7 @@ function FeedPlaceholder() {
       const res = await fetch('/api/posts/list', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ limit: 50, viewer_member_id: MEMBER_ID })
+        body: JSON.stringify({ limit: 50, viewer_member_id: viewerMemberId })
       });
       const data = await res.json().catch(() => []);
       const rows = Array.isArray(data) ? data : [];
@@ -179,12 +180,12 @@ function FeedPlaceholder() {
           const connRes = await fetch('/api/connections/list', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ user_id: MEMBER_ID })
+            body: JSON.stringify({ user_id: viewerMemberId })
           });
           const connJson = await connRes.json().catch(() => []);
           const connIds: string[] = Array.isArray(connJson) ? connJson : [];
           const fromConnections = (
-            await Promise.all(connIds.filter((id) => id && id !== MEMBER_ID).map(hydrateMember))
+            await Promise.all(connIds.filter((id) => id && id !== viewerMemberId).map(hydrateMember))
           ).filter(Boolean) as MemberRow[];
 
           const mergedMap = new Map<string, MemberRow>();
@@ -199,7 +200,7 @@ function FeedPlaceholder() {
           const searchList = Array.isArray(searchJson) ? searchJson : [];
           for (const raw of searchList) {
             const m = raw as MemberRow;
-            if (!m.member_id || m.member_id === MEMBER_ID) continue;
+            if (!m.member_id || m.member_id === viewerMemberId) continue;
             if (!mergedMap.has(m.member_id)) {
               mergedMap.set(m.member_id, {
                 member_id: m.member_id,
@@ -253,7 +254,7 @@ function FeedPlaceholder() {
     fetch('/api/members/get', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ member_id: MEMBER_ID })
+      body: JSON.stringify({ member_id: viewerMemberId })
     })
       .then((r) => r.json())
       .then((d) => {
@@ -299,7 +300,7 @@ function FeedPlaceholder() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          member_id: MEMBER_ID,
+          member_id: viewerMemberId,
           author_name: memberDisplayName,
           body: bodyText,
           image_data: attachedImage || undefined
@@ -327,7 +328,7 @@ function FeedPlaceholder() {
       const res = await fetch(`${path}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ post_id: p.post_id, member_id: MEMBER_ID })
+        body: JSON.stringify({ post_id: p.post_id, member_id: viewerMemberId })
       });
       if (!res.ok) return;
       await loadPosts();
@@ -359,20 +360,20 @@ function FeedPlaceholder() {
         const openRes = await fetch('/api/threads/open', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ participant_a: MEMBER_ID, participant_b: rid })
+          body: JSON.stringify({ participant_a: viewerMemberId, participant_b: rid })
         });
         const openData = await openRes.json().catch(() => ({}));
         if (!openData.thread_id) continue;
         await fetch('/api/messages/send', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ thread_id: openData.thread_id, sender_id: MEMBER_ID, text })
+          body: JSON.stringify({ thread_id: openData.thread_id, sender_id: viewerMemberId, text })
         });
       }
       const sendOnce = await fetch('/api/posts/send', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ post_id: post.post_id, member_id: MEMBER_ID })
+        body: JSON.stringify({ post_id: post.post_id, member_id: viewerMemberId })
       });
       if (!sendOnce.ok) {
         showToast('Could not log send.', 'error');
@@ -402,7 +403,7 @@ function FeedPlaceholder() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          member_id: MEMBER_ID,
+          member_id: viewerMemberId,
           author_name: memberDisplayName,
           body: t,
           quoted_post_id: p.post_id
@@ -415,7 +416,7 @@ function FeedPlaceholder() {
       await fetch('/api/posts/repost', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ post_id: p.post_id, member_id: MEMBER_ID })
+        body: JSON.stringify({ post_id: p.post_id, member_id: viewerMemberId })
       });
       setRepostThoughtsPost(null);
       setRepostThoughtsDraft('');
@@ -432,7 +433,7 @@ function FeedPlaceholder() {
       const res = await fetch(`${path}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ post_id: p.post_id, member_id: MEMBER_ID })
+        body: JSON.stringify({ post_id: p.post_id, member_id: viewerMemberId })
       });
       if (!res.ok) return;
       await loadPosts();
@@ -450,7 +451,7 @@ function FeedPlaceholder() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           post_id: postId,
-          member_id: MEMBER_ID,
+          member_id: viewerMemberId,
           author_name: memberDisplayName,
           body: t
         })
@@ -998,10 +999,11 @@ function FeedPlaceholder() {
 }
 
 function AppShell({ children }: { children: React.ReactNode }) {
+  const viewerMemberId = getCurrentMemberId() || MEMBER_ID;
   const [member, setMember] = useState<{ name: string; headline: string; photo: string }>({
-    name: 'Sneha Singh',
-    headline: 'MS Student | Distributed Systems',
-    photo: resolveViewerAvatarUrl(undefined, 'Sneha Singh')
+    name: '',
+    headline: '',
+    photo: resolveViewerAvatarUrl(undefined, 'Member')
   });
   const [memberDashboard, setMemberDashboard] = useState<any>(null);
 
@@ -1009,14 +1011,14 @@ function AppShell({ children }: { children: React.ReactNode }) {
     fetch('/api/members/get', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ member_id: MEMBER_ID })
+      body: JSON.stringify({ member_id: viewerMemberId })
     })
       .then((res) => res.json())
       .then((data) => {
         if (!data || data.error) return;
         setMember({
-          name: data.name || 'Sneha Singh',
-          headline: data.headline || data.title || 'MS Student | Distributed Systems',
+          name: data.name || 'Member',
+          headline: data.headline || data.title || '',
           photo: resolveViewerAvatarUrl(data.profile_photo_url, data.name)
         });
       })
@@ -1025,7 +1027,7 @@ function AppShell({ children }: { children: React.ReactNode }) {
     fetch('/api/analytics/member/dashboard', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ member_id: MEMBER_ID })
+      body: JSON.stringify({ member_id: viewerMemberId })
     })
       .then((res) => res.json())
       .then((data) => setMemberDashboard(data))
@@ -1042,12 +1044,12 @@ function AppShell({ children }: { children: React.ReactNode }) {
               <div className="h-16 bg-gradient-to-r from-[#70b5f9] via-[#90caf9] to-[#c7d2fe]" />
               <div className="px-4 pb-4">
                 <Link
-                  to={`/profile/${encodeURIComponent(MEMBER_ID)}`}
+                  to={`/profile/${encodeURIComponent(viewerMemberId)}`}
                   className="-mt-6 mb-2 block h-12 w-12 overflow-hidden rounded-full border-2 border-white bg-slate-300"
                 >
                   <img src={member.photo} alt="Profile" className="h-full w-full object-cover" />
                 </Link>
-                <Link to={`/profile/${encodeURIComponent(MEMBER_ID)}`} className="text-lg font-semibold text-[#191919] hover:text-[#0a66c2] hover:underline">
+                <Link to={`/profile/${encodeURIComponent(viewerMemberId)}`} className="text-lg font-semibold text-[#191919] hover:text-[#0a66c2] hover:underline">
                   {member.name}
                 </Link>
                 <p className="mt-1 text-sm leading-5 text-[#666666]">{member.headline}</p>
@@ -1128,14 +1130,15 @@ function ProfileShell({ children }: { children: React.ReactNode }) {
   const PROFILE_LANGUAGE_KEY = 'li_sim_profile_language';
   const PROFILE_URL_KEY = 'li_sim_profile_url';
   const [language, setLanguage] = useState(localStorage.getItem(PROFILE_LANGUAGE_KEY) || 'English');
-  const ownUrlDefault = `linkedin-sim.local/in/${MEMBER_ID.toLowerCase()}`;
+  const viewerMemberId = getCurrentMemberId() || MEMBER_ID;
+  const ownUrlDefault = `linkedin-sim.local/in/${viewerMemberId.toLowerCase()}`;
   const [publicUrl, setPublicUrl] = useState(localStorage.getItem(PROFILE_URL_KEY) || ownUrlDefault);
 
   const profilePathPrefix = '/profile/';
   const routeMemberId = location.pathname.startsWith(profilePathPrefix)
     ? decodeURIComponent(location.pathname.slice(profilePathPrefix.length))
-    : MEMBER_ID;
-  const isOwnProfile = routeMemberId === MEMBER_ID || location.pathname === '/profile';
+    : viewerMemberId;
+  const isOwnProfile = routeMemberId === viewerMemberId || location.pathname === '/profile';
   const displayedPublicUrl = isOwnProfile
     ? publicUrl
     : `linkedin-sim.local/in/${routeMemberId.toLowerCase()}`;

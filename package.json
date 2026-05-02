@@ -15,7 +15,7 @@
     "dev:member-worker": "cd services/member-service && node worker.js",
 
     "dev:connection-api": "cd services/connection-service && node api.js",
-
+    "dev:connection-worker": "cd services/connection-service && npm run start:worker",
     "dev:job-api": "cd services/job-service && npm run start:api",
     "dev:job-worker": "cd services/job-service && npm run start:worker",
 
@@ -39,6 +39,7 @@
   },
   "dependencies": {
     "cors": "^2.8.6",
+    "csv-parse": "^6.2.1",
     "dotenv": "^17.4.2",
     "express": "^5.2.1",
     "http-proxy-middleware": "^3.0.5",

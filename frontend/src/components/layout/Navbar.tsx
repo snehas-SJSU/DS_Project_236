@@ -1,7 +1,10 @@
 import { Bell, Briefcase, Building2, ChevronDown, CircleDollarSign, Compass, Crown, Grid3X3, Handshake, Home, MessageSquare, Network, Search, Settings, Sparkles } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { Link, NavLink, useLocation, useNavigate } from 'react-router-dom';
+import { getCurrentMemberId } from '../../lib/auth';
 import { LOCAL_AVATAR_KEY, MEMBER_ID, resolveViewerAvatarUrl } from '../../lib/memberProfile';
+
+const viewerMemberId = getCurrentMemberId() || MEMBER_ID;
 
 type SearchSuggestion =
   | { type: 'job'; value: string; label: string; subtitle?: string }
@@ -112,7 +115,7 @@ export default function Navbar() {
     fetch('/api/members/get', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ member_id: MEMBER_ID })
+      body: JSON.stringify({ member_id: viewerMemberId })
     })
       .then((res) => res.json())
       .then((data) => {

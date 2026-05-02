@@ -1,6 +1,9 @@
 import { useEffect, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
+import { getCurrentMemberId } from '../lib/auth';
 import { MEMBER_ID } from '../lib/memberProfile';
+
+const viewerMemberId = getCurrentMemberId() || MEMBER_ID;
 
 const normalizeStatus = (value: string) => {
   const lower = (value || '').toLowerCase().trim();
@@ -21,7 +24,7 @@ export default function ApplicationsPage() {
     const res = await fetch('/api/applications/byMember', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ member_id: MEMBER_ID })
+      body: JSON.stringify({ member_id: viewerMemberId })
     });
     const data = await res.json().catch(() => []);
     setMemberApps(Array.isArray(data) ? data : []);

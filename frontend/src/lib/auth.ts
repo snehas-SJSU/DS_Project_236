@@ -50,3 +50,7 @@ export function getValidAuthToken() {
 export function isAuthenticated() {
   return Boolean(getValidAuthToken());
 }
+
+export function getCurrentMemberId() {
+  return localStorage.getItem('member_id');
+}

@@ -1,6 +1,9 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { MEMBER_ID } from '../lib/memberProfile';
+import { getCurrentMemberId } from '../lib/auth';
+import { MEMBER_ID} from '../lib/memberProfile';
+
+const viewerMemberId = getCurrentMemberId() || MEMBER_ID;
 
 type JobItem = {
   id: string;
@@ -18,7 +21,7 @@ export default function JobInsightsPage() {
     fetch('/api/members/get', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ member_id: MEMBER_ID })
+      body: JSON.stringify({ member_id: viewerMemberId })
     })
       .then((res) => res.json())
       .then((data) => setSkills(Array.isArray(data?.skills) ? data.skills : []))

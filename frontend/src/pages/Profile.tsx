@@ -1,8 +1,11 @@
 import { useEffect, useRef, useState } from 'react';
 import { Briefcase, GraduationCap, MapPin, Pencil } from 'lucide-react';
 import { Link } from 'react-router-dom';
+import { getCurrentMemberId } from '../lib/auth';
 import { LOCAL_AVATAR_KEY, MEMBER_ID, resolveViewerAvatarUrl } from '../lib/memberProfile';
 import { showToast } from '../lib/toast';
+
+const viewerMemberId = getCurrentMemberId() || MEMBER_ID;
 
 type LoadState = { status: 'loading' } | { status: 'ok'; data: any } | { status: 'error'; message: string };
 type EditSection = 'profile' | 'suggested' | 'about' | 'activity' | 'analytics' | 'experience' | 'education' | 'skills';
@@ -30,7 +33,7 @@ export default function Profile() {
     fetch('/api/members/get', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ member_id: MEMBER_ID })
+      body: JSON.stringify({ member_id: viewerMemberId })
     })
       .then(async (res) => {
         const data = await res.json().catch(() => ({}));
@@ -74,7 +77,7 @@ export default function Profile() {
     fetch('/api/analytics/member/dashboard', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ member_id: MEMBER_ID })
+      body: JSON.stringify({ member_id: viewerMemberId })
     })
       .then((res) => res.json())
       .then((data) => setDashboard(data))
@@ -129,7 +132,7 @@ export default function Profile() {
         const res = await fetch('/api/members/update', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ member_id: MEMBER_ID, [key]: dataUrl })
+          body: JSON.stringify({ member_id: viewerMemberId, [key]: dataUrl })
         });
         if (res.ok) {
           if (key === 'profile_photo_url') {
@@ -201,7 +204,7 @@ export default function Profile() {
     const res = await fetch('/api/members/update', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ member_id: MEMBER_ID, ...fields })
+      body: JSON.stringify({ member_id: viewerMemberId, ...fields })
     });
     if (!res.ok) {
       const err = await res.json().catch(() => ({}));
@@ -476,7 +479,7 @@ export default function Profile() {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                  member_id: MEMBER_ID,
+                  member_id: viewerMemberId,
                   headline: draft.headline,
                   title: draft.title,
                   about: draft.about,

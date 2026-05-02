@@ -1,8 +1,11 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import Navbar from '../components/layout/Navbar';
+import { getCurrentMemberId } from '../lib/auth';
 import { MEMBER_ID, resolveViewerAvatarUrl } from '../lib/memberProfile';
 import { showToast } from '../lib/toast';
+
+const viewerMemberId = getCurrentMemberId() || MEMBER_ID;
 
 type NotificationItem = {
   notification_id: string;
@@ -48,7 +51,7 @@ export default function NotificationsPage() {
     const res = await fetch('/api/members/settings/get', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ member_id: MEMBER_ID })
+      body: JSON.stringify({ member_id: viewerMemberId })
     });
     const data = await res.json().catch(() => ({}));
     setInAppEnabled(data?.inAppNotificationsEnabled !== false);
@@ -58,7 +61,7 @@ export default function NotificationsPage() {
     const res = await fetch('/api/members/notifications/list', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ member_id: MEMBER_ID, category: activeTab, limit: 40 })
+      body: JSON.stringify({ member_id: viewerMemberId, category: activeTab, limit: 40 })
     });
     const data = await res.json().catch(() => []);
     setNotifications(Array.isArray(data) ? data : []);
@@ -68,7 +71,7 @@ export default function NotificationsPage() {
     fetch('/api/members/get', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ member_id: MEMBER_ID })
+      body: JSON.stringify({ member_id: viewerMemberId })
     })
       .then((res) => res.json())
       .then((data) => {
@@ -105,7 +108,7 @@ export default function NotificationsPage() {
     const res = await fetch('/api/members/notifications/markRead', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ member_id: MEMBER_ID, notification_ids: [id] })
+      body: JSON.stringify({ member_id: viewerMemberId, notification_ids: [id] })
     });
     if (!res.ok) {
       showToast('Unable to update this notification right now.', 'error');
@@ -119,7 +122,7 @@ export default function NotificationsPage() {
     const res = await fetch('/api/members/notifications/markAllRead', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ member_id: MEMBER_ID, category: activeTab })
+      body: JSON.stringify({ member_id: viewerMemberId, category: activeTab })
     });
     if (!res.ok) {
       showToast('Unable to mark notifications as read.', 'error');
@@ -133,7 +136,7 @@ export default function NotificationsPage() {
     const res = await fetch('/api/members/settings/update', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ member_id: MEMBER_ID, inAppNotificationsEnabled: true })
+      body: JSON.stringify({ member_id: viewerMemberId, inAppNotificationsEnabled: true })
     });
     if (!res.ok) {
       showToast('Unable to enable notifications right now.', 'error');
@@ -153,10 +156,10 @@ export default function NotificationsPage() {
             <section className="li-card overflow-hidden p-0">
               <div className="h-10 bg-gradient-to-r from-[#bfd7ff] to-[#d6ecff]" />
               <div className="px-4 pb-4">
-                <Link to={`/profile/${encodeURIComponent(MEMBER_ID)}`} className="-mt-4 block h-16 w-16 overflow-hidden rounded-full border-2 border-white">
+                <Link to={`/profile/${encodeURIComponent(viewerMemberId)}`} className="-mt-4 block h-16 w-16 overflow-hidden rounded-full border-2 border-white">
                   <img src={member.photo} alt="Profile" className="h-full w-full object-cover" />
                 </Link>
-                <Link to={`/profile/${encodeURIComponent(MEMBER_ID)}`} className="mt-2 block text-2xl font-semibold text-[#191919] hover:text-[#0a66c2]">
+                <Link to={`/profile/${encodeURIComponent(viewerMemberId)}`} className="mt-2 block text-2xl font-semibold text-[#191919] hover:text-[#0a66c2]">
                   {member.name}
                 </Link>
                 <p className="line-clamp-2 text-xs text-[#666]">{member.headline}</p>

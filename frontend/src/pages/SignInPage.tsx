@@ -73,7 +73,11 @@ export default function SignInPage() {
                   setError(data?.message || 'Login failed.');
                   return;
                 }
-                if (data?.token) setAuthToken(data.token);
+                if (data?.token) {
+                  setAuthToken(data.token);
+                  if (data?.user?.user_id) localStorage.setItem('user_id', data.user.user_id);
+                  if (data?.user?.member_id) localStorage.setItem('member_id', data.user.member_id);
+                }
                 navigate('/feed');
               } catch {
                 setError('Unable to sign in right now. Please try again.');
