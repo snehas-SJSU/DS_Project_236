@@ -268,6 +268,18 @@ paths:
     post:
       tags: [Job Service]
       summary: List all jobs by specific recruiter
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [recruiter_id]
+              properties:
+                recruiter_id:
+                  type: string
+            example:
+              recruiter_id: R-5001
       responses:
         '200':
           description: OK
@@ -442,7 +454,9 @@ paths:
         '201':
           description: Created
 
-  # Agentic AI Service (same contract as FastAPI/Uvicorn; gateway adds /api prefix)
+
+   
+  # Agentic AI Service (UPDATED)
   /ai/tasks/submit:
     post:
       tags: [Agentic AI Service]
@@ -453,11 +467,11 @@ paths:
           application/json:
             schema:
               type: object
-              required: [task_type, job_id, candidate_ids, actor_id]
+              required: [task_type, job_id, actor_id]
               properties:
                 task_type:
                   type: string
-                  enum: [candidate_shortlist]
+                  enum: [candidate_shortlist, generate_outreach]
                 job_id:
                   type: string
                 candidate_ids:
@@ -471,15 +485,89 @@ paths:
             example:
               task_type: candidate_shortlist
               job_id: J-LIVE-1
-              candidate_ids: [M-101, M-202, M-303]
+              candidate_ids: [M-101, M-202]
               actor_id: R-5001
       responses:
         '202':
           description: Accepted
+
+  /ai/agent/shortlist:
+    post:
+      tags: [Agentic AI Service]
+      summary: Trigger shortlist workflow (alias of submit)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [job_id, actor_id]
+              properties:
+                job_id:
+                  type: string
+                candidate_ids:
+                  type: array
+                  items:
+                    type: string
+                actor_id:
+                  type: string
+            example:
+              job_id: J-LIVE-1
+              actor_id: R-5001
+      responses:
+        '202':
+          description: Accepted
+
+  /ai/tasks/{task_id}:
+    get:
+      tags: [Agentic AI Service]
+      summary: Get task status and results
+      parameters:
+        - name: task_id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: OK
+
+  /ai/tasks/{task_id}/events:
+    get:
+      tags: [Agentic AI Service]
+      summary: Get task event stream
+      parameters:
+        - name: task_id
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 200
+      responses:
+        '200':
+          description: OK
+
+  /ai/tasks:
+    get:
+      tags: [Agentic AI Service]
+      summary: List AI tasks
+      parameters:
+        - name: actor_id
+          in: query
+          schema:
+            type: string
+      responses:
+        '200':
+          description: OK
+
   /ai/tasks/{task_id}/approve:
     post:
       tags: [Agentic AI Service]
-      summary: Human-in-the-loop approve / edit / reject
+      summary: Approve / edit / reject (main HITL endpoint)
       parameters:
         - name: task_id
           in: path
@@ -499,73 +587,65 @@ paths:
                   enum: [approve, edit, reject]
                 edited_text:
                   type: string
-                  description: Required when decision is edit
+                edited_drafts:
+                  type: object
                 reviewer_id:
                   type: string
             example:
-              decision: edit
-              edited_text: Looks good, please schedule a call.
+              decision: approve
               reviewer_id: R-5001
       responses:
         '200':
           description: OK
-  /ai/tasks/{task_id}:
-    get:
+
+  /ai/agent/edit:
+    post:
       tags: [Agentic AI Service]
-      summary: Get task status and partial results
-      parameters:
-        - name: task_id
-          in: path
-          required: true
-          schema:
-            type: string
+      summary: Edit AI-generated outreach draft (standalone)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [task_id, reviewer_id]
+              properties:
+                task_id:
+                  type: string
+                edited_text:
+                  type: string
+                edited_drafts:
+                  type: object
+                reviewer_id:
+                  type: string
       responses:
         '200':
           description: OK
-  /ai/tasks/{task_id}/events:
-    get:
+
+  /ai/agent/reject:
+    post:
       tags: [Agentic AI Service]
-      summary: Get task event stream for observability
-      parameters:
-        - name: task_id
-          in: path
-          required: true
-          schema:
-            type: string
-        - name: limit
-          in: query
-          required: false
-          schema:
-            type: integer
-            default: 200
+      summary: Reject AI-generated output (standalone)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [task_id, reviewer_id]
+              properties:
+                task_id:
+                  type: string
+                reviewer_id:
+                  type: string
       responses:
         '200':
           description: OK
-  /ai/tasks:
-    get:
-      tags: [Agentic AI Service]
-      summary: List AI tasks (optional filter by recruiter actor_id)
-      parameters:
-        - name: actor_id
-          in: query
-          required: false
-          schema:
-            type: string
-          description: When set, returns tasks for that recruiter
-      responses:
-        '200':
-          description: OK
-  /ai/health:
-    get:
-      tags: [Agentic AI Service]
-      summary: AI service health (via gateway)
-      responses:
-        '200':
-          description: OK
+
   /ai/resume/parse:
     post:
       tags: [Agentic AI Service]
-      summary: Parse resume synchronously
+      summary: Parse resume
       requestBody:
         content:
           application/json:
@@ -576,15 +656,14 @@ paths:
                   type: string
                 text:
                   type: string
-            example:
-              member_id: M-101
       responses:
         '200':
           description: OK
+
   /ai/match/score:
     post:
       tags: [Agentic AI Service]
-      summary: Score job match
+      summary: Compute match score
       requestBody:
         required: true
         content:
@@ -592,105 +671,62 @@ paths:
             schema:
               type: object
               required: [job_id, parsed_profile]
-              properties:
-                job_id:
-                  type: string
-                member_id:
-                  type: string
-                parsed_profile:
-                  type: object
-            example:
-              job_id: J-LIVE-1
-              parsed_profile:
-                member_id: M-101
-                skills: [python, kafka, fastapi]
-                resume_text: Python engineer with 5 years Kafka and FastAPI.
-                location: San Jose
-                seniority: mid
       responses:
         '200':
           description: OK
+
   /ai/shortlist:
     post:
       tags: [Agentic AI Service]
-      summary: Fetch ranked shortlist
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required: [job_id, scores]
-              properties:
-                job_id:
-                  type: string
-                scores:
-                  type: array
-                  items:
-                    type: object
-                top_k:
-                  type: integer
-            example:
-              job_id: J-LIVE-1
-              top_k: 3
-              scores:
-                - member_id: M-101
-                  score: 0.85
+      summary: Rank candidates
       responses:
         '200':
           description: OK
+
   /ai/outreach/draft:
     post:
       tags: [Agentic AI Service]
-      summary: Draft recruiter outreach
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required: [job_id, shortlist]
-              properties:
-                job_id:
-                  type: string
-                shortlist:
-                  type: array
-                  items:
-                    type: object
-                actor_id:
-                  type: string
-            example:
-              job_id: J-LIVE-1
-              actor_id: R-5001
-              shortlist:
-                - member_id: M-101
-                  score: 0.85
+      summary: Generate outreach draft
       responses:
         '200':
           description: OK
+
   /ai/career-coach/suggest:
     post:
       tags: [Agentic AI Service]
-      summary: Get career suggestions
-      requestBody:
-        content:
-          application/json:
-            schema:
-              type: object
+      summary: Career coaching suggestions
       responses:
         '200':
           description: OK
+
   /ai/metrics:
     get:
       tags: [Agentic AI Service]
-      summary: AI metrics summary (alias)
+      summary: Metrics alias
       responses:
         '200':
           description: OK
+
   /ai/metrics/summary:
     get:
       tags: [Agentic AI Service]
-      summary: AI metrics summary
+      summary: Metrics summary
+      responses:
+        '200':
+          description: OK
+
+  /ai/metrics/matching-quality:
+    get:
+      tags: [Agentic AI Service]
+      summary: Matching quality metrics
+      responses:
+        '200':
+          description: OK
+
+  /ai/health:
+    get:
+      tags: [Agentic AI Service]
+      summary: Health check
       responses:
         '200':
           description: OK
