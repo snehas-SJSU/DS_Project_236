@@ -1,18 +1,15 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { getCurrentMemberId } from '../lib/auth';
-import { MEMBER_ID } from '../lib/memberProfile';
-
-const viewerMemberId = getCurrentMemberId() || MEMBER_ID;
 
 export default function MemberAnalyticsPage() {
+  const MEMBER_ID = sessionStorage.getItem('li_sim_member_id') || 'M-123';
   const [dashboard, setDashboard] = useState<any>(null);
 
   useEffect(() => {
     fetch('/api/analytics/member/dashboard', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ member_id: viewerMemberId })
+      body: JSON.stringify({ member_id: MEMBER_ID })
     })
       .then((res) => res.json())
       .then((data) => setDashboard(data))

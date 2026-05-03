@@ -5,7 +5,7 @@ const https = require('https');
 const { URL } = require('url');
 const { Kafka } = require('kafkajs');
 
-const brokers = (process.env.KAFKA_BROKERS || '127.0.0.1:9092').split(',').map((s) => s.trim());
+const brokers = (process.env.KAFKA_BROKERS || 'localhost:29092').split(',').map((s) => s.trim());
 const topic = process.env.OUTREACH_REQUESTS_TOPIC || 'outreach.requests';
 const groupId = process.env.OUTREACH_SEND_GROUP || 'outreach-send-worker';
 const gatewayBase = (process.env.GATEWAY_API_BASE || 'http://127.0.0.1:4000/api').replace(/\/$/, '');

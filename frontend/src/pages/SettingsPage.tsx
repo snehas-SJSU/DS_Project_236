@@ -1,8 +1,4 @@
 import { useEffect, useState } from 'react';
-import { getCurrentMemberId } from '../lib/auth';
-import { MEMBER_ID } from '../lib/memberProfile';
-
-const viewerMemberId = getCurrentMemberId() || MEMBER_ID;
 
 type Settings = {
   profileVisibility: boolean;
@@ -21,6 +17,7 @@ const defaults: Settings = {
 };
 
 export default function SettingsPage() {
+  const MEMBER_ID = sessionStorage.getItem('li_sim_member_id') || 'M-123';
   const [settings, setSettings] = useState<Settings>(defaults);
   const [status, setStatus] = useState('');
   const [loading, setLoading] = useState(true);
@@ -29,7 +26,7 @@ export default function SettingsPage() {
     fetch('/api/members/settings/get', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ member_id: viewerMemberId })
+      body: JSON.stringify({ member_id: MEMBER_ID })
     })
       .then((res) => res.json())
       .then((data) => {
@@ -52,7 +49,7 @@ export default function SettingsPage() {
     const res = await fetch('/api/members/settings/update', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ member_id: viewerMemberId, ...settings })
+      body: JSON.stringify({ member_id: MEMBER_ID, ...settings })
     });
     setStatus(res.ok ? 'Settings saved.' : 'Unable to save settings right now.');
   };

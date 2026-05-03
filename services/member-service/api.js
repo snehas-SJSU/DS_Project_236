@@ -410,10 +410,15 @@ async function syncNotifications(memberId) {
   );
   for (const row of threads) {
     const peerId = row.participant_a === memberId ? row.participant_b : row.participant_a;
+    let peerName = peerId;
+    try {
+      const [peerRows] = await db.query('SELECT name FROM members WHERE member_id = ? LIMIT 1', [peerId]);
+      if (peerRows.length && peerRows[0].name) peerName = peerRows[0].name;
+    } catch {}
     await upsertNotification(memberId, `thread-${row.thread_id}`, {
       category: 'mentions',
       title: 'Message activity',
-      body: `New activity in your conversation with ${peerId}.`,
+      body: `New message from ${peerName}.`,
       route_path: '/messaging',
       created_at: row.last_activity,
       priority: 1
@@ -527,41 +532,6 @@ function normalizeMemberPayload(body, partial = false) {
   };
 }
 
-async function ensureAuthUserMember(user) {
-  const memberId = `M-${String(user.user_id || '').replace(/^U-/, '')}`;
-  const email = String(user.email || '').trim().toLowerCase();
-
-  const [rows] = await db.query(
-    'SELECT member_id FROM members WHERE member_id = ? LIMIT 1',
-    [memberId]
-  );
-
-  if (!rows.length) {
-    const fullName = String(user.name || '').trim();
-    const firstName = fullName ? fullName.split(' ')[0] : null;
-    const lastName = fullName ? fullName.split(' ').slice(1).join(' ') || null : null;
-
-    await db.query(
-      `INSERT INTO members (
-        member_id, name, first_name, last_name, email, title, headline, location, status
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'active')`,
-      [
-        memberId,
-        fullName || email,
-        firstName,
-        lastName,
-        email,
-        'LinkedIn Member',
-        'LinkedIn Member',
-        null
-      ]
-    );
-  }
-
-  await ensureMemberSettingsRow(memberId);
-  return memberId;
-}
-
 // Auth: Signup
 app.post('/auth/signup', async (req, res) => {
   try {
@@ -597,20 +567,9 @@ app.post('/auth/signup', async (req, res) => {
       [token, userId, emailNorm, AUTH_TOKEN_TTL_HOURS]
     );
 
-    const memberId = await ensureAuthUserMember({
-      user_id: userId,
-      email: emailNorm,
-      name: name || null
-    });
-
     return res.status(201).json({
       token,
-      user: {
-        user_id: userId,
-        member_id: memberId,
-        email: emailNorm,
-        name: name || null
-      },
+      user: { user_id: userId, email: emailNorm, name: name || null },
       message: 'Signup successful'
     });
   } catch (err) {
@@ -645,16 +604,9 @@ app.post('/auth/login', async (req, res) => {
       'INSERT INTO auth_sessions (token, user_id, email, expires_at) VALUES (?, ?, ?, DATE_ADD(NOW(), INTERVAL ? HOUR))',
       [token, user.user_id, user.email, AUTH_TOKEN_TTL_HOURS]
     );
-    const memberId = await ensureAuthUserMember(user);
-
     return res.status(200).json({
       token,
-      user: {
-        user_id: user.user_id,
-        member_id: memberId,
-        email: user.email,
-        name: user.name || null
-      },
+      user: { user_id: user.user_id, email: user.email, name: user.name || null },
       message: 'Login successful'
     });
   } catch (err) {
@@ -683,13 +635,7 @@ app.get('/auth/me', async (req, res) => {
     if (!users.length) {
       return res.status(404).json({ error: 'NOT_FOUND', message: 'User not found', trace_id: crypto.randomUUID() });
     }
-    const memberId = await ensureAuthUserMember(users[0]);
-    return res.status(200).json({
-      user: {
-        ...users[0],
-        member_id: memberId
-      }
-    });
+    return res.status(200).json({ user: users[0] });
   } catch (err) {
     console.error(err);
     return res.status(500).json({ error: 'INTERNAL_ERROR', message: err.message, trace_id: crypto.randomUUID() });
@@ -1041,6 +987,29 @@ app.post('/members/get', async (req, res) => {
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'INTERNAL_ERROR', message: err.message, trace_id: crypto.randomUUID() });
+  }
+});
+
+
+// Resolve auth user_id (U-...) → member_id (M-...)
+app.post('/members/by-user', async (req, res) => {
+  const { user_id } = req.body || {};
+  if (!user_id) {
+    return res.status(400).json({ error: 'BAD_REQUEST', message: 'user_id required' });
+  }
+  try {
+    const [rows] = await db.query(
+      `SELECT m.member_id FROM members m
+       INNER JOIN auth_users u ON u.email = m.email
+       WHERE u.user_id = ? LIMIT 1`,
+      [user_id]
+    );
+    if (!rows.length) {
+      return res.status(404).json({ error: 'NOT_FOUND', message: 'No member profile for this user' });
+    }
+    return res.json({ member_id: rows[0].member_id });
+  } catch (e) {
+    return res.status(500).json({ error: 'SERVER_ERROR', message: e.message });
   }
 });
 

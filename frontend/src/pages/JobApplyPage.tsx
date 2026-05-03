@@ -1,15 +1,12 @@
 import { FormEvent, useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
-import { getCurrentMemberId } from '../lib/auth';
-import { MEMBER_ID } from '../lib/memberProfile';
 import { jobFromGetPayload, mergeJobDetail, normalizeJobListRows } from '../lib/jobNormalize';
 import { companyProfilePath, jobsResultsPath, jobsSearchPath } from '../lib/jobRoutes';
 import { showToast } from '../lib/toast';
 import type { Job } from '../mockData/jobs';
 
-const viewerMemberId = getCurrentMemberId() || MEMBER_ID;
-
 export default function JobApplyPage() {
+  const MEMBER_ID = sessionStorage.getItem('li_sim_member_id') || 'M-123';
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const jobId = useMemo(() => searchParams.get('jobId')?.trim() || '', [searchParams]);
@@ -38,7 +35,7 @@ export default function JobApplyPage() {
     fetch('/api/jobs/get', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ job_id: jobId, member_id: viewerMemberId })
+      body: JSON.stringify({ job_id: jobId, member_id: MEMBER_ID })
     })
       .then((res) => res.json().then((data) => ({ ok: res.ok, data })))
       .then(({ ok, data }) => {
@@ -88,7 +85,7 @@ export default function JobApplyPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           job_id: job.id,
-          member_id: viewerMemberId,
+          member_id: MEMBER_ID,
           resume_text: text,
           resume_url: resumeUrl.trim() || undefined,
           cover_letter: coverLetter.trim() || undefined

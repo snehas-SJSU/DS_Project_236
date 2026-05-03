@@ -1,12 +1,9 @@
 import { FormEvent, useEffect, useMemo, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import Navbar from '../components/layout/Navbar';
-import { getCurrentMemberId } from '../lib/auth';
-import { MEMBER_ID, resolveAvatarUrl } from '../lib/memberProfile';
+import { resolveAvatarUrl } from '../lib/memberProfile';
 import { addActivity } from '../lib/localData';
 import { showToast } from '../lib/toast';
-
-const viewerMemberId = getCurrentMemberId() || MEMBER_ID;
 
 type MemberResult = {
   id: string;
@@ -17,8 +14,9 @@ type MemberResult = {
 };
 
 export default function MemberSearchPage() {
+  const MEMBER_ID = sessionStorage.getItem('li_sim_member_id') || 'M-123';
   const [searchParams] = useSearchParams();
-  const memberId = viewerMemberId;
+  const memberId = MEMBER_ID;
   const [keyword, setKeyword] = useState('');
   const [location, setLocation] = useState('');
   const [skill, setSkill] = useState('');

@@ -1,9 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { getCurrentMemberId } from '../lib/auth';
-import { MEMBER_ID} from '../lib/memberProfile';
-
-const viewerMemberId = getCurrentMemberId() || MEMBER_ID;
 
 type JobItem = {
   id: string;
@@ -14,6 +10,7 @@ type JobItem = {
 };
 
 export default function JobInsightsPage() {
+  const MEMBER_ID = sessionStorage.getItem('li_sim_member_id') || 'M-123';
   const [skills, setSkills] = useState<string[]>([]);
   const [jobs, setJobs] = useState<JobItem[]>([]);
 
@@ -21,7 +18,7 @@ export default function JobInsightsPage() {
     fetch('/api/members/get', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ member_id: viewerMemberId })
+      body: JSON.stringify({ member_id: MEMBER_ID })
     })
       .then((res) => res.json())
       .then((data) => setSkills(Array.isArray(data?.skills) ? data.skills : []))

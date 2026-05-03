@@ -1,13 +1,10 @@
 import { Fragment, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { ChevronDown, Crown, MoreHorizontal, Search, SendHorizonal, SquarePen, Star } from 'lucide-react';
-import { getCurrentMemberId } from '../lib/auth';
-import { MEMBER_ID, resolveAvatarUrl, resolveViewerAvatarUrl } from '../lib/memberProfile';
+import { resolveAvatarUrl, resolveViewerAvatarUrl } from '../lib/memberProfile';
 import Navbar from '../components/layout/Navbar';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { addActivity } from '../lib/localData';
 import { showToast } from '../lib/toast';
-
-const viewerMemberId = getCurrentMemberId() || MEMBER_ID;
 
 type Thread = {
   id: string;
@@ -199,7 +196,8 @@ function MessagingFooterLinks() {
   );
 }
 
-function MessagingRightRail({ memberName, memberPhoto }: { memberName: string; memberPhoto: string }) {
+function MessagingRightRail({  memberName, memberPhoto }: { memberName: string; memberPhoto: string }) {
+  const MEMBER_ID = sessionStorage.getItem('li_sim_member_id') || 'M-123';
   const firstName = memberName.trim().split(/\s+/)[0] || 'You';
   return (
     <>
@@ -212,7 +210,7 @@ function MessagingRightRail({ memberName, memberPhoto }: { memberName: string; m
         </div>
         <div className="bg-gradient-to-b from-[#f3f2ef] to-white px-4 pb-5 pt-10 text-center">
           <p className="text-sm font-semibold leading-snug text-[#191919]">Premium subscribers are 2.7x more likely to get hired</p>
-          <Link to={`/profile/${encodeURIComponent(viewerMemberId)}`} className="relative mx-auto mt-4 block h-[72px] w-[72px]">
+          <Link to={`/profile/${encodeURIComponent(MEMBER_ID)}`} className="relative mx-auto mt-4 block h-[72px] w-[72px]">
             <img src={memberPhoto} alt="" className="h-full w-full rounded-full border-2 border-white object-cover shadow-md" />
             <span className="absolute -bottom-0.5 left-1/2 flex -translate-x-1/2 items-center gap-0.5 rounded-full bg-[#c9a227] px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white shadow">
               <Crown size={12} className="shrink-0" /> Premium
@@ -237,6 +235,7 @@ function MessagingRightRail({ memberName, memberPhoto }: { memberName: string; m
 }
 
 export default function MessagingPage() {
+  const MEMBER_ID = sessionStorage.getItem('li_sim_member_id') || 'M-123';
   const location = useLocation();
   const navigate = useNavigate();
   const [threads, setThreads] = useState<Thread[]>([]);
@@ -245,7 +244,7 @@ export default function MessagingPage() {
   const [loading, setLoading] = useState(true);
   const [draft, setDraft] = useState('');
   const [memberPhoto, setMemberPhoto] = useState<string>(resolveViewerAvatarUrl(undefined, 'Me'));
-  const [memberName, setMemberName] = useState('Sneha Singh');
+  const [memberName, setMemberName] = useState('');
   const [search, setSearch] = useState('');
   const [people, setPeople] = useState<Person[]>([]);
   const [personNameMap, setPersonNameMap] = useState<Record<string, string>>({});
@@ -257,7 +256,7 @@ export default function MessagingPage() {
   const [threadStarred, setThreadStarred] = useState<Record<string, boolean>>({});
   const [postShareCache, setPostShareCache] = useState<Record<string, SharedPostCard | null>>({});
   const postShareInflightRef = useRef<Set<string>>(new Set());
-  const memberId = viewerMemberId;
+  const memberId = sessionStorage.getItem('li_sim_member_id') || 'M-123';
 
   const avatarForShareQuoted = (q: SharedPostQuoted) =>
     q.member_id === memberId
@@ -359,7 +358,7 @@ export default function MessagingPage() {
       .then((data) => {
         if (!data || data.error) return;
         setMemberPhoto(resolveViewerAvatarUrl(data.profile_photo_url, data.name));
-        setMemberName(data.name || 'Sneha Singh');
+        setMemberName(data.name || '');
       })
       .catch(() => undefined);
     const timer = window.setInterval(() => {

@@ -1,9 +1,5 @@
 import { useEffect, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
-import { getCurrentMemberId } from '../lib/auth';
-import { MEMBER_ID } from '../lib/memberProfile';
-
-const viewerMemberId = getCurrentMemberId() || MEMBER_ID;
 
 const normalizeStatus = (value: string) => {
   const lower = (value || '').toLowerCase().trim();
@@ -12,6 +8,7 @@ const normalizeStatus = (value: string) => {
 };
 
 export default function ApplicationsPage() {
+  const MEMBER_ID = sessionStorage.getItem('li_sim_member_id') || 'M-123';
   const [searchParams] = useSearchParams();
   const [memberApps, setMemberApps] = useState<any[]>([]);
   const [jobId, setJobId] = useState('');
@@ -24,7 +21,7 @@ export default function ApplicationsPage() {
     const res = await fetch('/api/applications/byMember', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ member_id: viewerMemberId })
+      body: JSON.stringify({ member_id: MEMBER_ID })
     });
     const data = await res.json().catch(() => []);
     setMemberApps(Array.isArray(data) ? data : []);

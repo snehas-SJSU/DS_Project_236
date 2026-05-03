@@ -1,10 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Crown, Lock } from 'lucide-react';
-import { getCurrentMemberId } from '../lib/auth';
-import { MEMBER_ID } from '../lib/memberProfile';
 import { showToast } from '../lib/toast';
-
-const viewerMemberId = getCurrentMemberId() || MEMBER_ID;
 
 const plans = [
   { name: 'Career', price: '$29.99/mo', perks: ['Who viewed your profile', 'Priority job alerts', 'Tracker recommendations'] },
@@ -12,6 +8,7 @@ const plans = [
 ];
 
 export default function PremiumPage() {
+  const MEMBER_ID = sessionStorage.getItem('li_sim_member_id') || 'M-123';
   const [selected, setSelected] = useState('Career');
   const [status, setStatus] = useState<{ is_active: boolean; plan_name?: string | null; expires_at?: string | null }>({ is_active: false });
   const [busy, setBusy] = useState(false);
@@ -20,7 +17,7 @@ export default function PremiumPage() {
     fetch('/api/members/premium/status', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ member_id: viewerMemberId })
+      body: JSON.stringify({ member_id: MEMBER_ID })
     })
       .then((res) => res.json())
       .then((data) => setStatus({ is_active: Boolean(data?.is_active), plan_name: data?.plan_name || null, expires_at: data?.expires_at || null }))
@@ -33,7 +30,7 @@ export default function PremiumPage() {
       const res = await fetch('/api/members/premium/activate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ member_id: viewerMemberId, plan_name: selected })
+        body: JSON.stringify({ member_id: MEMBER_ID, plan_name: selected })
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
