@@ -151,6 +151,42 @@ Notes:
 2. `npm run bootstrap:python` creates `backend/.venv` and installs the FastAPI stack (`backend/requirements.txt`).
 3. `npm run bootstrap:ai-service` creates `services/ai-service/.venv` for the Agentic AI Uvicorn process (`start:all`).
 
+### 2.1.1 Optional: load full demo data from SQL dump (realistic jobs + members)
+
+The repo includes **`scripts/seed-full-db.sql`** (mysqldump of `linkedin_db`). Importing it **replaces** the listed tables (it uses `DROP TABLE` / `CREATE TABLE` / `INSERT`) with the snapshot—use when you want **real-looking job rows** instead of only smoke-test data.
+
+**Requirements:** Docker MySQL container running (`docker compose up -d`), container name **`linkedin-mysql`** (default in this repo).
+
+From repo root:
+
+```bash
+npm run seed:full-sql
+```
+
+Or without npm:
+
+```bash
+docker exec -i linkedin-mysql mysql -ulinkedin_user -plinkedin_pass linkedin_db < scripts/seed-full-db.sql
+```
+
+If you have the `mysql` client on the host instead:
+
+```bash
+mysql -h 127.0.0.1 -P 3307 -u linkedin_user -plinkedin_pass linkedin_db < scripts/seed-full-db.sql
+```
+
+Then **restart** `npm run start:all` so FastAPI reconnects and schema expectations match the loaded data.
+
+**Warning:** This overwrites those MySQL tables for `linkedin_db`. Do not run against a database you need to keep unless you have a backup.
+
+**Heads-up:** `seed-full-db.sql` only ships **two** job rows (smoke-style titles). If you then run **`npm run cleanup:smoke`**, those rows are removed and **`jobs` can be empty**—so `/jobs` shows nothing. Fix by loading realistic postings:
+
+```bash
+npm run seed:demo-jobs
+```
+
+That runs **`scripts/seed-demo-jobs.sql`** (15 Bay Area–style open roles, `R-123`). Safe to re-run (`ON DUPLICATE KEY UPDATE`).
+
 ### 2.2 Start infrastructure (DB + broker)
 
 ```bash
@@ -449,6 +485,7 @@ chmod +x scripts/smoke-test.sh
 Notes:
 1. By default the script calls **`http://localhost:4000/api`** (FastAPI directly), not port `3000`. That validates backends regardless of the Vite proxy.
 2. Keep **`npm run start:all`** running so FastAPI, Python workers, and the AI service are up before running smoke.
+3. After smoke, known test jobs (**Smoke Duplicate Apply Job**, **Smoke Closed Job**) are **deleted from MySQL** so `/jobs` is not flooded with duplicates. To keep them for debugging, run: `SMOKE_CLEANUP=0 bash scripts/smoke-test.sh`. Anytime: **`npm run cleanup:smoke`** removes those rows if they are still present.
 
 ### 8.1 Automated tests (pytest)
 

@@ -249,4 +249,14 @@ fatal_if_bad_response "messages/send" "$send_msg"
 assert_contains_any "${send_msg}" "message_id" "thread_id"
 post "/messages/list" "{\"thread_id\":\"${thread_id}\",\"limit\":20}" >/dev/null
 
+if [[ "${SMOKE_CLEANUP:-1}" != "0" ]]; then
+  echo "[cleanup] Removing smoke-test job rows from MySQL (set SMOKE_CLEANUP=0 to keep them)."
+  REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+  if (cd "${REPO_ROOT}" && node scripts/cleanup-smoke-artifacts.js); then
+    :
+  else
+    echo "Note: cleanup failed (MySQL down or node?). Jobs board may still show Smoke_* rows — run: npm run cleanup:smoke"
+  fi
+fi
+
 echo "Smoke tests passed (FastAPI + async workers + posts/get + messaging + analytics/events)."

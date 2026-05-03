@@ -11,10 +11,15 @@ export function normalizeJobListRows(rows: any[]): Job[] {
         : typeof row?.skills === 'string'
           ? JSON.parse(row.skills || '[]')
           : [];
+      const logo =
+        (row?.company_logo_url && String(row.company_logo_url)) ||
+        (row?.logoUrl && String(row.logoUrl)) ||
+        undefined;
       return {
         id,
         title: String(row?.title ?? ''),
         company: String(row?.company ?? ''),
+        logoUrl: logo || undefined,
         location: String(row?.location ?? ''),
         salary: String(row?.salary ?? ''),
         type: String(row?.type ?? row?.employment_type ?? ''),
@@ -41,11 +46,16 @@ export function mergeJobDetail(job: Job, detail: any): Job {
       ? JSON.parse(detail.skills || '[]')
       : job.skills;
   const id = job.id || String(detail?.job_id ?? detail?.id ?? '');
+  const mergedLogo =
+    (detail?.company_logo_url && String(detail.company_logo_url)) ||
+    (detail?.logoUrl && String(detail.logoUrl)) ||
+    job.logoUrl;
   return {
     ...job,
     ...detail,
     id,
     skills,
+    logoUrl: mergedLogo || undefined,
     applicants: detail?.applicants_count ?? detail?.applicants ?? job.applicants
   };
 }
@@ -59,10 +69,15 @@ export function jobFromGetPayload(detail: any): Job | null {
     : typeof detail?.skills === 'string'
       ? JSON.parse(detail.skills || '[]')
       : [];
+  const logo =
+    (detail?.company_logo_url && String(detail.company_logo_url)) ||
+    (detail?.logoUrl && String(detail.logoUrl)) ||
+    undefined;
   return {
     id: String(rawId),
     title: String(detail.title ?? ''),
     company: String(detail.company ?? ''),
+    logoUrl: logo || undefined,
     location: String(detail.location ?? ''),
     salary: String(detail.salary ?? ''),
     type: String(detail.type ?? detail.employment_type ?? ''),

@@ -8,6 +8,7 @@ import { companyProfilePath, jobsResultsPath, jobsSearchPath } from '../lib/jobR
 import { mergeJobDetail, normalizeJobListRows } from '../lib/jobNormalize';
 import { showToast } from '../lib/toast';
 import RecruiterAiJobPanel from '../components/recruiter/RecruiterAiJobPanel';
+import CompanyLogoTile from '../components/shared/CompanyLogoTile';
 
 const chips = ['Date posted', 'Remote', 'Inside Sales', 'Outside Sales', 'Healthcare', 'Biotech', 'Easy Apply', 'Employment type', 'Company', 'Under 10 applicants', 'In my network'];
 type DatePostedFilter = '24h' | 'week' | null;
@@ -554,12 +555,15 @@ export default function JobsSearchPage() {
               <Link
                 key={job.id}
                 to={jobsResultsPath(job.id)}
-                className={`block w-full border-b border-[#e0dfdc] px-4 py-2.5 text-left ${activeJob?.id === job.id ? 'bg-[#edf3f8]' : 'hover:bg-[#f9fafb]'}`}
+                className={`flex gap-3 border-b border-[#e0dfdc] px-4 py-2.5 text-left ${activeJob?.id === job.id ? 'bg-[#edf3f8]' : 'hover:bg-[#f9fafb]'}`}
               >
-                <p className="text-[22px] leading-tight font-semibold text-[#0a66c2]">{job.title}</p>
-                <p className="text-sm text-[#444]">{job.company}</p>
-                <p className="text-sm text-[#666]">{job.location}</p>
-                <p className="mt-1 text-xs text-[#666]">{job.postedAt} · {job.type}</p>
+                <CompanyLogoTile logoUrl={job.logoUrl} companyName={job.company} className="mt-0.5 h-12 w-12" />
+                <div className="min-w-0 flex-1">
+                  <p className="text-[22px] leading-tight font-semibold text-[#0a66c2]">{job.title}</p>
+                  <p className="text-sm text-[#444]">{job.company}</p>
+                  <p className="text-sm text-[#666]">{job.location}</p>
+                  <p className="mt-1 text-xs text-[#666]">{job.postedAt} · {job.type}</p>
+                </div>
               </Link>
             ))}
           </div>
@@ -567,22 +571,27 @@ export default function JobsSearchPage() {
         <section className="border border-l-0 border-[#e0dfdc] bg-white lg:col-span-7">
           {activeJob ? (
             <div className="p-6">
-              <h1 className="text-[44px] leading-[1.05] font-semibold text-[#191919]">{activeJob.title}</h1>
-              <p className="mt-2 text-lg text-[#444]">
-                <Link to={companyProfilePath(activeJob.company)} className="hover:text-[#0a66c2] hover:underline">
-                  {activeJob.company}
-                </Link>
-                {' '}
-                ·{' '}
-                <Link
-                  to={jobsSearchPath({ location: activeJob.location })}
-                  className="hover:text-[#0a66c2] hover:underline"
-                >
-                  {activeJob.location}
-                </Link>
-              </p>
-              <p className="mt-2 text-sm text-[#666]">{activeJob.postedAt} · {activeJob.applicants ?? 0} applicants</p>
-              <div className="mt-4 flex gap-2">
+              <div className="flex gap-4">
+                <CompanyLogoTile logoUrl={activeJob.logoUrl} companyName={activeJob.company} className="h-16 w-16 shrink-0" />
+                <div className="min-w-0 flex-1">
+                  <h1 className="text-[44px] leading-[1.05] font-semibold text-[#191919]">{activeJob.title}</h1>
+                  <p className="mt-2 text-lg text-[#444]">
+                    <Link to={companyProfilePath(activeJob.company)} className="hover:text-[#0a66c2] hover:underline">
+                      {activeJob.company}
+                    </Link>
+                    {' '}
+                    ·{' '}
+                    <Link
+                      to={jobsSearchPath({ location: activeJob.location })}
+                      className="hover:text-[#0a66c2] hover:underline"
+                    >
+                      {activeJob.location}
+                    </Link>
+                  </p>
+                  <p className="mt-2 text-sm text-[#666]">{activeJob.postedAt} · {activeJob.applicants ?? 0} applicants</p>
+                </div>
+              </div>
+              <div className="mt-6 flex gap-2">
                 <button
                   onClick={onApply}
                   disabled={Boolean((activeJob as any).applied)}

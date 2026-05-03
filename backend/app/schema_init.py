@@ -217,6 +217,7 @@ async def _jobs_tables() -> None:
     )
     """
     )
+    await _ensure_col("jobs", "company_logo_url", "company_logo_url LONGTEXT NULL")
     await _exec(
         """
     CREATE TABLE IF NOT EXISTS saved_jobs (

@@ -4,6 +4,7 @@ import { jobFromGetPayload, mergeJobDetail, normalizeJobListRows } from '../lib/
 import { companyProfilePath, jobsResultsPath, jobsSearchPath } from '../lib/jobRoutes';
 import { showToast } from '../lib/toast';
 import type { Job } from '../mockData/jobs';
+import CompanyLogoTile from '../components/shared/CompanyLogoTile';
 
 export default function JobApplyPage() {
   const MEMBER_ID = sessionStorage.getItem('li_sim_member_id') || 'M-123';
@@ -133,16 +134,21 @@ export default function JobApplyPage() {
     <div className="space-y-4">
       <section className="li-card p-5">
         <p className="text-xs font-semibold uppercase tracking-wide text-[#666]">Job details</p>
-        <h1 className="mt-2 text-3xl font-semibold text-[#191919]">{job.title}</h1>
-        <p className="mt-2 text-sm text-[#444]">
-          <Link to={companyProfilePath(job.company)} className="hover:text-[#0a66c2] hover:underline">
-            {job.company}
-          </Link>
-          {' · '}
-          <Link to={jobsSearchPath({ location: job.location })} className="hover:text-[#0a66c2] hover:underline">
-            {job.location}
-          </Link>
-        </p>
+        <div className="mt-3 flex gap-4">
+          <CompanyLogoTile logoUrl={job.logoUrl} companyName={job.company} className="h-16 w-16 shrink-0" />
+          <div className="min-w-0 flex-1">
+            <h1 className="text-3xl font-semibold text-[#191919]">{job.title}</h1>
+            <p className="mt-2 text-sm text-[#444]">
+              <Link to={companyProfilePath(job.company)} className="hover:text-[#0a66c2] hover:underline">
+                {job.company}
+              </Link>
+              {' · '}
+              <Link to={jobsSearchPath({ location: job.location })} className="hover:text-[#0a66c2] hover:underline">
+                {job.location}
+              </Link>
+            </p>
+          </div>
+        </div>
         <p className="mt-4 text-sm leading-relaxed text-[#333]">{job.description || 'No description provided.'}</p>
         <div className="mt-4">
           <p className="text-sm font-semibold text-[#191919]">Skills required</p>

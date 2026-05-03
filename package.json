@@ -11,6 +11,10 @@
 
     "seed:connections": "node scripts/seed-demo-connections.js",
     "seed:ai-applicants": "node scripts/seed-ai-applicants.js",
+    "seed:full-sql": "docker exec -i linkedin-mysql mysql -ulinkedin_user -plinkedin_pass linkedin_db < scripts/seed-full-db.sql",
+    "seed:demo-jobs": "docker exec -i linkedin-mysql mysql -ulinkedin_user -plinkedin_pass linkedin_db < scripts/seed-demo-jobs.sql",
+
+    "cleanup:smoke": "node scripts/cleanup-smoke-artifacts.js",
 
     "dev:ai-service": "cd services/ai-service && .venv/bin/python -m uvicorn main:app --reload --host 127.0.0.1 --port 8001",
 

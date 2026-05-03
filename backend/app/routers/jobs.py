@@ -20,6 +20,49 @@ from app.routers.members import _iso_z
 
 router = APIRouter()
 
+# Known employers → domain for Google favicon (LinkedIn-style square logo in UI).
+_COMPANY_DOMAINS: dict[str, str] = {
+    "Stripe": "stripe.com",
+    "Databricks": "databricks.com",
+    "Confluent": "confluent.io",
+    "NVIDIA": "nvidia.com",
+    "Netflix": "netflix.com",
+    "Okta": "okta.com",
+    "Snowflake": "snowflake.com",
+    "Apple": "apple.com",
+    "Google": "google.com",
+    "Adobe": "adobe.com",
+    "Figma": "figma.com",
+    "Uber": "uber.com",
+    "Cisco": "cisco.com",
+    "ServiceNow": "servicenow.com",
+    "LinkedIn": "linkedin.com",
+    "Microsoft": "microsoft.com",
+    "Amazon": "amazon.com",
+    "Meta": "meta.com",
+    "Salesforce": "salesforce.com",
+    "Acme": "",
+}
+
+
+def _resolved_company_logo_url(row: dict) -> Optional[str]:
+    """Return a logo URL that loads reliably in `<img>` (Clearbit often 403s in browsers)."""
+    raw = str(row.get("company_logo_url") or "").strip()
+    if raw:
+        if "logo.clearbit.com/" in raw:
+            try:
+                dom = raw.split("logo.clearbit.com/", 1)[1].split("?")[0].strip().rstrip("/")
+                if dom:
+                    return f"https://www.google.com/s2/favicons?domain={dom}&sz=128"
+            except Exception:
+                pass
+        return raw
+    company = str(row.get("company") or "").strip()
+    dom = _COMPANY_DOMAINS.get(company)
+    if not dom:
+        return None
+    return f"https://www.google.com/s2/favicons?domain={dom}&sz=128"
+
 
 def _tid() -> str:
     return str(uuid.uuid4())
@@ -168,12 +211,14 @@ async def jobs_search(body: dict):
                     sk = json.loads(sk or "[]")
                 except json.JSONDecodeError:
                     sk = []
+            rdict = dict(r)
             out.append({
                 "id": r["job_id"],
                 "job_id": r["job_id"],
                 "company_id": r.get("company_id"),
                 "title": r.get("title"),
                 "company": r.get("company"),
+                "company_logo_url": _resolved_company_logo_url(rdict),
                 "location": r.get("location"),
                 "salary": r.get("salary"),
                 "type": r.get("type"),
@@ -250,11 +295,15 @@ async def jobs_get(body: dict):
                 job["skills"] = json.loads(sk or "[]")
             except json.JSONDecodeError:
                 job["skills"] = []
+        job["company_logo_url"] = _resolved_company_logo_url(job)
         try:
             r = get_redis()
             await r.setex(f"job:{job_id}", 300, json.dumps(job, default=str))
         except Exception:
             pass
+    else:
+        job = dict(job)
+        job["company_logo_url"] = _resolved_company_logo_url(job)
     trace_id = _tid()
     idem = hashlib.sha256(f"view-{job_id}-{trace_id}".encode()).hexdigest()
     ev = job_env("job.viewed", trace_id, member_id or "anonymous", job_id, {"job_id": job_id, "viewer": member_id}, idem)
@@ -279,10 +328,12 @@ async def jobs_get(body: dict):
             saved = bool(s)
         except Exception:
             pass
+    job_out = dict(job)
+    job_out["company_logo_url"] = _resolved_company_logo_url(job_out)
     return {
-        **job,
-        "company_id": job.get("company_id"),
-        "posted_datetime": job.get("created_at"),
+        **job_out,
+        "company_id": job_out.get("company_id"),
+        "posted_datetime": job_out.get("created_at"),
         "applied": applied,
         "saved": saved,
     }
