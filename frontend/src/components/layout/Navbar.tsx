@@ -1,10 +1,7 @@
 import { Bell, Briefcase, Building2, ChevronDown, CircleDollarSign, Compass, Crown, Grid3X3, Handshake, Home, MessageSquare, Network, Search, Settings, Sparkles } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { Link, NavLink, useLocation, useNavigate } from 'react-router-dom';
-import { getCurrentMemberId } from '../../lib/auth';
-import { LOCAL_AVATAR_KEY, MEMBER_ID, resolveViewerAvatarUrl } from '../../lib/memberProfile';
-
-const viewerMemberId = getCurrentMemberId() || MEMBER_ID;
+import { LOCAL_AVATAR_KEY, resolveViewerAvatarUrl } from '../../lib/memberProfile';
 
 type SearchSuggestion =
   | { type: 'job'; value: string; label: string; subtitle?: string }
@@ -19,13 +16,16 @@ export default function Navbar() {
   const [suggestions, setSuggestions] = useState<SearchSuggestion[]>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [meProfile, setMeProfile] = useState<{ name: string; headline: string; photo?: string }>({
-    name: 'Sneha Singh',
-    headline: 'MS in Applied Data Intelligence | Distributed Systems',
-    photo: resolveViewerAvatarUrl(undefined, 'Sneha Singh')
+    name: '',
+    headline: '',
+    photo: undefined
   });
   const menuRef = useRef<HTMLDivElement | null>(null);
   const businessMenuRef = useRef<HTMLDivElement | null>(null);
   const searchWrapRef = useRef<HTMLDivElement | null>(null);
+
+  // Always read member ID dynamically from sessionStorage at render time
+  const MEMBER_ID = sessionStorage.getItem('li_sim_member_id') || 'M-123';
 
   useEffect(() => {
     const onClickOutside = (event: MouseEvent) => {
@@ -112,10 +112,11 @@ export default function Navbar() {
   }, [searchTerm]);
 
   useEffect(() => {
+    const memberId = sessionStorage.getItem('li_sim_member_id') || 'M-123';
     fetch('/api/members/get', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ member_id: viewerMemberId })
+      body: JSON.stringify({ member_id: memberId })
     })
       .then((res) => res.json())
       .then((data) => {
@@ -123,9 +124,9 @@ export default function Navbar() {
         const photo = resolveViewerAvatarUrl(data.profile_photo_url, data.name);
         if (photo) localStorage.setItem(LOCAL_AVATAR_KEY, photo);
         setMeProfile({
-          name: data.name || 'Sneha Singh',
-          headline: data.headline || data.title || 'MS in Applied Data Intelligence | Distributed Systems',
-                  photo
+          name: data.name || '',
+          headline: data.headline || data.title || '',
+          photo
         });
       })
       .catch(() => undefined);
@@ -327,7 +328,9 @@ export default function Navbar() {
                   {meProfile.photo ? (
                     <img src={meProfile.photo} alt="Me" className="h-full w-full object-cover" />
                   ) : (
-                    <span className="text-xs font-bold text-white">ME</span>
+                    <span className="text-xs font-bold text-white">
+                      {meProfile.name ? meProfile.name.charAt(0).toUpperCase() : 'M'}
+                    </span>
                   )}
                 </div>
                 <span className="mt-0.5 text-[12px] font-medium">Me</span>

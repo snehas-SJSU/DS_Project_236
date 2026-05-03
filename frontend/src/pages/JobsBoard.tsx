@@ -3,23 +3,21 @@ import { Job } from '../mockData/jobs';
 import JobCard from '../components/shared/JobCard';
 import Navbar from '../components/layout/Navbar';
 import { Link } from 'react-router-dom';
-import { getCurrentMemberId } from '../lib/auth';
-import { MEMBER_ID, resolveViewerAvatarUrl } from '../lib/memberProfile';
+import { resolveViewerAvatarUrl } from '../lib/memberProfile';
 import { normalizeJobListRows } from '../lib/jobNormalize';
 
-const viewerMemberId = getCurrentMemberId() || MEMBER_ID;
-
 export default function JobsBoard() {
+  const MEMBER_ID = sessionStorage.getItem('li_sim_member_id') || 'M-123';
   const [jobs, setJobs] = useState<Job[]>([]);
   const [loading, setLoading] = useState(true);
   const [keyword, setKeyword] = useState('');
   const [locationFilter, setLocationFilter] = useState('');
   const [typeFilter, setTypeFilter] = useState('');
   const [member, setMember] = useState<{ name: string; location: string; headline: string; photo: string }>({
-    name: 'Sneha Singh',
-    location: 'San Jose, California',
-    headline: 'MS Student | Distributed Systems',
-    photo: resolveViewerAvatarUrl(undefined, 'Sneha Singh')
+    name: '',
+    location: '',
+    headline: '',
+    photo: resolveViewerAvatarUrl(undefined, '')
   });
 
   const fetchJobs = () => {
@@ -68,15 +66,15 @@ export default function JobsBoard() {
     fetch('/api/members/get', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ member_id: viewerMemberId })
+      body: JSON.stringify({ member_id: MEMBER_ID })
     })
       .then((res) => res.json())
       .then((data) => {
         if (!data || data.error) return;
         setMember({
-          name: data.name || 'Sneha Singh',
-          location: data.location || 'San Jose, California',
-          headline: data.headline || data.title || 'MS Student | Distributed Systems',
+          name: data.name || '',
+          location: data.location || '',
+          headline: data.headline || data.title || '',
           photo: resolveViewerAvatarUrl(data.profile_photo_url, data.name)
         });
       })
@@ -93,12 +91,12 @@ export default function JobsBoard() {
             <div className="h-14 bg-gradient-to-r from-[#9ec6e5] to-[#c9def0]" />
             <div className="px-4 pb-4">
               <Link
-                to={`/profile/${encodeURIComponent(viewerMemberId)}`}
+                to={`/profile/${encodeURIComponent(MEMBER_ID)}`}
                 className="-mt-6 mb-2 block h-12 w-12 overflow-hidden rounded-full border-2 border-white bg-slate-300"
               >
                 <img src={member.photo} alt="Profile" className="h-full w-full object-cover" />
               </Link>
-              <Link to={`/profile/${encodeURIComponent(viewerMemberId)}`} className="text-lg font-semibold text-[#191919] hover:text-[#0a66c2] hover:underline">
+              <Link to={`/profile/${encodeURIComponent(MEMBER_ID)}`} className="text-lg font-semibold text-[#191919] hover:text-[#0a66c2] hover:underline">
                 {member.name}
               </Link>
               <p className="text-xs text-[#666666]">{member.location}</p>

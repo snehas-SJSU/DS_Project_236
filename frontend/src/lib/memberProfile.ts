@@ -1,4 +1,4 @@
-export const MEMBER_ID = 'M-123';
+export const MEMBER_ID = sessionStorage.getItem('li_sim_member_id') || 'M-123';
 
 /** Logged-in recruiter for hiring / AI workflows (override with VITE_RECRUITER_ID). */
 export const RECRUITER_ID =

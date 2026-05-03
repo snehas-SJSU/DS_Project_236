@@ -1,12 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { ArrowLeft, ExternalLink, Lock, MoreHorizontal } from 'lucide-react';
-import { getCurrentMemberId } from '../lib/auth';
-import { MEMBER_ID } from '../lib/memberProfile';
 import { jobsResultsPath } from '../lib/jobRoutes';
 import { showToast } from '../lib/toast';
-
-const viewerMemberId = getCurrentMemberId() || MEMBER_ID;
 
 type TrackedJob = {
   id: string;
@@ -46,6 +42,7 @@ function parseStage(job: TrackedJob) {
 }
 
 export default function JobTrackerPage() {
+  const MEMBER_ID = sessionStorage.getItem('li_sim_member_id') || 'M-123';
   const navigate = useNavigate();
   const [trackedJobs, setTrackedJobs] = useState<TrackedJob[]>([]);
   const [loading, setLoading] = useState(true);
@@ -71,7 +68,7 @@ export default function JobTrackerPage() {
       const res = await fetch('/api/jobs/tracker', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ member_id: viewerMemberId })
+        body: JSON.stringify({ member_id: MEMBER_ID })
       });
       const data = await res.json().catch(() => []);
       if (!res.ok) {
@@ -93,7 +90,7 @@ export default function JobTrackerPage() {
     fetch('/api/connections/list', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ user_id: viewerMemberId })
+      body: JSON.stringify({ user_id: MEMBER_ID })
     })
       .then((res) => res.json())
       .then((data) => {
@@ -108,7 +105,7 @@ export default function JobTrackerPage() {
     fetch('/api/members/premium/status', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ member_id: viewerMemberId })
+      body: JSON.stringify({ member_id: MEMBER_ID })
     })
       .then((res) => res.json())
       .then((data) => setPremium({ is_active: Boolean(data?.is_active), plan_name: data?.plan_name || null }))
@@ -217,7 +214,7 @@ export default function JobTrackerPage() {
       const res = await fetch('/api/jobs/tracker/note', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ member_id: viewerMemberId, job_id: noteEditorJob.id, note: noteDraft })
+        body: JSON.stringify({ member_id: MEMBER_ID, job_id: noteEditorJob.id, note: noteDraft })
       });
       if (!res.ok) {
         showToast('Unable to save note right now.', 'error');
@@ -241,7 +238,7 @@ export default function JobTrackerPage() {
       const res = await fetch('/api/applications/submit', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ job_id: job.id, member_id: viewerMemberId })
+        body: JSON.stringify({ job_id: job.id, member_id: MEMBER_ID })
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
@@ -268,7 +265,7 @@ export default function JobTrackerPage() {
       const res = await fetch('/api/jobs/unsave', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ job_id: job.id, member_id: viewerMemberId })
+        body: JSON.stringify({ job_id: job.id, member_id: MEMBER_ID })
       });
       if (!res.ok) {
         showToast('Unable to unsave right now.', 'error');
@@ -286,7 +283,7 @@ export default function JobTrackerPage() {
       const res = await fetch('/api/jobs/tracker/archive', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ member_id: viewerMemberId, job_id: job.id, archived })
+        body: JSON.stringify({ member_id: MEMBER_ID, job_id: job.id, archived })
       });
       if (!res.ok) {
         showToast(`Unable to ${archived ? 'archive' : 'restore'} right now.`, 'error');

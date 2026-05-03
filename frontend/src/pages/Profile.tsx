@@ -1,11 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { Briefcase, GraduationCap, MapPin, Pencil } from 'lucide-react';
 import { Link } from 'react-router-dom';
-import { getCurrentMemberId } from '../lib/auth';
-import { LOCAL_AVATAR_KEY, MEMBER_ID, resolveViewerAvatarUrl } from '../lib/memberProfile';
+import { LOCAL_AVATAR_KEY, resolveViewerAvatarUrl } from '../lib/memberProfile';
 import { showToast } from '../lib/toast';
-
-const viewerMemberId = getCurrentMemberId() || MEMBER_ID;
 
 type LoadState = { status: 'loading' } | { status: 'ok'; data: any } | { status: 'error'; message: string };
 type EditSection = 'profile' | 'suggested' | 'about' | 'activity' | 'analytics' | 'experience' | 'education' | 'skills';
@@ -18,6 +15,7 @@ const COVER_THEMES: Record<string, string> = {
 };
 
 export default function Profile() {
+  const MEMBER_ID = sessionStorage.getItem('li_sim_member_id') || 'M-123';
   const [state, setState] = useState<LoadState>({ status: 'loading' });
   const [editing, setEditing] = useState(false);
   const [editSection, setEditSection] = useState<EditSection>('profile');
@@ -33,7 +31,7 @@ export default function Profile() {
     fetch('/api/members/get', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ member_id: viewerMemberId })
+      body: JSON.stringify({ member_id: MEMBER_ID })
     })
       .then(async (res) => {
         const data = await res.json().catch(() => ({}));
@@ -77,7 +75,7 @@ export default function Profile() {
     fetch('/api/analytics/member/dashboard', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ member_id: viewerMemberId })
+      body: JSON.stringify({ member_id: MEMBER_ID })
     })
       .then((res) => res.json())
       .then((data) => setDashboard(data))
@@ -98,7 +96,7 @@ export default function Profile() {
   const displayName =
     (profile.name && String(profile.name).trim()) ||
     [profile.first_name, profile.last_name].filter(Boolean).join(' ').trim() ||
-    'Sneha Singh';
+    '';
   const headlineText = profile.headline || profile.title || 'Full Stack AI Engineer';
   const avatarUrl = resolveViewerAvatarUrl((draft.profile_photo_url || profile.profile_photo_url) as string | undefined, displayName);
   const coverClass = COVER_THEMES[draft.cover_theme || profile.cover_theme || 'blue'] || COVER_THEMES.blue;
@@ -132,7 +130,7 @@ export default function Profile() {
         const res = await fetch('/api/members/update', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ member_id: viewerMemberId, [key]: dataUrl })
+          body: JSON.stringify({ member_id: MEMBER_ID, [key]: dataUrl })
         });
         if (res.ok) {
           if (key === 'profile_photo_url') {
@@ -204,7 +202,7 @@ export default function Profile() {
     const res = await fetch('/api/members/update', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ member_id: viewerMemberId, ...fields })
+      body: JSON.stringify({ member_id: MEMBER_ID, ...fields })
     });
     if (!res.ok) {
       const err = await res.json().catch(() => ({}));
@@ -479,7 +477,7 @@ export default function Profile() {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                  member_id: viewerMemberId,
+                  member_id: MEMBER_ID,
                   headline: draft.headline,
                   title: draft.title,
                   about: draft.about,

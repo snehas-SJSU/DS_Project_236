@@ -75,8 +75,19 @@ export default function SignInPage() {
                 }
                 if (data?.token) {
                   setAuthToken(data.token);
-                  if (data?.user?.user_id) localStorage.setItem('user_id', data.user.user_id);
-                  if (data?.user?.member_id) localStorage.setItem('member_id', data.user.member_id);
+                  if (data?.user?.user_id) {
+                    try {
+                      const mr = await fetch('/api/members/by-user', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ user_id: data.user.user_id })
+                      });
+                      const m = await mr.json();
+                      sessionStorage.setItem('li_sim_member_id', m?.member_id || data.user.user_id);
+                    } catch {
+                      sessionStorage.setItem('li_sim_member_id', data.user.user_id);
+                    }
+                  }
                 }
                 navigate('/feed');
               } catch {

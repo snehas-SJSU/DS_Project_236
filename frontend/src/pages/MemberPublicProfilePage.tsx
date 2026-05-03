@@ -2,11 +2,11 @@ import { useEffect, useMemo, useState } from 'react';
 import { Briefcase, GraduationCap, MapPin } from 'lucide-react';
 import { Link, Navigate, useParams } from 'react-router-dom';
 import { getCurrentMemberId } from '../lib/auth';
-import { MEMBER_ID, resolveAvatarUrl } from '../lib/memberProfile';
+import { resolveAvatarUrl } from '../lib/memberProfile';
 import { addActivity } from '../lib/localData';
 import { showToast } from '../lib/toast';
 
-const viewerMemberId = getCurrentMemberId() || MEMBER_ID;
+const viewerMemberId = getCurrentMemberId() || sessionStorage.getItem('li_sim_member_id') || 'M-123';
 
 type ProfileData = {
   member_id: string;
@@ -23,8 +23,8 @@ type ProfileData = {
 };
 
 const fallbackProfiles: Record<string, ProfileData> = {
-  'M-DEMO-01': {
-    member_id: 'M-DEMO-01',
+  'M-a1b2c3d4': {
+    member_id: 'M-a1b2c3d4',
     name: 'Alex Chen',
     headline: 'Senior Engineer at Acme',
     location: 'San Jose, CA',
@@ -33,8 +33,8 @@ const fallbackProfiles: Record<string, ProfileData> = {
     experience: [{ role: 'Senior Engineer', company: 'Acme', period: '2021 - Present', description: 'Building scalable backend systems and Kafka-based workflows.' }],
     education: [{ school: 'San Jose State University', degree: 'MS, Software Engineering', period: '2019 - 2021' }]
   },
-  'M-DEMO-02': {
-    member_id: 'M-DEMO-02',
+  'M-e5f6g7h8': {
+    member_id: 'M-e5f6g7h8',
     name: 'Priya Kapoor',
     headline: 'Recruiter at Nova Labs',
     location: 'San Francisco, CA',
@@ -46,6 +46,7 @@ const fallbackProfiles: Record<string, ProfileData> = {
 };
 
 export default function MemberPublicProfilePage() {
+  const MEMBER_ID = sessionStorage.getItem('li_sim_member_id') || 'M-123';
   const { memberId = '' } = useParams();
   const viewerId = viewerMemberId;
   const [member, setMember] = useState<ProfileData | null>(null);

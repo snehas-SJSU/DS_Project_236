@@ -39,7 +39,7 @@ class Config:
             or os.getenv("KAFKA_BROKERS")
             or os.getenv("KAFKA_BROKER")
             or os.getenv("KAFKA_BOOTSTRAP_SERVERS")
-            or "127.0.0.1:9092"
+            or "localhost:29092"
         ).split(",")
         if s.strip()
     ]
