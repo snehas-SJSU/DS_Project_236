@@ -8,7 +8,7 @@
  */
 const path = require('path');
 const crypto = require('crypto');
-const db = require(path.join(__dirname, '..', 'shared', 'mysql'));
+const db = require(path.join(__dirname, 'lib', 'mysql'));
 
 function argValue(flag) {
   const idx = process.argv.indexOf(flag);

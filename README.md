@@ -1,6 +1,6 @@
 # LinkedIn Simulation (Data 236)
 
-Distributed LinkedIn-style project with React frontend, API gateway, Node microservices, Kafka workers, MySQL, MongoDB, Redis, Agentic AI, and deployment/benchmarking readiness.
+Distributed LinkedIn-style project with React frontend, **FastAPI** core API (port 4000), Python Kafka workers, MySQL, MongoDB, Redis, Agentic AI service, and deployment/benchmarking readiness.
 
 ---
 
@@ -10,70 +10,57 @@ Distributed LinkedIn-style project with React frontend, API gateway, Node micros
 ```mermaid
 graph TD
     User((Browser / Recruiter / Member)) -->|HTTPS| FE[React Frontend]
-    FE -->|/api/*| Gateway[API Gateway]
+    FE -->|/api/*| CoreAPI[FastAPI Core :4000]
 
-    subgraph Core_Microservices["Core Microservices (Node.js / Express)"]
-      Member[Member Service]
-      Job[Job Service]
-      App[Application Service]
-      Msg[Messaging Service]
-      Analytics[Analytics Service]
-      Conn[Connection Service]
+    subgraph CoreAPI_Internal["Routes on :4000"]
+      R1[Members Auth Jobs Applications]
+      R2[Messaging Analytics Connections Posts]
+      R3[HTTP/WS proxy → AI :8001]
     end
 
-    Gateway --> Member
-    Gateway --> Job
-    Gateway --> App
-    Gateway --> Msg
-    Gateway --> Analytics
-    Gateway --> Conn
+    CoreAPI --> CoreAPI_Internal
 
-    subgraph Agentic_AI["Agentic AI Layer (FastAPI)"]
+    subgraph Workers["Python Kafka consumers"]
+      W1[member worker]
+      W2[job worker]
+      W3[application worker]
+    end
+
+    subgraph Agentic_AI["Agentic AI (FastAPI :8001)"]
       AIAPI[AI API Service]
       Supervisor[Hiring Assistant Supervisor]
-      Skills[Resume Parse / Match / Outreach Agents]
+      Skills[Resume Parse / Match / Outreach]
     end
 
-    Gateway -->|/api/ai/*| AIAPI
+    R3 --> AIAPI
     AIAPI --> Supervisor
     Supervisor --> Skills
 
     subgraph Event_Streaming["Async Event Streaming"]
       Kafka[(Kafka)]
-      ZK[(Zookeeper)]
     end
-    ZK --> Kafka
-    Member --> Kafka
-    Job --> Kafka
-    App --> Kafka
-    Msg --> Kafka
-    Conn --> Kafka
-    Analytics --> Kafka
+    CoreAPI --> Kafka
+    Workers --> Kafka
     AIAPI --> Kafka
 
     subgraph Data_Stores["Data Layer"]
-      MySQL[(MySQL - transactional)]
-      Mongo[(MongoDB - events/messages)]
-      Redis[(Redis - cache/idempotency)]
+      MySQL[(MySQL)]
+      Mongo[(MongoDB)]
+      Redis[(Redis)]
     end
-    Member --> MySQL
-    Job --> MySQL
-    App --> MySQL
-    Conn --> MySQL
-    Msg --> Mongo
-    Analytics --> Mongo
-    Member --> Redis
-    Job --> Redis
-    App --> Redis
+    CoreAPI --> MySQL
+    CoreAPI --> Mongo
+    CoreAPI --> Redis
+    Workers --> MySQL
+    Agentic_AI --> Mongo
 
     subgraph Validation_Deployment["Validation + Deployment"]
       JMeter[JMeter Load Tests]
       AWS[AWS Deployment Target]
     end
     JMeter --> FE
-    JMeter --> Gateway
-    Gateway --> AWS
-    Core_Microservices --> AWS
+    JMeter --> CoreAPI
+    CoreAPI --> AWS
     Agentic_AI --> AWS
     Data_Stores --> AWS
 ```
@@ -82,8 +69,8 @@ graph TD
 
 ```mermaid
 graph TD
-  FE[Frontend UI] --> GW[API Gateway]
-  GW --> AI[FastAPI Agent Layer]
+  FE[Frontend UI] --> GW[FastAPI Core :4000]
+  GW -->|proxy /api/ai| AI[FastAPI Agent Layer :8001]
 
   AI -->|REST| SK[AI Skills Service]
   AI <--> K[(Kafka: ai.requests / ai.results)]
@@ -107,15 +94,31 @@ graph TD
 
 | Port | What it is | You use it for |
 |------|------------|----------------|
-| **4000** | **API gateway** (single HTTP entry to the backend) | `POST /api/...`, **`http://localhost:4000/docs`** (Swagger — **served by the gateway**, not “moved” elsewhere) |
-| **3000** | **React app** (Vite dev server) | **`http://localhost:3000`** for the UI. In dev, Vite **proxies** `/api` and `/docs` → `http://localhost:4000`, so **`http://localhost:3000/docs`** is the **same** Swagger document, just reached through the proxy for convenience (one browser origin). |
-| **4001–4007** | Individual microservices behind the gateway | Normally **not** opened in the browser; traffic goes **via 4000** (or relative `/api/...` from the app on 3000). |
-
+| **4000** | **FastAPI** core API (single HTTP entry: all domain routes + proxy to AI) | `POST /api/...`, **`http://localhost:4000/docs`** (OpenAPI / Swagger) |
+| **8001** | **Agentic AI** (FastAPI) | Used directly by the core API via HTTP/WebSocket proxy under `/api/ai` |
+| **3000** | **React app** (Vite dev server) | **`http://localhost:3000`**. Vite **proxies** `/api` and `/docs` → `http://localhost:4000`. |
 **Takeaways**
 
-1. **Swagger always lives on the gateway process** (`/docs` on port **4000**). Port **3000** does not host a second copy; it only **forwards** `/docs` when you run `npm run dev` in `frontend/` (see `frontend/vite.config.ts`).
-2. If someone says “use the app on3000,” that is correct for the **UI**. If they say “the API is on 4000,” that is also correct for the **gateway** and **Swagger**.
+1. **Swagger** is served by **FastAPI** on **`/docs`** (port **4000**). The Vite dev server **forwards** `/docs` when you run `npm run dev` in `frontend/`. A frozen copy of the old gateway OpenAPI YAML is in **`docs/swagger.yaml`** (reference only).
+2. **UI** on **3000**, **API** on **4000** (Python). Run **`npm run bootstrap:python`** and **`npm run bootstrap:ai-service`** once, then **`npm run start:all`** (FastAPI + Kafka workers + AI).
 3. **`npm run test:smoke`** calls **`http://localhost:4000/api`** on purpose so backend health is checked **without** relying on the Vite dev server.
+
+---
+
+## 0.2 Local workflow (features and correctness)
+
+Use this while you focus on **everything working on your machine**. **AWS/Kubernetes, JMeter, and the performance write-up** are separate milestones (see `deploy/` and the class PDF when you tackle them).
+
+| Step | Command |
+|------|---------|
+| 1. One-time install | `npm run bootstrap` · `npm run bootstrap:python` · `npm run bootstrap:ai-service` |
+| 2. Databases + Kafka + Redis | `docker compose up -d` |
+| 3. API + workers + AI | `npm run start:all` (leave running) |
+| 4. React UI | `cd frontend && npm run dev` → [http://localhost:3000](http://localhost:3000) |
+| 5. Sanity check | `npm run test:smoke` |
+| 6. Automated tests | `npm run test:backend` · optional live: `npm run test:backend:integration` |
+
+If something fails, see **§9.0 Troubleshooting**. Feature-to-code mapping: **`docs/RUBRIC_ALIGNMENT.md`**.
 
 ---
 
@@ -139,12 +142,14 @@ Run from repo root.
 
 ```bash
 npm run bootstrap
-pip install -r requirements.txt
+npm run bootstrap:python
+npm run bootstrap:ai-service
 ```
 
 Notes:
-1. `npm run bootstrap` installs all Node dependencies for gateway/services/frontend.
-2. `requirements.txt` installs Python dependencies used in this repo.
+1. `npm run bootstrap` installs Node dependencies for `frontend/`.
+2. `npm run bootstrap:python` creates `backend/.venv` and installs the FastAPI stack (`backend/requirements.txt`).
+3. `npm run bootstrap:ai-service` creates `services/ai-service/.venv` for the Agentic AI Uvicorn process (`start:all`).
 
 ### 2.2 Start infrastructure (DB + broker)
 
@@ -162,6 +167,16 @@ Infra services started by this command:
 3. MySQL (`3306`)
 4. MongoDB (`27017`)
 5. Redis (`6379`)
+
+### 2.2.1 Optional: run API + workers + AI in Docker (rubrics / AWS images)
+
+After infra is up:
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.apps.yml up -d --build
+```
+
+This builds `backend/Dockerfile` (FastAPI or workers via `RUN_WORKERS`) and `services/ai-service/Dockerfile`. The React app can still run on the host with `cd frontend && npm run dev` (proxies to `localhost:4000`). For **EKS/ECS**, see `deploy/kubernetes/` and `deploy/aws-ecs/README.md`.
 
 ### 2.3 Start backend services
 
@@ -183,8 +198,8 @@ If port `3000` is already in use, Vite auto-selects another port (for example `3
 See **§0.1** for why both **4000** and **3000** appear — both are correct for different purposes.
 
 1. App: [http://localhost:3000](http://localhost:3000)
-2. Swagger (**canonical** — on the API gateway): [http://localhost:4000/docs](http://localhost:4000/docs)
-3. Swagger (**dev convenience** — Vite on 3000 proxies `/docs` to the gateway; same content as #2): [http://localhost:3000/docs](http://localhost:3000/docs)
+2. Swagger (**canonical** — FastAPI on :4000): [http://localhost:4000/docs](http://localhost:4000/docs)
+3. Swagger (**dev convenience** — Vite on 3000 proxies `/docs` to :4000; same content as #2): [http://localhost:3000/docs](http://localhost:3000/docs)
 
 ### 2.5.1 Quick access URLs
 
@@ -192,7 +207,7 @@ See **§0.1** for why both **4000** and **3000** appear — both are correct for
 2. Sign in: [http://localhost:3000/login/email](http://localhost:3000/login/email)
 3. Sign up: [http://localhost:3000/signup](http://localhost:3000/signup)
 4. Feed (post-login): [http://localhost:3000/feed](http://localhost:3000/feed)
-5. Swagger API docs (gateway): [http://localhost:4000/docs](http://localhost:4000/docs)
+5. Swagger API docs (FastAPI): [http://localhost:4000/docs](http://localhost:4000/docs)
 6. Swagger API docs (via dev server proxy — convenient if you only want to share port `3000`): [http://localhost:3000/docs](http://localhost:3000/docs)
 7. AI FastAPI docs (only when AI service is running): [http://localhost:8001/docs](http://localhost:8001/docs)
 
@@ -215,12 +230,7 @@ cd "<repo-root>/frontend"
 npm run dev
 ```
 
-3. Terminal 3 (optional) - restart member API if auth/login issues:
-
-```bash
-cd "<repo-root>"
-npm run dev:member-api
-```
+3. If login or auth flakes after infra restart, stop `npm run start:all` and start it again so FastAPI on :4000 reconnects cleanly to MySQL.
 
 ### 2.7 Quick start (same flow, shorter)
 
@@ -256,7 +266,7 @@ Note: if `3000` is occupied, Vite will run on the next free port and print it in
 ### 2.8 Open and test
 
 1. Browser: [http://localhost:3000](http://localhost:3000) — sign in at `/login/email`, then open `/feed`.
-2. API docs (direct on gateway): [http://localhost:4000/docs](http://localhost:4000/docs).
+2. API docs (direct on FastAPI): [http://localhost:4000/docs](http://localhost:4000/docs).
 3. API docs (proxied — same host as the React app): [http://localhost:3000/docs](http://localhost:3000/docs) when the Vite dev server is running (`npm run dev` in `frontend/`).
 
 `docker compose up -d` starts Zookeeper, Kafka, MySQL, MongoDB, Redis (see **§6.0** for ports).
@@ -265,13 +275,19 @@ Note: if `3000` is occupied, Vite will run on the next free port and print it in
 
 Ports:
 
-1. Gateway: `4000`
+1. Core API (FastAPI): `4000`
 2. AI service: `8001`
 
-Start:
+Start (typical — starts API, workers, and AI):
 
 ```bash
-npm run dev:gateway
+npm run start:all
+```
+
+Or run only the API (after `npm run bootstrap:python`):
+
+```bash
+npm run dev:api-python
 npm run dev:ai-service
 ```
 
@@ -350,7 +366,7 @@ flowchart LR
 
 ### 3.1 Default admin test account (local only)
 
-`member-service` bootstrap **auto-creates** a default admin account on startup and **resets the password** for that email on startup (so teammates always get the same credentials on a fresh machine).
+The **FastAPI** app runs DB bootstrap on startup: it **auto-creates** the default admin account and **resets the password** for that email (so teammates get the same credentials on a fresh machine).
 
 Use this to sign in at [http://localhost:3000/login/email](http://localhost:3000/login/email):
 
@@ -361,13 +377,8 @@ After login, open the feed: [http://localhost:3000/feed](http://localhost:3000/f
 
 ### 3.2 If login fails
 
-1. Confirm **Terminal 1** still running `npm run start:all` (member API should be up on `:4001` behind gateway `:4000`).
-2. Try restart member API once:
-
-```bash
-npm run dev:member-api
-```
-
+1. Confirm **`npm run start:all`** is running (FastAPI API on **:4000**).
+2. After `docker compose up -d`, wait for MySQL to be ready, then restart **`npm run start:all`** if login still fails.
 3. Or create a new account at [http://localhost:3000/signup](http://localhost:3000/signup).
 
 ---
@@ -400,18 +411,12 @@ Auth status:
 <!-- ====================== 6.0 SERVICES AND PORTS ====================== -->
 ## 6.0 Services and Ports
 
-**Summary of gateway vs UI:** see **§0.1**.
+**Summary:** see **§0.1**.
 
-1. API Gateway: `:4000` (HTTP API under `/api/*`; **Swagger UI** at **`/docs`** on this port, e.g. `http://localhost:4000/docs`)
-2. Member: `:4001`
-3. Job (+ recruiter admin APIs): `:4002`
-4. Application: `:4003`
-5. Messaging: `:4004`
-6. Analytics: `:4005`
-7. Connections: `:4006`
-8. Post / feed service: `:4007`
-9. Frontend (Vite): `:3000` — this is the **main app URL** for the React UI. The dev server **proxies** **`/api`** and **`/docs`** to **`http://localhost:4000`**, so API calls from the browser use relative paths like `/api/...` and you can open Swagger at **`http://localhost:3000/docs`** without using port `4000` in the browser.
-10. Optional: set **`VITE_API_BASE_URL`** at build time if the UI and API are hosted on different origins (see `frontend/src/main.tsx`).
+1. **Core API (FastAPI):** `:4000` — all REST routes under `/api/*`, **Swagger** at `/docs`.
+2. **Agentic AI (FastAPI):** `:8001` — reached via the core API proxy under `/api/ai`.
+3. **Frontend (Vite):** `:3000` — proxies `/api` and `/docs` to `http://localhost:4000`.
+4. Optional: set **`VITE_API_BASE_URL`** at build time if the UI and API are hosted on different origins (see `frontend/src/main.tsx`).
 
 ---
 
@@ -442,22 +447,37 @@ chmod +x scripts/smoke-test.sh
 ```
 
 Notes:
-1. By default the script calls **`http://localhost:4000/api`** (gateway directly), not port `3000`. That validates backends regardless of the Vite proxy.
-2. Keep **`npm run start:all`** running so the gateway and services are up before running smoke.
+1. By default the script calls **`http://localhost:4000/api`** (FastAPI directly), not port `3000`. That validates backends regardless of the Vite proxy.
+2. Keep **`npm run start:all`** running so FastAPI, Python workers, and the AI service are up before running smoke.
+
+### 8.1 Automated tests (pytest)
+
+From repo root (after `npm run bootstrap:python`):
+
+```bash
+npm run test:backend
+```
+
+Integration checks (duplicate signup/application, closed job, health) need the stack running:
+
+```bash
+docker compose up -d
+npm run start:all
+# second terminal:
+npm run test:backend:integration
+```
+
+Mapping to the class rubric: `docs/RUBRIC_ALIGNMENT.md`.
 
 <!-- ====================== 9.0 TROUBLESHOOTING ====================== -->
 ## 9.0 Troubleshooting
 
-1. If profile is missing, run `npm run seed:member`.
+1. If profile **M-123** is missing, ensure **`npm run start:all`** has run at least once (FastAPI creates baseline schema + member on startup). For extra demo data use **`npm run seed:connections`** or **`npm run seed:ai-applicants`**.
 2. If ports are busy, stop old processes and restart `npm run start:all`.
 3. If DB state is corrupted, run `docker compose down -v`, then start again.
-4. If Swagger is not loading, run `npm run dev:gateway`.
-5. If auth endpoints return 404, restart gateway and member API.
-6. If jobs/applications APIs return `BAD_GATEWAY` or apply says `Job not found`, start/verify these services:
-   - `npm run dev:job-api`
-   - `npm run dev:job-worker`
-   - `npm run dev:app-api`
-   - `npm run dev:app-worker`
+4. If Swagger is not loading, confirm FastAPI is up on **`http://localhost:4000/docs`**.
+5. If auth endpoints return 404, restart **`npm run start:all`** (core API on :4000).
+6. If jobs/applications lag after create, confirm **Python Kafka workers** are running (`dev:workers-python` is part of `start:all`) and Kafka is up.
 7. Premium page aliases supported: `/premium`, `/try-premium`, `/premium/free-trial`, `/premium/trial`.
 8. If Kafka worker logs show `ECONNREFUSED 127.0.0.1:9092`, Docker/Kafka is not up yet. Start Docker, run `docker compose up -d`, then restart `npm run start:all`.
 9. If frontend starts on `3001` (or another port), use that printed URL or free `3000` first.
@@ -465,7 +485,7 @@ Notes:
 ### 9.1 Additional port/startup diagnostics
 
 ```bash
-lsof -nP -iTCP -sTCP:LISTEN | grep -E '400[0-7]'
+lsof -nP -iTCP -sTCP:LISTEN | grep -E ':(3000|4000|8001)\b'
 ```
 
 ---

@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
+import LinkedInMark from '../components/brand/LinkedInMark';
 import { setAuthToken } from '../lib/auth';
 
 const footerLinks = [
@@ -24,9 +25,7 @@ export default function SignInPage() {
   return (
     <div className="flex min-h-screen flex-col bg-[#f3f2ef]">
       <header className="px-8 py-5">
-        <Link to="/" className="text-4xl font-bold text-[#0a66c2]">
-          in
-        </Link>
+        <LinkedInMark to="/" size="auth" />
       </header>
 
       <main className="flex flex-1 items-center justify-center px-4 pb-12">

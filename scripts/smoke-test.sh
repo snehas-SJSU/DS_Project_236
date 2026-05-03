@@ -47,18 +47,18 @@ if not any(n in payload for n in needles):
 PY
 }
 
-fatal_if_gateway_html() {
+fatal_if_bad_response() {
   local label=$1
   local payload=$2
   if [[ -z "${payload// }" ]]; then
-    echo "ERROR [${label}]: empty response. Is the gateway up at ${BASE_URL}? (npm run start:all)"
+    echo "ERROR [${label}]: empty response. Is FastAPI up at ${BASE_URL}? (npm run start:all)"
     exit 1
   fi
   if echo "$payload" | grep -qi '<!DOCTYPE html\|<html'; then
     echo "ERROR [${label}]: got HTML (proxy/upstream missing?). Response snippet:"
     echo "$payload" | head -c 500
     echo ""
-    echo "Hint: start api-gateway :4000 and all services (see package.json start:all)."
+    echo "Hint: start FastAPI on :4000 and Python Kafka workers (npm run start:all)."
     exit 1
   fi
 }
@@ -82,7 +82,7 @@ wait_until_job_in_db() {
   done
   echo "Timeout: job ${job_id} not visible via /jobs/get after worker processing."
   echo "Last response: ${r}"
-  echo "Hint: ensure job-service worker is running and Kafka is up."
+  echo "Hint: ensure Python job worker is running and Kafka is up."
   exit 1
 }
 
@@ -120,14 +120,14 @@ wait_until_job_closed() {
   exit 1
 }
 
-echo "[0] gateway / member reachability"
+echo "[0] API / member reachability"
 code0="$(http_post_code "/members/get" "{\"member_id\":\"${SMOKE_MEMBER_ID}\"}")"
 if [[ "${code0}" != "200" ]]; then
-  echo "ERROR: GET member HTTP ${code0}. Is the gateway up at ${BASE_URL}? (npm run start:all)"
+  echo "ERROR: GET member HTTP ${code0}. Is FastAPI up at ${BASE_URL}? (npm run start:all)"
   exit 1
 fi
 r0="$(post_trim "/members/get" "{\"member_id\":\"${SMOKE_MEMBER_ID}\"}" 8192)"
-fatal_if_gateway_html "members/get" "$r0"
+fatal_if_bad_response "members/get" "$r0"
 
 echo "[1] member get (HTTP only — skip full body; can be multi-MB with cover image)"
 code1="$(http_post_code "/members/get" "{\"member_id\":\"${SMOKE_MEMBER_ID}\"}")"
@@ -135,7 +135,7 @@ code1="$(http_post_code "/members/get" "{\"member_id\":\"${SMOKE_MEMBER_ID}\"}")
 
 echo "[2] jobs search"
 r2="$(post "/jobs/search" '{}')"
-fatal_if_gateway_html "jobs/search" "$r2"
+fatal_if_bad_response "jobs/search" "$r2"
 
 echo "[3] applications by member"
 post "/applications/byMember" "{\"member_id\":\"${SMOKE_MEMBER_ID}\"}" >/dev/null
@@ -148,7 +148,7 @@ post "/connections/list" "{\"user_id\":\"${SMOKE_MEMBER_ID}\"}" >/dev/null
 
 echo "[5b] connections requestsByUser"
 r5b="$(post "/connections/requestsByUser" "{\"user_id\":\"${SMOKE_MEMBER_ID}\"}")"
-fatal_if_gateway_html "connections/requestsByUser" "$r5b"
+fatal_if_bad_response "connections/requestsByUser" "$r5b"
 assert_contains_any "$r5b" "incoming" "sent"
 
 echo "[6] analytics member dashboard"
@@ -159,14 +159,14 @@ post "/analytics/jobs/top" '{}' >/dev/null
 
 echo "[7] duplicate signup should return DUPLICATE_EMAIL"
 first_signup="$(post "/auth/signup" "{\"email\":\"${TEST_EMAIL}\",\"password\":\"${TEST_PASSWORD}\"}")"
-fatal_if_gateway_html "auth/signup" "$first_signup"
+fatal_if_bad_response "auth/signup" "$first_signup"
 assert_contains_any "${first_signup}" "\"token\"" "Signup successful"
 second_signup="$(post "/auth/signup" "{\"email\":\"${TEST_EMAIL}\",\"password\":\"${TEST_PASSWORD}\"}")"
 assert_contains_any "${second_signup}" "DUPLICATE_EMAIL"
 
 echo "[8] create job, apply once, then duplicate apply check"
 new_job="$(post "/jobs/create" "{\"title\":\"Smoke Duplicate Apply Job\",\"company\":\"Acme\",\"location\":\"San Jose, CA\",\"salary\":\"100k-120k\",\"type\":\"Full-time\",\"description\":\"Smoke duplicate apply check\",\"skills\":[\"Node.js\"],\"recruiter_id\":\"${SMOKE_RECRUITER_ID}\"}")"
-fatal_if_gateway_html "jobs/create" "$new_job"
+fatal_if_bad_response "jobs/create" "$new_job"
 job_id="$(python3 -c 'import json,sys; print(json.loads(sys.argv[1]).get("job_id",""))' "${new_job}")"
 if [[ -z "${job_id}" ]]; then
   echo "Failed to parse job_id from jobs/create response"
@@ -176,17 +176,17 @@ fi
 wait_until_job_in_db "${job_id}"
 
 first_apply="$(post "/applications/submit" "{\"job_id\":\"${job_id}\",\"member_id\":\"${SMOKE_MEMBER_ID}\"}")"
-fatal_if_gateway_html "applications/submit (1)" "$first_apply"
+fatal_if_bad_response "applications/submit (1)" "$first_apply"
 assert_contains_any "${first_apply}" "Application submitted" "application_id"
 wait_until_application_for_job "${job_id}"
 
 second_apply="$(post "/applications/submit" "{\"job_id\":\"${job_id}\",\"member_id\":\"${SMOKE_MEMBER_ID}\"}")"
-fatal_if_gateway_html "applications/submit (2)" "$second_apply"
+fatal_if_bad_response "applications/submit (2)" "$second_apply"
 assert_contains_any "${second_apply}" "DUPLICATE_APPLICATION"
 
 echo "[9] closed job apply should return JOB_CLOSED"
 closed_job_create="$(post "/jobs/create" "{\"title\":\"Smoke Closed Job\",\"company\":\"Acme\",\"location\":\"San Jose, CA\",\"salary\":\"100k-120k\",\"type\":\"Full-time\",\"description\":\"Smoke closed job check\",\"skills\":[\"Node.js\"],\"recruiter_id\":\"${SMOKE_RECRUITER_ID}\"}")"
-fatal_if_gateway_html "jobs/create (closed)" "$closed_job_create"
+fatal_if_bad_response "jobs/create (closed)" "$closed_job_create"
 closed_job_id="$(python3 -c 'import json,sys; print(json.loads(sys.argv[1]).get("job_id",""))' "${closed_job_create}")"
 if [[ -z "${closed_job_id}" ]]; then
   echo "Failed to parse closed_job_id from jobs/create response"
@@ -197,12 +197,12 @@ wait_until_job_in_db "${closed_job_id}"
 post "/jobs/close" "{\"job_id\":\"${closed_job_id}\"}" >/dev/null
 wait_until_job_closed "${closed_job_id}"
 closed_apply="$(post "/applications/submit" "{\"job_id\":\"${closed_job_id}\",\"member_id\":\"${SMOKE_MEMBER_ID}\"}")"
-fatal_if_gateway_html "applications/submit (closed)" "$closed_apply"
+fatal_if_bad_response "applications/submit (closed)" "$closed_apply"
 assert_contains_any "${closed_apply}" "JOB_CLOSED"
 
 echo "[10] posts: create → list → get → like → comment → repost → send → unrepost → unlike"
 create_post="$(post "/posts/create" "{\"member_id\":\"${SMOKE_MEMBER_ID}\",\"author_name\":\"Smoke\",\"body\":\"smoke post $(date +%s)\"}")"
-fatal_if_gateway_html "posts/create" "$create_post"
+fatal_if_bad_response "posts/create" "$create_post"
 post_id="$(python3 -c 'import json,sys; print(json.loads(sys.argv[1]).get("post_id",""))' "${create_post}")"
 if [[ -z "${post_id}" ]]; then
   echo "posts/create failed or no post_id"
@@ -211,9 +211,9 @@ if [[ -z "${post_id}" ]]; then
 fi
 post "/posts/list" "{\"limit\":5,\"viewer_member_id\":\"${SMOKE_MEMBER_ID}\"}" >/dev/null
 get_post="$(post "/posts/get" "{\"post_id\":\"${post_id}\",\"viewer_member_id\":\"${SMOKE_MEMBER_ID}\"}")"
-fatal_if_gateway_html "posts/get" "$get_post"
+fatal_if_bad_response "posts/get" "$get_post"
 if echo "$get_post" | grep -q 'Cannot POST'; then
-  echo "posts/get failed — restart post-service on :4007 with latest code (POST /posts/get)."
+  echo "posts/get failed — restart FastAPI on :4000 (POST /api/posts/get)."
   echo "$get_post"
   exit 1
 fi
@@ -238,15 +238,15 @@ post "/events/ingest" "{\"event_type\":\"smoke.test\",\"trace_id\":\"SMOKE-$(dat
 echo "[12] messaging: open thread + send + list"
 peer_demo="${SMOKE_MSG_PEER:-M-DEMO-01}"
 thread_open="$(post "/threads/open" "{\"participant_a\":\"${SMOKE_MEMBER_ID}\",\"participant_b\":\"${peer_demo}\"}")"
-fatal_if_gateway_html "threads/open" "$thread_open"
+fatal_if_bad_response "threads/open" "$thread_open"
 thread_id="$(python3 -c 'import json,sys; print(json.loads(sys.argv[1]).get("thread_id",""))' "${thread_open}")"
 if [[ -z "${thread_id}" ]]; then
   echo "threads/open missing thread_id: ${thread_open}"
   exit 1
 fi
 send_msg="$(post "/messages/send" "{\"thread_id\":\"${thread_id}\",\"sender_id\":\"${SMOKE_MEMBER_ID}\",\"text\":\"smoke $(date +%s)\"}")"
-fatal_if_gateway_html "messages/send" "$send_msg"
+fatal_if_bad_response "messages/send" "$send_msg"
 assert_contains_any "${send_msg}" "message_id" "thread_id"
 post "/messages/list" "{\"thread_id\":\"${thread_id}\",\"limit\":20}" >/dev/null
 
-echo "Smoke tests passed (gateway + async workers + posts/get + messaging + analytics/events)."
+echo "Smoke tests passed (FastAPI + async workers + posts/get + messaging + analytics/events)."

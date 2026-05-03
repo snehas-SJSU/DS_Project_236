@@ -15,6 +15,7 @@ export default function RecruiterDashboard() {
   const [granularity, setGranularity] = useState<'day' | 'week'>('day');
   const [savedTrend, setSavedTrend] = useState<any[]>([]);
   const [clickTrend, setClickTrend] = useState<any[]>([]);
+  const [funnel, setFunnel] = useState<{ view: number; save: number; apply_start: number; submit: number } | null>(null);
 
   const selectedJobId = useMemo(() => topJobs[0]?.job_id || lowJobs[0]?.job_id, [topJobs, lowJobs]);
 
@@ -54,6 +55,21 @@ export default function RecruiterDashboard() {
       .then((r) => r.json())
       .then((d) => setGeo((d.distribution || []).map((x: any) => ({ name: x.location, value: x.applicants }))))
       .catch(() => setGeo([]));
+  }, [selectedJobId, windowDays]);
+
+  useEffect(() => {
+    if (!selectedJobId) {
+      setFunnel(null);
+      return;
+    }
+    fetch('/api/analytics/funnel', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ job_id: selectedJobId, window_days: windowDays })
+    })
+      .then((r) => r.json())
+      .then((d) => setFunnel(d.funnel || null))
+      .catch(() => setFunnel(null));
   }, [selectedJobId, windowDays]);
 
   return (
@@ -121,6 +137,33 @@ export default function RecruiterDashboard() {
           </div>
         ))}
       </div>
+
+      {funnel && selectedJobId && (
+        <div className="mb-8 bg-white p-6 rounded-lg shadow-sm border border-slate-200">
+          <h3 className="font-bold text-lg text-slate-800 mb-2">Application funnel (selected job)</h3>
+          <p className="text-xs text-slate-500 mb-4">
+            View → Save → Apply start → Submit (from events + applications in window)
+          </p>
+          <div className="h-64">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart
+                data={[
+                  { stage: 'Views', count: funnel.view },
+                  { stage: 'Saves', count: funnel.save },
+                  { stage: 'Apply start', count: funnel.apply_start },
+                  { stage: 'Submitted', count: funnel.submit }
+                ]}
+              >
+                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E2E8F0" />
+                <XAxis dataKey="stage" tick={{ fontSize: 11 }} />
+                <YAxis allowDecimals={false} />
+                <RechartsTooltip />
+                <Bar dataKey="count" fill="#0f766e" radius={[4, 4, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+      )}
 
       <div className="grid grid-cols-2 gap-6 mb-8">
         {/* Bar Chart */}

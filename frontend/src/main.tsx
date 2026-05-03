@@ -4,7 +4,7 @@ import App from './App'
 import './index.css'
 
 /**
- * Empty = same-origin `/api` (Vite dev server proxies to the gateway on :4000).
+ * Empty = same-origin `/api` (Vite dev server proxies to FastAPI on :4000).
  * Set VITE_API_BASE_URL when the UI and API are on different origins (e.g. production).
  */
 const API_BASE = (import.meta.env.VITE_API_BASE_URL ?? '').replace(/\/+$/, '')

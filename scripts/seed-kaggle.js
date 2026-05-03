@@ -344,7 +344,7 @@ async function main() {
 
   // ── 5b. Seed auth_users for members (so they can log in) ────────
   console.log('Step 5b/5 — Seeding auth_users for members …');
-  // Default password: LinkedIn#1  (salt + pbkdf2 — same logic as member-service)
+  // Default password: LinkedIn#1  (salt + pbkdf2 — same logic as FastAPI members/auth)
   const pbkdf2 = require('crypto').pbkdf2Sync;
   const DEFAULT_PASSWORD = 'LinkedIn#1';
   const authRows = memberRows.map(m => {

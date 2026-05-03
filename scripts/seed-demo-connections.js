@@ -1,10 +1,10 @@
 #!/usr/bin/env node
 /**
  * Upserts 3 demo members and INSERT IGNORE connections with M-123 (for feed Send modal / network tests).
- * Requires MySQL (same env as shared/mysql). Run from repo root: npm run seed:connections
+ * Requires MySQL (same env as scripts/lib/mysql.js). Run from repo root: npm run seed:connections
  */
 const path = require('path');
-const db = require(path.join(__dirname, '..', 'shared', 'mysql'));
+const db = require(path.join(__dirname, 'lib', 'mysql'));
 
 function pairKey(a, b) {
   return a < b ? [a, b] : [b, a];

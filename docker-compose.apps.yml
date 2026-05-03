@@ -1,0 +1,83 @@
+# Optional: run FastAPI API, Python Kafka workers, and AI service in Docker (rubrics: distributed deploy / ECS–K8s images).
+# Infra: docker compose up -d
+# Apps:   docker compose -f docker-compose.yml -f docker-compose.apps.yml up -d --build
+#
+# Frontend still runs on the host: cd frontend && npm run dev  (Vite proxies /api → localhost:4000)
+
+services:
+  core-api:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: linkedin-core-api
+    ports:
+      - "4000:4000"
+    environment:
+      MYSQL_HOST: mysql
+      MYSQL_PORT: 3306
+      MYSQL_USER: linkedin_user
+      MYSQL_PASSWORD: linkedin_pass
+      MYSQL_DATABASE: linkedin_db
+      REDIS_URL: redis://redis:6379/0
+      MONGO_URL: mongodb://mongodb:27017
+      MONGO_DB: linkedin_sim
+      KAFKA_BROKERS: kafka:9092
+      AI_SERVICE_URL: http://ai-service:8001
+      RUN_WORKERS: "0"
+    depends_on:
+      - mysql
+      - mongodb
+      - redis
+      - kafka
+    networks:
+      - linkedin-net
+
+  core-workers:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: linkedin-core-workers
+    environment:
+      MYSQL_HOST: mysql
+      MYSQL_PORT: 3306
+      MYSQL_USER: linkedin_user
+      MYSQL_PASSWORD: linkedin_pass
+      MYSQL_DATABASE: linkedin_db
+      REDIS_URL: redis://redis:6379/0
+      MONGO_URL: mongodb://mongodb:27017
+      MONGO_DB: linkedin_sim
+      KAFKA_BROKERS: kafka:9092
+      RUN_WORKERS: "1"
+    depends_on:
+      - mysql
+      - mongodb
+      - redis
+      - kafka
+      - core-api
+    networks:
+      - linkedin-net
+
+  ai-service:
+    build:
+      context: ./services/ai-service
+      dockerfile: Dockerfile
+    container_name: linkedin-ai-service
+    ports:
+      - "8001:8001"
+    environment:
+      MONGO_URL: mongodb://mongodb:27017
+      MONGO_DB: linkedin_sim
+      REDIS_URL: redis://redis:6379/0
+      KAFKA_BROKERS: kafka:9092
+      AI_MEMBER_API_URL: http://core-api:4000/api/members/get
+      AI_JOB_API_URL: http://core-api:4000/api/jobs/get
+      AI_APPLICATIONS_API_URL: http://core-api:4000/api/applications/byJob
+      AI_THREADS_OPEN_URL: http://core-api:4000/api/threads/open
+      AI_MESSAGES_SEND_URL: http://core-api:4000/api/messages/send
+    depends_on:
+      - mongodb
+      - redis
+      - kafka
+      - core-api
+    networks:
+      - linkedin-net

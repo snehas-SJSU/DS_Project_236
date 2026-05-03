@@ -40,7 +40,7 @@ export default function Profile() {
             setState({
               status: 'error',
               message:
-                'No profile for member M-123 yet. With Docker + Kafka + npm run start:all running, open a terminal in the repo root and run: npm run seed:member — wait a few seconds, then refresh this page.'
+                'No profile for member M-123 yet. With Docker + npm run start:all running, wait for FastAPI to finish schema init, then refresh. Baseline member is created on API startup.'
             });
             return;
           }
@@ -48,8 +48,8 @@ export default function Profile() {
             status: 'error',
             message:
               res.status === 504
-                ? 'Gateway timeout (504). Usually member service (:4001) was not ready yet, or MySQL was slow to accept connections. Wait ~15s after `docker compose up`, restart `npm run start:all`, then refresh. If it persists, run `npm run seed:member` once the member worker is up.'
-                : data.message || data.error || `API error (${res.status}). Check gateway :4000 and member service :4001.`
+                ? 'Gateway timeout (504). Usually the API on :4000 was not ready yet, or MySQL was slow to accept connections. Wait ~15s after `docker compose up`, restart `npm run start:all`, then refresh.'
+                : data.message || data.error || `API error (${res.status}). Check FastAPI on :4000 (npm run start:all).`
           });
           return;
         }
@@ -115,7 +115,7 @@ export default function Profile() {
       showToast('Choose an image file.', 'error');
       return;
     }
-    // Raw file limit: base64 grows ~4/3; keep under API JSON body limit (50MB on member-service).
+    // Raw file limit: base64 grows ~4/3; keep under API JSON body limit (FastAPI / members).
     const maxBytes = 12 * 1024 * 1024;
     if (file.size > maxBytes) {
       showToast('Image too large — max 12MB file (JPEG/PNG/WebP).', 'error');

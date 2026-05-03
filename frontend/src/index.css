@@ -4,13 +4,18 @@
 
 @layer base {
   :root {
-    color: #1f2328;
+    color: #191919;
     background: #f3f2ef;
+    --li-bg: #f3f2ef;
+    --li-card-border: #e0dfdc;
+    --li-blue: #0a66c2;
+    --li-blue-hover: #004182;
+    --li-text-muted: #666666;
   }
 
   body {
-    @apply antialiased text-slate-900 bg-[#f3f2ef];
-    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+    @apply antialiased bg-[#f3f2ef] text-[#191919];
+    font-family: -apple-system, system-ui, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Helvetica, Arial, sans-serif;
   }
 
   a,
@@ -24,7 +29,11 @@
 
 @layer components {
   .li-card {
-    @apply rounded-xl border border-[#e0dfdc] bg-white shadow-[0_0_0_1px_rgba(0,0,0,0.01),0_1px_2px_rgba(0,0,0,0.08)];
+    @apply rounded-[10px] border border-[#e0dfdc] bg-white shadow-[0_0_0_1px_rgba(0,0,0,0.02),0_2px_3px_rgba(0,0,0,0.06)];
+  }
+
+  .li-skeleton {
+    @apply animate-pulse rounded bg-[#e9e8e5];
   }
 
   .li-section-title {

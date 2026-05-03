@@ -1,0 +1,42 @@
+# Same image as API; RUN_WORKERS=1 runs Python Kafka consumers.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: linkedin-core-workers
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: linkedin-core-workers
+  template:
+    metadata:
+      labels:
+        app: linkedin-core-workers
+    spec:
+      containers:
+        - name: workers
+          image: YOUR_ACCOUNT.dkr.ecr.YOUR_REGION.amazonaws.com/linkedin-core-api:latest
+          env:
+            - name: RUN_WORKERS
+              value: "1"
+            - name: MYSQL_HOST
+              value: "mysql-service"
+            - name: MYSQL_PORT
+              value: "3306"
+            - name: MYSQL_USER
+              value: "linkedin_user"
+            - name: MYSQL_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: linkedin-db
+                  key: mysql-password
+            - name: MYSQL_DATABASE
+              value: "linkedin_db"
+            - name: REDIS_URL
+              value: "redis://redis-service:6379/0"
+            - name: MONGO_URL
+              value: "mongodb://mongo-service:27017"
+            - name: MONGO_DB
+              value: "linkedin_sim"
+            - name: KAFKA_BROKERS
+              value: "kafka-service:9092"

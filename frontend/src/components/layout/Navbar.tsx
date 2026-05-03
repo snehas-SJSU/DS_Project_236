@@ -1,6 +1,7 @@
 import { Bell, Briefcase, Building2, ChevronDown, CircleDollarSign, Compass, Crown, Grid3X3, Handshake, Home, MessageSquare, Network, Search, Settings, Sparkles } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { Link, NavLink, useLocation, useNavigate } from 'react-router-dom';
+import LinkedInMark from '../brand/LinkedInMark';
 import { LOCAL_AVATAR_KEY, resolveViewerAvatarUrl } from '../../lib/memberProfile';
 
 type SearchSuggestion =
@@ -138,12 +139,10 @@ export default function Navbar() {
     }`;
 
   return (
-    <nav className="sticky top-0 z-50 border-b border-[#e0dfdc] bg-white/95 backdrop-blur">
-      <div className="mx-auto flex h-[56px] max-w-[1128px] items-center justify-between gap-3 px-3">
-          <div className="flex items-center gap-2.5">
-            <Link to="/feed" className="rounded-md bg-[#0a66c2] px-2 py-1 text-[28px] font-bold leading-none text-white shadow-sm">
-              in
-            </Link>
+    <nav className="sticky top-0 z-50 border-b border-[#e0dfdc] bg-white shadow-[0_1px_0_rgba(0,0,0,0.04)]">
+      <div className="mx-auto flex h-[52px] max-w-[1128px] items-center justify-between gap-3 px-3 md:h-[56px]">
+          <div className="flex min-w-0 items-center gap-2 md:gap-2.5">
+            <LinkedInMark to="/feed" />
             <form
               className="relative hidden md:block"
               onSubmit={(e) => {
@@ -165,7 +164,7 @@ export default function Navbar() {
                     setShowSuggestions(true);
                   }}
                   onFocus={() => setShowSuggestions(true)}
-                  className="li-soft-input h-9 w-56 pl-9 pr-3 focus:w-72"
+                  className="li-soft-input h-9 w-[200px] pl-9 pr-3 transition-[width] duration-200 focus:w-64 md:w-60 md:focus:w-80 lg:w-72 lg:focus:w-96"
                 />
                 {showSuggestions && searchTerm.trim().length >= 2 ? (
                   <div className="absolute left-0 top-10 z-50 w-[340px] rounded-md border border-[#e0dfdc] bg-white py-1 shadow-lg">

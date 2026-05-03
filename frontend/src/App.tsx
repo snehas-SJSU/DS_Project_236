@@ -1,7 +1,7 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { BrowserRouter, Link, Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
-import { Link2, MessageCircle, Pencil, Repeat2, Search, Send as SendIcon, ThumbsUp, X } from 'lucide-react';
+import { Briefcase, Image as ImageIcon, Link2, MessageCircle, Newspaper, Pencil, Repeat2, Search, Send as SendIcon, ThumbsUp, Video, X } from 'lucide-react';
 import Navbar from './components/layout/Navbar';
 import JobsBoard from './pages/JobsBoard';
 import JobsSearchPage from './pages/JobsSearchPage';
@@ -54,7 +54,7 @@ type ApiPostRow = {
   member_id: string;
   author_name: string | null;
   author_headline?: string | null;
-  /** From members.profile_photo_url when post-service joins members */
+  /** From members.profile_photo_url when feed joins member row */
   author_profile_photo_url?: string | null;
   body: string;
   image_data: string | null;
@@ -85,7 +85,27 @@ type PostComment = {
   created_at: string;
 };
 
-function FeedPlaceholder() {
+function FeedSkeletonCard() {
+  return (
+    <div className="li-card space-y-4 p-4">
+      <div className="flex gap-3">
+        <div className="li-skeleton h-12 w-12 shrink-0 rounded-full" />
+        <div className="flex flex-1 flex-col gap-2 pt-1">
+          <div className="li-skeleton h-3 w-[40%] rounded" />
+          <div className="li-skeleton h-2 w-[28%] rounded" />
+        </div>
+      </div>
+      <div className="space-y-2">
+        <div className="li-skeleton h-3 w-full rounded" />
+        <div className="li-skeleton h-3 w-[92%] rounded" />
+        <div className="li-skeleton h-3 w-[70%] rounded" />
+      </div>
+    </div>
+  );
+}
+
+/** Home feed (posts + composer) — LinkedIn-style layout for the simulation. */
+function HomeFeed() {
   const navigate = useNavigate();
   const location = useLocation();
   const MEMBER_ID = sessionStorage.getItem('li_sim_member_id') || 'M-123';
@@ -482,13 +502,39 @@ function FeedPlaceholder() {
             Start a post
           </button>
         </div>
-        <div className="mt-1 grid grid-cols-3 gap-2">
-          <Link to="/profile/activity" className="flex items-center justify-center rounded-lg px-4 py-2 text-sm font-semibold text-[#666666] hover:bg-[#f3f6f8]">Media</Link>
-          <Link to="/jobs" className="flex items-center justify-center rounded-lg px-4 py-2 text-sm font-semibold text-[#666666] hover:bg-[#f3f6f8]">Job</Link>
-          <Link to="/profile/activity" className="flex items-center justify-center rounded-lg px-4 py-2 text-sm font-semibold text-[#666666] hover:bg-[#f3f6f8]">Write article</Link>
+        <div className="mt-2 grid grid-cols-2 gap-1 sm:grid-cols-4">
+          <button
+            type="button"
+            className="flex items-center justify-center gap-2 rounded-md px-2 py-2.5 text-sm font-semibold text-[#666666] hover:bg-[#f3f6f8]"
+            onClick={() => setComposerOpen(true)}
+          >
+            <ImageIcon className="h-5 w-5 text-[#378fe9]" aria-hidden />
+            Photo
+          </button>
+          <button
+            type="button"
+            className="flex items-center justify-center gap-2 rounded-md px-2 py-2.5 text-sm font-semibold text-[#666666] hover:bg-[#f3f6f8]"
+            onClick={() => setComposerOpen(true)}
+          >
+            <Video className="h-5 w-5 text-[#5f9b41]" aria-hidden />
+            Video
+          </button>
+          <Link to="/jobs" className="flex items-center justify-center gap-2 rounded-md px-2 py-2.5 text-sm font-semibold text-[#666666] hover:bg-[#f3f6f8]">
+            <Briefcase className="h-5 w-5 text-[#a872c9]" aria-hidden />
+            Job
+          </Link>
+          <Link to="/profile/activity" className="flex items-center justify-center gap-2 rounded-md px-2 py-2.5 text-sm font-semibold text-[#666666] hover:bg-[#f3f6f8]">
+            <Newspaper className="h-5 w-5 text-[#e16745]" aria-hidden />
+            Article
+          </Link>
         </div>
       </div>
-      {feedLoading ? <p className="text-sm text-slate-500">Loading feed…</p> : null}
+      {feedLoading ? (
+        <div className="space-y-2">
+          <FeedSkeletonCard />
+          <FeedSkeletonCard />
+        </div>
+      ) : null}
       {apiPosts.map((p) => (
         <article key={p.post_id} id={p.post_id} className="li-card scroll-mt-28 p-4">
           <div className="flex items-start gap-3">
@@ -1007,6 +1053,12 @@ function AppShell({ children }: { children: React.ReactNode }) {
   });
   const [memberDashboard, setMemberDashboard] = useState<any>(null);
 
+  const applicationsTotal = useMemo(() => {
+    const rows = memberDashboard?.applications_by_status;
+    if (!Array.isArray(rows)) return 0;
+    return rows.reduce((acc: number, r: { c?: number }) => acc + Number(r?.c ?? 0), 0);
+  }, [memberDashboard]);
+
   useEffect(() => {
     fetch('/api/members/get', {
       method: 'POST',
@@ -1062,8 +1114,8 @@ function AppShell({ children }: { children: React.ReactNode }) {
                   <span className="text-[#0a66c2]">{memberDashboard?.profile_views_30d ?? 0}</span>
                 </div>
                 <div className="flex items-center justify-between font-semibold text-[#191919]">
-                  <span>Post impressions</span>
-                  <span className="text-[#0a66c2]">{Math.max((memberDashboard?.profile_views_30d ?? 0) * 3, 18)}</span>
+                  <span>My applications</span>
+                  <span className="text-[#0a66c2]">{applicationsTotal}</span>
                 </div>
               </div>
               <Link to="/analytics/member" className="mt-3 block text-base font-semibold text-[#191919] hover:text-[#0a66c2]">
@@ -1255,7 +1307,7 @@ function App() {
           <Route path="/login" element={<RedirectIfAuthenticated><LoginLandingPage /></RedirectIfAuthenticated>} />
           <Route path="/login/email" element={<RedirectIfAuthenticated><SignInPage /></RedirectIfAuthenticated>} />
           <Route path="/signup" element={<RedirectIfAuthenticated><JoinPage /></RedirectIfAuthenticated>} />
-          <Route path="/feed" element={<RequireAuth><AppShell><FeedPlaceholder /></AppShell></RequireAuth>} />
+          <Route path="/feed" element={<RequireAuth><AppShell><HomeFeed /></AppShell></RequireAuth>} />
           <Route path="/jobs" element={<RequireAuth><JobsBoard /></RequireAuth>} />
           <Route path="/jobs/search" element={<RequireAuth><JobsSearchPage /></RequireAuth>} />
           <Route path="/jobs/search-results" element={<RequireAuth><JobsSearchPage /></RequireAuth>} />

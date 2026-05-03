@@ -1,4 +1,5 @@
 import { Link } from 'react-router-dom';
+import LinkedInMark from '../components/brand/LinkedInMark';
 
 const topLinks = ['Top Content', 'People', 'Learning', 'Jobs', 'Games'];
 
@@ -36,9 +37,7 @@ export default function LoginLandingPage() {
   return (
     <div className="min-h-screen bg-white text-[#191919]">
       <header className="mx-auto flex h-[76px] w-full max-w-[1128px] items-center justify-between px-4">
-        <Link to="/login" className="rounded-md text-4xl font-bold text-[#0a66c2]">
-          in
-        </Link>
+        <LinkedInMark to="/" size="hero" />
         <div className="flex items-center gap-5">
           <nav className="hidden items-center gap-4 md:flex">
             {topLinks.map((item) => (

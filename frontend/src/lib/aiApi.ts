@@ -1,5 +1,5 @@
 // ─── AI Service API Client ────────────────────────────────────────────────────
-// Base URL routes through the existing API gateway on :4000
+// Base URL routes through the core FastAPI app on :4000 (/api/ai/...)
 const AI_BASE = '/api/ai';
 
 // ─── Types ────────────────────────────────────────────────────────────────────

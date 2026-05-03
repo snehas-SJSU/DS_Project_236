@@ -1,4 +1,4 @@
-const db = require('./shared/mysql');
+const db = require('./scripts/lib/mysql');
 
 async function check() {
   try {

@@ -16,7 +16,7 @@ const faq = [
   },
   {
     q: 'Why does login fail with valid credentials?',
-    a: 'Verify gateway/member service are running and retry with seeded admin user if needed.'
+    a: 'Verify `npm run start:all` is running (FastAPI on :4000), Docker infra is up, and retry with the seeded admin user if needed.'
   },
   {
     q: 'Where can I see API docs?',
