@@ -196,7 +196,8 @@ function MessagingFooterLinks() {
   );
 }
 
-function MessagingRightRail({ memberName, memberPhoto }: { memberName: string; memberPhoto: string }) {
+function MessagingRightRail({  memberName, memberPhoto }: { memberName: string; memberPhoto: string }) {
+  const MEMBER_ID = sessionStorage.getItem('li_sim_member_id') || 'M-123';
   const firstName = memberName.trim().split(/\s+/)[0] || 'You';
   return (
     <>
