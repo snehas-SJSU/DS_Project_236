@@ -360,6 +360,21 @@ paths:
     post:
       tags: [Messaging Service]
       summary: Create a message thread
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [participant_a, participant_b]
+              properties:
+                participant_a:
+                  type: string
+                participant_b:
+                  type: string
+            example:
+              participant_a: M-ADMIN01
+              participant_b: M-28ac45b2
       responses:
         '201':
           description: Created
@@ -367,6 +382,18 @@ paths:
     post:
       tags: [Messaging Service]
       summary: Get thread metadata
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [thread_id]
+              properties:
+                thread_id:
+                  type: string
+            example:
+              thread_id: T-12345678
       responses:
         '200':
           description: OK
@@ -374,6 +401,18 @@ paths:
     post:
       tags: [Messaging Service]
       summary: List all threads for a user
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [user_id]
+              properties:
+                user_id:
+                  type: string
+            example:
+              user_id: M-ADMIN01
       responses:
         '200':
           description: OK
@@ -381,6 +420,24 @@ paths:
     post:
       tags: [Messaging Service]
       summary: Send a message in thread
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [thread_id, sender_id, text]
+              properties:
+                thread_id:
+                  type: string
+                sender_id:
+                  type: string
+                text:
+                  type: string
+            example:
+              thread_id: T-12345678
+              sender_id: M-ADMIN01
+              text: Hello Maya, this is a test message.
       responses:
         '201':
           description: Created
@@ -388,6 +445,21 @@ paths:
     post:
       tags: [Messaging Service]
       summary: List messages in thread
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [thread_id]
+              properties:
+                thread_id:
+                  type: string
+                limit:
+                  type: integer
+            example:
+              thread_id: T-12345678
+              limit: 50
       responses:
         '200':
           description: OK
@@ -397,6 +469,21 @@ paths:
     post:
       tags: [Connection Service]
       summary: Send connection request
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [requester_id, receiver_id]
+              properties:
+                requester_id:
+                  type: string
+                receiver_id:
+                  type: string
+            example:
+              requester_id: M-ADMIN01
+              receiver_id: M-28ac45b2
       responses:
         '201':
           description: Created
@@ -404,6 +491,18 @@ paths:
     post:
       tags: [Connection Service]
       summary: Accept request
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [request_id]
+              properties:
+                request_id:
+                  type: string
+            example:
+              request_id: CR-12345678
       responses:
         '200':
           description: OK
@@ -411,6 +510,18 @@ paths:
     post:
       tags: [Connection Service]
       summary: Reject request
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [request_id]
+              properties:
+                request_id:
+                  type: string
+            example:
+              request_id: CR-12345678
       responses:
         '200':
           description: OK
@@ -418,6 +529,18 @@ paths:
     post:
       tags: [Connection Service]
       summary: List all user connections
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [user_id]
+              properties:
+                user_id:
+                  type: string
+            example:
+              user_id: M-ADMIN01
       responses:
         '200':
           description: OK
@@ -425,6 +548,18 @@ paths:
     post:
       tags: [Connection Service]
       summary: List incoming and sent connection requests by user
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [user_id]
+              properties:
+                user_id:
+                  type: string
+            example:
+              user_id: M-ADMIN01
       responses:
         '200':
           description: OK
