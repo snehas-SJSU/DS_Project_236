@@ -515,16 +515,21 @@ async def jobs_close(body: dict):
     if not job_id:
         return JSONResponse(status_code=400, content={"error": "BAD_REQUEST", "message": "job_id required", "trace_id": _tid()})
     trace_id = _tid()
-    try:
-        await send_job_event(job_env("job.closed", trace_id, "recruiter", job_id, {}, str(uuid.uuid4())))
-    except Exception as e:
-        return JSONResponse(status_code=503, content={"error": "KAFKA_UNAVAILABLE", "message": str(e), "trace_id": _tid()})
+    # Update DB synchronously so status is immediately visible
+    await dbm.execute("UPDATE jobs SET status = 'closed' WHERE job_id = %s", (job_id,))
+    # Invalidate cache
     try:
         r = get_redis()
         await r.delete(f"job:{job_id}")
     except Exception:
         pass
+    # Also fire Kafka event for downstream consumers/analytics
+    try:
+        await send_job_event(job_env("job.closed", trace_id, "recruiter", job_id, {}, str(uuid.uuid4())))
+    except Exception:
+        pass
     return {"message": "Closed", "job_id": job_id, "trace_id": trace_id}
+
 
 
 @router.post("/jobs/byRecruiter")
