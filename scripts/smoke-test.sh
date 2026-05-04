@@ -91,7 +91,7 @@ wait_until_application_for_job() {
   local i=0
   local r=""
   while [[ $i -lt $SMOKE_ASYNC_WAIT_ATTEMPTS ]]; do
-    r="$(post "/applications/byJob" "{\"job_id\":\"${job_id}\"}")"
+    r="$(post "/applications/byJob" "{\"job_id\":\"${job_id}\",\"recruiter_id\":\"${SMOKE_RECRUITER_ID}\"}")"
     if echo "$r" | grep -qF "${job_id}"; then
       return 0
     fi

@@ -52,6 +52,30 @@ def map_app_row(r: dict) -> dict:
     return out
 
 
+async def _require_job_poster_for_job(job_id: str | None, recruiter_id: str | None) -> JSONResponse | None:
+    """Return 400/403 JSONResponse if job_id missing, recruiter_id missing, job not found, or poster mismatch."""
+    if not job_id or not str(job_id).strip():
+        return JSONResponse(
+            status_code=400,
+            content={"error": "BAD_REQUEST", "message": "job_id required", "trace_id": _tid()},
+        )
+    rid = str(recruiter_id or "").strip()
+    if not rid:
+        return JSONResponse(
+            status_code=400,
+            content={"error": "BAD_REQUEST", "message": "recruiter_id required", "trace_id": _tid()},
+        )
+    row = await dbm.fetch_one("SELECT recruiter_id FROM jobs WHERE job_id = %s LIMIT 1", (str(job_id).strip(),))
+    if not row:
+        return JSONResponse(status_code=404, content={"error": "NOT_FOUND", "message": "Job not found", "trace_id": _tid()})
+    if str(row.get("recruiter_id") or "").strip() != rid:
+        return JSONResponse(
+            status_code=403,
+            content={"error": "FORBIDDEN", "message": "Only the job poster can review applicants for this job", "trace_id": _tid()},
+        )
+    return None
+
+
 @router.post("/applications/submit")
 @router.post("/applications/apply")
 async def applications_submit(request: Request, body: dict):
@@ -141,8 +165,9 @@ async def applications_get(body: dict):
 async def applications_by_job(body: dict):
     await ensure_applications_table()
     job_id = body.get("job_id")
-    if not job_id:
-        return JSONResponse(status_code=400, content={"error": "BAD_REQUEST", "message": "job_id required", "trace_id": _tid()})
+    banned = await _require_job_poster_for_job(job_id, body.get("recruiter_id"))
+    if banned:
+        return banned
     rows = await dbm.fetch_all(
         "SELECT * FROM applications WHERE job_id = %s ORDER BY applied_at DESC", (job_id,)
     )
@@ -175,6 +200,13 @@ async def applications_update_status(body: dict):
     recruiter_note = body.get("recruiter_note")
     if not application_id or not status:
         return JSONResponse(status_code=400, content={"error": "BAD_REQUEST", "message": "application_id and status required", "trace_id": _tid()})
+    await ensure_applications_table()
+    prow = await dbm.fetch_one("SELECT job_id FROM applications WHERE app_id = %s LIMIT 1", (application_id,))
+    if not prow:
+        return JSONResponse(status_code=404, content={"error": "NOT_FOUND", "message": "Application not found", "trace_id": _tid()})
+    banned = await _require_job_poster_for_job(str(prow.get("job_id")), body.get("recruiter_id"))
+    if banned:
+        return banned
     trace_id = _tid()
     idem = str(uuid.uuid4())
     ev = app_env(
@@ -199,5 +231,11 @@ async def applications_add_note(body: dict):
     if not application_id or note is None:
         return JSONResponse(status_code=400, content={"error": "BAD_REQUEST", "message": "application_id and note required", "trace_id": _tid()})
     await ensure_applications_table()
+    nrow = await dbm.fetch_one("SELECT job_id FROM applications WHERE app_id = %s LIMIT 1", (application_id,))
+    if not nrow:
+        return JSONResponse(status_code=404, content={"error": "NOT_FOUND", "message": "Application not found", "trace_id": _tid()})
+    banned = await _require_job_poster_for_job(str(nrow.get("job_id")), body.get("recruiter_id"))
+    if banned:
+        return banned
     await dbm.execute("UPDATE applications SET recruiter_note = %s WHERE app_id = %s", (note, application_id))
     return {"message": "Note saved", "application_id": application_id}

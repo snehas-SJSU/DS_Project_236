@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { ArrowLeft, ExternalLink, Lock, MoreHorizontal } from 'lucide-react';
 import { jobsResultsPath } from '../lib/jobRoutes';
+import { getViewerRecruiterId } from '../lib/memberProfile';
 import { showToast } from '../lib/toast';
 
 type TrackedJob = {
@@ -27,7 +28,6 @@ type PremiumStatus = {
   plan_name?: string | null;
 };
 
-type DateFilter = '24h' | 'week' | null;
 type StageFilter = 'all' | 'saved' | 'submitted' | 'reviewing' | 'interview' | 'offer' | 'rejected' | 'archived';
 
 function displayDate(job: TrackedJob) {
@@ -39,6 +39,14 @@ function displayDate(job: TrackedJob) {
 
 function parseStage(job: TrackedJob) {
   return String(job.stage || (job.source === 'saved' ? 'saved' : 'submitted')).toLowerCase();
+}
+
+function jobTimestamp(job: TrackedJob): number | null {
+  const iso = job.saved_at || job.applied_at || job.created_at;
+  if (!iso) return null;
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return null;
+  return d.getTime();
 }
 
 export default function JobTrackerPage() {
@@ -54,9 +62,6 @@ export default function JobTrackerPage() {
   const [connectionsOpen, setConnectionsOpen] = useState(false);
   const [noteEditorJob, setNoteEditorJob] = useState<TrackedJob | null>(null);
   const [noteDraft, setNoteDraft] = useState('');
-  const [dateFilter, setDateFilter] = useState<DateFilter>(null);
-  const [dateFilterDraft, setDateFilterDraft] = useState<DateFilter>(null);
-  const [dateFilterOpen, setDateFilterOpen] = useState(false);
   const [stageFilter, setStageFilter] = useState<StageFilter>('all');
   const [rowMenuJobId, setRowMenuJobId] = useState<string | null>(null);
   const [premium, setPremium] = useState<PremiumStatus>({ is_active: false });
@@ -141,21 +146,13 @@ export default function JobTrackerPage() {
       .catch(() => setConnectionPeople([]));
   }, [connectionsOpen, connectionIds]);
 
-  const grouped = useMemo(() => {
-    const map = new Map<string, number>();
-    trackedJobs.forEach((job) => {
-      const key = job.archived ? 'archived' : parseStage(job);
-      map.set(key, (map.get(key) || 0) + 1);
-    });
-    return Array.from(map.entries());
-  }, [trackedJobs]);
-
+  const trackedActiveCount = useMemo(() => trackedJobs.filter((job) => !job.archived).length, [trackedJobs]);
   const actuallySavedCount = useMemo(
     () => trackedJobs.filter((job) => job.source === 'saved' && !job.archived).length,
     [trackedJobs]
   );
   const inProgressCount = useMemo(
-    () => trackedJobs.filter((job) => ['reviewing', 'interview', 'offer'].includes(parseStage(job)) && !job.archived).length,
+    () => trackedJobs.filter((job) => parseStage(job) === 'reviewing' && !job.archived).length,
     [trackedJobs]
   );
   const appliedCount = useMemo(
@@ -169,6 +166,18 @@ export default function JobTrackerPage() {
   const archivedCount = useMemo(
     () => trackedJobs.filter((job) => job.archived).length,
     [trackedJobs]
+  );
+  const statusChips = useMemo(
+    () =>
+      [
+        { key: 'all' as StageFilter, label: 'Tracked', count: trackedActiveCount },
+        { key: 'saved' as StageFilter, label: 'Saved', count: actuallySavedCount },
+        { key: 'reviewing' as StageFilter, label: 'In progress', count: inProgressCount },
+        { key: 'submitted' as StageFilter, label: 'Applied', count: appliedCount },
+        { key: 'interview' as StageFilter, label: 'Interview', count: interviewCount },
+        { key: 'archived' as StageFilter, label: 'Archived', count: archivedCount }
+      ],
+    [trackedActiveCount, actuallySavedCount, inProgressCount, appliedCount, interviewCount, archivedCount]
   );
 
   const premiumInsight = useMemo(() => {
@@ -193,15 +202,18 @@ export default function JobTrackerPage() {
         if (archived) return false;
         if (stageFilter !== 'all' && parseStage(job) !== stageFilter) return false;
       }
-      if (!dateFilter) return true;
-      const d = new Date(job.saved_at || job.applied_at || job.created_at || '');
-      if (Number.isNaN(d.getTime())) return true;
-      const age = now - d.getTime();
-      if (dateFilter === '24h') return age <= 24 * 60 * 60 * 1000;
-      if (dateFilter === 'week') return age <= 7 * 24 * 60 * 60 * 1000;
       return true;
     });
-  }, [trackedJobs, stageFilter, dateFilter]);
+  }, [trackedJobs, stageFilter]);
+
+  const visibleAppliedCount = useMemo(
+    () => visibleTrackedJobs.filter((job) => Boolean(job.application_id)).length,
+    [visibleTrackedJobs]
+  );
+  const visibleNotesCount = useMemo(
+    () => visibleTrackedJobs.filter((job) => Boolean(job.note?.trim())).length,
+    [visibleTrackedJobs]
+  );
 
   const openNoteEditor = (job: TrackedJob) => {
     setNoteEditorJob(job);
@@ -313,7 +325,11 @@ export default function JobTrackerPage() {
       const res = await fetch('/api/applications/updateStatus', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ application_id: job.application_id, status })
+        body: JSON.stringify({
+          application_id: job.application_id,
+          status,
+          recruiter_id: getViewerRecruiterId()
+        })
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
@@ -347,79 +363,23 @@ export default function JobTrackerPage() {
             </button>
             <h1 className="text-xl font-semibold text-[#191919]">Job tracker</h1>
           </div>
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="rounded-full bg-[#057642] px-3 py-1 text-xs font-semibold text-white">
-              Tracked {trackedJobs.length > 0 ? `• ${trackedJobs.length}` : ''}
-            </span>
-            <span className="rounded-full border border-[#d0d7de] px-3 py-1 text-xs font-semibold text-[#444]">
-              Saved {actuallySavedCount > 0 ? `• ${actuallySavedCount}` : ''}
-            </span>
-            <span className="rounded-full border border-[#d0d7de] px-3 py-1 text-xs font-semibold text-[#444]">
-              In progress {inProgressCount > 0 ? `• ${inProgressCount}` : ''}
-            </span>
-            <span className="rounded-full border border-[#d0d7de] px-3 py-1 text-xs font-semibold text-[#444]">
-              Applied {appliedCount > 0 ? `• ${appliedCount}` : ''}
-            </span>
-            <span className="rounded-full border border-[#d0d7de] px-3 py-1 text-xs font-semibold text-[#444]">
-              Interview {interviewCount > 0 ? `• ${interviewCount}` : ''}
-            </span>
-            <span className="rounded-full border border-[#d0d7de] px-3 py-1 text-xs font-semibold text-[#444]">
-              Archived {archivedCount > 0 ? `• ${archivedCount}` : ''}
-            </span>
-            <div className="relative ml-auto">
-              <button
-                type="button"
-                onClick={() => setDateFilterOpen((v) => !v)}
-                className="rounded-full border border-[#d0d7de] px-3 py-1 text-xs font-semibold text-[#444] hover:bg-[#f3f2ef]"
-              >
-                Date posted {dateFilter ? `(${dateFilter === '24h' ? 'Past 24 hours' : 'Past week'})` : ''}
-              </button>
-              {dateFilterOpen ? (
-                <div className="absolute right-0 top-8 z-20 w-52 rounded-md border border-[#e0dfdc] bg-white p-2 shadow-lg">
-                  <p className="px-1 pb-1 text-xs font-semibold text-[#444]">Date posted</p>
-                  <label className="flex items-center justify-between px-1 py-1 text-xs text-[#444]">
-                    Past 24 hours
-                    <input
-                      type="radio"
-                      name="datePostedFilter"
-                      checked={dateFilterDraft === '24h'}
-                      onChange={() => setDateFilterDraft('24h')}
-                    />
-                  </label>
-                  <label className="flex items-center justify-between px-1 py-1 text-xs text-[#444]">
-                    Past week
-                    <input
-                      type="radio"
-                      name="datePostedFilter"
-                      checked={dateFilterDraft === 'week'}
-                      onChange={() => setDateFilterDraft('week')}
-                    />
-                  </label>
-                  <div className="mt-2 flex items-center justify-end gap-2">
-                    <button
-                      type="button"
-                      className="text-xs text-[#666] hover:underline"
-                      onClick={() => {
-                        setDateFilterDraft(null);
-                        setDateFilter(null);
-                        setDateFilterOpen(false);
-                      }}
-                    >
-                      Clear
-                    </button>
-                    <button
-                      type="button"
-                      className="rounded-full bg-[#0a66c2] px-3 py-1 text-xs font-semibold text-white"
-                      onClick={() => {
-                        setDateFilter(dateFilterDraft);
-                        setDateFilterOpen(false);
-                      }}
-                    >
-                      Apply
-                    </button>
-                  </div>
-                </div>
-              ) : null}
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div className="flex flex-wrap items-center gap-2">
+              {statusChips.map((chip) => {
+                const active = stageFilter === chip.key;
+                return (
+                  <button
+                    key={chip.key}
+                    type="button"
+                    onClick={() => setStageFilter(chip.key)}
+                    className={`rounded-full px-3 py-1 text-xs font-semibold transition ${
+                      active ? 'bg-[#057642] text-white' : 'border border-[#d0d7de] text-[#444] hover:bg-[#f3f2ef]'
+                    }`}
+                  >
+                    {chip.label} {chip.count > 0 ? `• ${chip.count}` : ''}
+                  </button>
+                );
+              })}
             </div>
           </div>
         </div>
@@ -538,36 +498,15 @@ export default function JobTrackerPage() {
             )}
           </div>
 
-          <div className="border-t border-[#e0dfdc] px-5 py-3">
-            <div className="flex flex-wrap gap-2 text-xs">
-              <button
-                type="button"
-                onClick={() => setStageFilter('all')}
-                className={`rounded-full px-2.5 py-1 ${stageFilter === 'all' ? 'bg-[#0a66c2] font-semibold text-white' : 'bg-[#f3f2ef] text-[#555]'}`}
-              >
-                all
-              </button>
-              {grouped.map(([status, count]) => (
-                <button
-                  key={status}
-                  type="button"
-                  onClick={() => setStageFilter(status as StageFilter)}
-                  className={`rounded-full px-2.5 py-1 ${stageFilter === status ? 'bg-[#0a66c2] font-semibold text-white' : 'bg-[#f3f2ef] text-[#555]'}`}
-                >
-                  {status}: {count}
-                </button>
-              ))}
-            </div>
-          </div>
         </section>
 
         <aside className="space-y-3">
           <section className="li-card p-4">
             <p className="text-sm font-semibold text-[#191919]">Tracker summary</p>
             <div className="mt-3 space-y-2 text-sm text-[#555]">
-              <p>{trackedJobs.filter((job) => !job.archived).length} active opportunities</p>
-              <p>{trackedJobs.filter((job) => Boolean(job.note?.trim())).length} jobs with notes</p>
-              <p>{trackedJobs.filter((job) => Boolean(job.application_id)).length} applied jobs</p>
+              <p>{visibleTrackedJobs.length} active opportunities</p>
+              <p>{visibleNotesCount} jobs with notes</p>
+              <p>{visibleAppliedCount} applied jobs</p>
             </div>
           </section>
           <section className="li-card p-4">
