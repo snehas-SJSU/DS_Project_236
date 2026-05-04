@@ -6,6 +6,7 @@ import {
   GraduationCap,
   MapPin,
   MessageCircle,
+  MoreVertical,
   Pencil,
   Repeat2,
   Search,
@@ -62,6 +63,11 @@ export default function Profile() {
   const [activityLoading, setActivityLoading] = useState(false);
   const [composerOpen, setComposerOpen] = useState(false);
   const [editPost, setEditPost] = useState<{ post_id: string; body: string } | null>(null);
+  const [contactMenuOpen, setContactMenuOpen] = useState(false);
+  const [contactModalOpen, setContactModalOpen] = useState(false);
+  const [contactDraft, setContactDraft] = useState({ email: '', phone: '' });
+  const [contactSaving, setContactSaving] = useState(false);
+  const contactMenuRef = useRef<HTMLDivElement | null>(null);
 
   const loadDashboard = () => {
     fetch('/api/analytics/member/dashboard', {
@@ -173,6 +179,16 @@ export default function Profile() {
     window.addEventListener('focus', onFocus);
     return () => window.removeEventListener('focus', onFocus);
   }, []);
+
+  useEffect(() => {
+    if (!contactMenuOpen) return;
+    const close = (e: MouseEvent) => {
+      const el = contactMenuRef.current;
+      if (el && !el.contains(e.target as Node)) setContactMenuOpen(false);
+    };
+    document.addEventListener('mousedown', close);
+    return () => document.removeEventListener('mousedown', close);
+  }, [contactMenuOpen]);
 
   const filteredActivity = useMemo(() => {
     if (activityTab === 'all') return activityRows;
@@ -398,7 +414,7 @@ export default function Profile() {
 
         <div className="px-5 pb-5">
           <div className="-mt-16 flex flex-wrap items-end justify-between gap-3">
-            <div className="relative h-32 w-32 overflow-hidden rounded-full border-4 border-white bg-slate-300 shadow-sm">
+            <div className="relative h-32 w-32 shrink-0 overflow-hidden rounded-full border-4 border-white bg-slate-300 shadow-sm">
               <img src={avatarUrl} alt="Avatar" className="h-full w-full object-cover" />
               <button
                 type="button"
@@ -413,6 +429,40 @@ export default function Profile() {
                 <Pencil size={14} />
               </button>
             </div>
+            <div className="relative ml-auto sm:ml-0 sm:pt-[4.5rem]" ref={contactMenuRef}>
+              <button
+                type="button"
+                onClick={() => setContactMenuOpen((o) => !o)}
+                className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-[#e0dfdc] bg-white text-[#191919] hover:bg-[#f3f2ef]"
+                title="Profile options"
+                aria-expanded={contactMenuOpen}
+                aria-haspopup="menu"
+              >
+                <MoreVertical size={20} />
+              </button>
+              {contactMenuOpen ? (
+                <div
+                  className="absolute right-0 z-40 mt-1 min-w-[13rem] rounded-md border border-[#e0dfdc] bg-white py-1 shadow-lg"
+                  role="menu"
+                >
+                  <button
+                    type="button"
+                    role="menuitem"
+                    className="block w-full px-3 py-2 text-left text-sm text-[#191919] hover:bg-[#f3f2ef]"
+                    onClick={() => {
+                      setContactDraft({
+                        email: String(profile.email || '').trim(),
+                        phone: String(profile.phone || '').trim()
+                      });
+                      setContactModalOpen(true);
+                      setContactMenuOpen(false);
+                    }}
+                  >
+                    Contact information
+                  </button>
+                </div>
+              ) : null}
+            </div>
           </div>
 
           <div className="mt-3">
@@ -426,6 +476,23 @@ export default function Profile() {
               <Link to="/network" className="font-semibold text-[#0a66c2] hover:underline">
                 View your network
               </Link>
+            </div>
+            <div className="mt-3 rounded-lg border border-dashed border-slate-200 bg-slate-50/90 px-3 py-2">
+              <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Contact · private to you</p>
+              <p className="mt-1 text-[11px] text-slate-500"></p>
+              {profile.email ? (
+                <p className="mt-2 text-sm text-slate-800">
+                  <span className="text-slate-500">Email:</span> {profile.email}
+                </p>
+              ) : null}
+              {profile.phone ? (
+                <p className={`text-sm text-slate-800 ${profile.email ? 'mt-1' : 'mt-2'}`}>
+                  <span className="text-slate-500">Phone:</span> {profile.phone}
+                </p>
+              ) : null}
+              {!profile.email && !profile.phone ? (
+                <p className="mt-2 text-sm text-slate-600">No email or phone on your profile yet.</p>
+              ) : null}
             </div>
             <div className="mt-3 flex flex-wrap gap-2">
               <button
@@ -1188,6 +1255,96 @@ export default function Profile() {
         </div>
         )}
       </section>
+
+      {contactModalOpen ? (
+        <div
+          className="fixed inset-0 z-[100] flex items-center justify-center bg-black/45 p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="contact-info-title"
+          onMouseDown={(e) => {
+            if (e.target === e.currentTarget) setContactModalOpen(false);
+          }}
+        >
+          <div
+            className="w-full max-w-md rounded-xl border border-[#e0dfdc] bg-white p-5 shadow-2xl"
+            onMouseDown={(e) => e.stopPropagation()}
+          >
+            <h2 id="contact-info-title" className="text-lg font-semibold text-[#191919]">
+              Contact information
+            </h2>
+            <p className="mt-1 text-sm text-slate-600">
+              Only you see this on your profile. Recruiters and visitors do not see your email or phone here.
+            </p>
+            <div className="mt-4 space-y-3">
+              <div>
+                <label htmlFor="profile-contact-email" className="text-xs font-semibold text-slate-600">
+                  Email
+                </label>
+                <input
+                  id="profile-contact-email"
+                  type="email"
+                  autoComplete="email"
+                  value={contactDraft.email}
+                  onChange={(e) => setContactDraft((d) => ({ ...d, email: e.target.value }))}
+                  className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
+                  placeholder="you@example.com"
+                />
+              </div>
+              <div>
+                <label htmlFor="profile-contact-phone" className="text-xs font-semibold text-slate-600">
+                  Phone
+                </label>
+                <input
+                  id="profile-contact-phone"
+                  type="tel"
+                  autoComplete="tel"
+                  value={contactDraft.phone}
+                  onChange={(e) => setContactDraft((d) => ({ ...d, phone: e.target.value }))}
+                  className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
+                  placeholder="+1 555 000 0000"
+                />
+              </div>
+            </div>
+            <div className="mt-5 flex flex-wrap justify-end gap-2">
+              <button
+                type="button"
+                className="rounded-full border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+                onClick={() => setContactModalOpen(false)}
+                disabled={contactSaving}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="rounded-full bg-[#0a66c2] px-4 py-2 text-sm font-semibold text-white hover:bg-[#004182] disabled:opacity-50"
+                disabled={contactSaving}
+                onClick={async () => {
+                  const email = contactDraft.email.trim();
+                  const phone = contactDraft.phone.trim();
+                  if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+                    showToast('Please enter a valid email address or leave it blank.', 'error');
+                    return;
+                  }
+                  setContactSaving(true);
+                  try {
+                    await saveMemberFields({ email, phone });
+                    setContactModalOpen(false);
+                    showToast('Contact information saved.', 'success');
+                  } catch (e: unknown) {
+                    const msg = e instanceof Error ? e.message : 'Could not save contact information.';
+                    showToast(msg, 'error');
+                  } finally {
+                    setContactSaving(false);
+                  }
+                }}
+              >
+                {contactSaving ? 'Saving…' : 'Save'}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }
