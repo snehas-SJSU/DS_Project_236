@@ -226,6 +226,9 @@ async def _members_tables() -> None:
         ("resume_text", "resume_text MEDIUMTEXT"),
         ("connections_count", "connections_count INT DEFAULT 0"),
         ("profile_views", "profile_views INT DEFAULT 0"),
+        ("website_url", "website_url VARCHAR(500) NULL"),
+        ("website_label", "website_label VARCHAR(80) NULL"),
+        ("public_profile_slug", "public_profile_slug VARCHAR(120) NULL"),
     ]:
         await _ensure_col("members", col, ddl)
 
@@ -507,6 +510,14 @@ async def _seed_baseline_member() -> None:
         """INSERT IGNORE INTO member_settings
         (member_id, profile_visibility, open_to_work, allow_messages, in_app_notifications_enabled, preferred_language)
         VALUES ('M-123',1,1,1,1,'English')"""
+    )
+    await _exec(
+        """UPDATE members SET phone=%s, website_url=%s, website_label=%s, public_profile_slug=%s
+        WHERE member_id=%s
+          AND (website_url IS NULL OR website_url = '')
+          AND (public_profile_slug IS NULL OR public_profile_slug = '')
+          AND (phone IS NULL OR phone = '')""",
+        ("(408) 581-2224", "https://example.github.io/portfolio", "Portfolio", "sneha-singh", "M-123"),
     )
 
 

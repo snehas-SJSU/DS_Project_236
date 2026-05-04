@@ -66,14 +66,11 @@ export default function LoginLandingPage() {
           <div className="max-w-[420px]">
             <h1 className="text-[3.3rem] font-light leading-[1.08] tracking-[-0.02em] text-[#526a6e]">Welcome to your professional community</h1>
             <div className="mt-9 space-y-3">
-              <button type="button" className="li-btn-primary w-full py-3 text-base">
-                Continue with Google
-              </button>
-              <Link to="/login/email" className="li-btn-ghost flex w-full py-3 text-base">
+              <Link to="/login/email" className="li-btn-primary flex w-full justify-center py-3 text-base">
                 Sign in with email
               </Link>
               <p className="px-2 text-xs leading-relaxed text-[#666666]">
-                By clicking Continue to join or sign in, you agree to the Terms, Privacy Policy, and Cookie Policy.
+                By signing in, you agree to the Terms, Privacy Policy, and Cookie Policy.
               </p>
             </div>
             <p className="mt-6 text-base">

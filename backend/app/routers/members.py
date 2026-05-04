@@ -134,6 +134,12 @@ def normalize_member_payload(body: dict, partial: bool = False) -> dict:
         out["resume_url"] = body.get("resume_url")
     if "resume_text" in body:
         out["resume_text"] = body.get("resume_text")
+    if "website_url" in body:
+        out["website_url"] = body.get("website_url")
+    if "website_label" in body:
+        out["website_label"] = body.get("website_label")
+    if "public_profile_slug" in body:
+        out["public_profile_slug"] = body.get("public_profile_slug")
     return out
 
 
@@ -335,6 +341,7 @@ async def members_update(body: dict):
         "name", "first_name", "last_name", "title", "headline", "location",
         "city", "state", "country", "email", "phone", "about", "summary",
         "skills", "experience", "education", "profile_photo_url", "cover_photo_url", "cover_theme", "resume_url", "resume_text",
+        "website_url", "website_label", "public_profile_slug",
     ]
     updates = []
     vals = []

@@ -32,24 +32,10 @@ export default function SignInPage() {
         <div className="li-panel w-full max-w-[400px] p-8">
           <h1 className="mb-2 text-[32px] font-semibold leading-none text-[#191919]">Sign in</h1>
           <p className="mb-5 text-sm text-[#526a6e]">Stay updated on your professional world.</p>
-          <div className="space-y-2">
-            <button type="button" className="li-btn-ghost w-full">
-              Continue with Google
-            </button>
-            <button type="button" className="li-btn-ghost w-full">
-              Sign in with Apple
-            </button>
-          </div>
 
-          <p className="mt-3 text-[11px] leading-relaxed text-[#666666]">
-            By clicking Continue, you agree to LinkedIn&apos;s User Agreement, Privacy Policy, and Cookie Policy.
+          <p className="mb-4 text-[11px] leading-relaxed text-[#666666]">
+            By signing in, you agree to LinkedIn&apos;s User Agreement, Privacy Policy, and Cookie Policy.
           </p>
-
-          <div className="my-4 flex items-center gap-3">
-            <div className="h-px flex-1 bg-[#d9d9d9]" />
-            <span className="text-xs text-[#666666]">or</span>
-            <div className="h-px flex-1 bg-[#d9d9d9]" />
-          </div>
 
           <form
             className="space-y-3"

@@ -3,19 +3,31 @@ import {
   BarChart3,
   Briefcase,
   Eye,
+  Globe,
   GraduationCap,
+  Mail,
   MapPin,
   MessageCircle,
   MoreVertical,
   Pencil,
+  Phone,
   Repeat2,
   Search,
   ThumbsUp,
-  Users
+  UserCircle2,
+  Users,
+  X
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import PostComposerModal from '../components/feed/PostComposerModal';
-import { LOCAL_AVATAR_KEY, resolveAvatarUrl, resolveViewerAvatarUrl } from '../lib/memberProfile';
+import {
+  defaultPublicProfileSlug,
+  LOCAL_AVATAR_KEY,
+  MEMBER_CONTACT_UPDATED_EVENT,
+  OPEN_CONTACT_INFO_EVENT,
+  resolveAvatarUrl,
+  resolveViewerAvatarUrl
+} from '../lib/memberProfile';
 import { showToast } from '../lib/toast';
 
 type LoadState = { status: 'loading' } | { status: 'ok'; data: any } | { status: 'error'; message: string };
@@ -38,6 +50,29 @@ type ActivityApiRow = {
     created_at: string;
   };
 };
+
+type ContactDraft = {
+  email: string;
+  phone: string;
+  website_url: string;
+  website_label: string;
+  public_profile_slug: string;
+  location: string;
+};
+
+function formatWebsiteHref(url: string): string {
+  const u = url.trim();
+  if (!u) return '';
+  if (/^https?:\/\//i.test(u)) return u;
+  return `https://${u}`;
+}
+
+function displayWebsiteHost(url: string): string {
+  return url
+    .trim()
+    .replace(/^https?:\/\//i, '')
+    .replace(/\/$/, '');
+}
 const AVATAR_OPTIONS = ['Avery', 'Morgan', 'Noah', 'Sophia', 'Liam', 'Maya'];
 const COVER_THEMES: Record<string, string> = {
   blue: 'from-blue-400 to-indigo-500',
@@ -65,7 +100,15 @@ export default function Profile() {
   const [editPost, setEditPost] = useState<{ post_id: string; body: string } | null>(null);
   const [contactMenuOpen, setContactMenuOpen] = useState(false);
   const [contactModalOpen, setContactModalOpen] = useState(false);
-  const [contactDraft, setContactDraft] = useState({ email: '', phone: '' });
+  const [contactModalScreen, setContactModalScreen] = useState<'view' | 'edit'>('view');
+  const [contactDraft, setContactDraft] = useState<ContactDraft>({
+    email: '',
+    phone: '',
+    website_url: '',
+    website_label: 'Portfolio',
+    public_profile_slug: '',
+    location: ''
+  });
   const [contactSaving, setContactSaving] = useState(false);
   const contactMenuRef = useRef<HTMLDivElement | null>(null);
 
@@ -189,6 +232,27 @@ export default function Profile() {
     document.addEventListener('mousedown', close);
     return () => document.removeEventListener('mousedown', close);
   }, [contactMenuOpen]);
+
+  useEffect(() => {
+    if (!contactModalOpen) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setContactModalOpen(false);
+        setContactModalScreen('view');
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [contactModalOpen]);
+
+  useEffect(() => {
+    const open = () => {
+      setContactModalScreen('view');
+      setContactModalOpen(true);
+    };
+    window.addEventListener(OPEN_CONTACT_INFO_EVENT, open);
+    return () => window.removeEventListener(OPEN_CONTACT_INFO_EVENT, open);
+  }, []);
 
   const filteredActivity = useMemo(() => {
     if (activityTab === 'all') return activityRows;
@@ -450,15 +514,12 @@ export default function Profile() {
                     role="menuitem"
                     className="block w-full px-3 py-2 text-left text-sm text-[#191919] hover:bg-[#f3f2ef]"
                     onClick={() => {
-                      setContactDraft({
-                        email: String(profile.email || '').trim(),
-                        phone: String(profile.phone || '').trim()
-                      });
+                      setContactModalScreen('view');
                       setContactModalOpen(true);
                       setContactMenuOpen(false);
                     }}
                   >
-                    Contact information
+                    Contact info
                   </button>
                 </div>
               ) : null}
@@ -477,22 +538,17 @@ export default function Profile() {
                 View your network
               </Link>
             </div>
-            <div className="mt-3 rounded-lg border border-dashed border-slate-200 bg-slate-50/90 px-3 py-2">
-              <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Contact · private to you</p>
-              <p className="mt-1 text-[11px] text-slate-500"></p>
-              {profile.email ? (
-                <p className="mt-2 text-sm text-slate-800">
-                  <span className="text-slate-500">Email:</span> {profile.email}
-                </p>
-              ) : null}
-              {profile.phone ? (
-                <p className={`text-sm text-slate-800 ${profile.email ? 'mt-1' : 'mt-2'}`}>
-                  <span className="text-slate-500">Phone:</span> {profile.phone}
-                </p>
-              ) : null}
-              {!profile.email && !profile.phone ? (
-                <p className="mt-2 text-sm text-slate-600">No email or phone on your profile yet.</p>
-              ) : null}
+            <div className="mt-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setContactModalScreen('view');
+                  setContactModalOpen(true);
+                }}
+                className="text-left text-sm font-semibold text-[#0a66c2] hover:underline"
+              >
+                Contact info
+              </button>
             </div>
             <div className="mt-3 flex flex-wrap gap-2">
               <button
@@ -1258,90 +1314,301 @@ export default function Profile() {
 
       {contactModalOpen ? (
         <div
-          className="fixed inset-0 z-[100] flex items-center justify-center bg-black/45 p-4"
+          className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 p-4"
           role="dialog"
           aria-modal="true"
           aria-labelledby="contact-info-title"
           onMouseDown={(e) => {
-            if (e.target === e.currentTarget) setContactModalOpen(false);
+            if (e.target === e.currentTarget) {
+              setContactModalOpen(false);
+              setContactModalScreen('view');
+            }
           }}
         >
           <div
-            className="w-full max-w-md rounded-xl border border-[#e0dfdc] bg-white p-5 shadow-2xl"
+            className="w-full max-w-[440px] overflow-hidden rounded-lg border border-[#d0d7de] bg-white shadow-[0_8px_40px_rgba(0,0,0,0.12)]"
             onMouseDown={(e) => e.stopPropagation()}
           >
-            <h2 id="contact-info-title" className="text-lg font-semibold text-[#191919]">
-              Contact information
-            </h2>
-            <p className="mt-1 text-sm text-slate-600">
-              Only you see this on your profile. Recruiters and visitors do not see your email or phone here.
-            </p>
-            <div className="mt-4 space-y-3">
-              <div>
-                <label htmlFor="profile-contact-email" className="text-xs font-semibold text-slate-600">
-                  Email
-                </label>
-                <input
-                  id="profile-contact-email"
-                  type="email"
-                  autoComplete="email"
-                  value={contactDraft.email}
-                  onChange={(e) => setContactDraft((d) => ({ ...d, email: e.target.value }))}
-                  className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
-                  placeholder="you@example.com"
-                />
-              </div>
-              <div>
-                <label htmlFor="profile-contact-phone" className="text-xs font-semibold text-slate-600">
-                  Phone
-                </label>
-                <input
-                  id="profile-contact-phone"
-                  type="tel"
-                  autoComplete="tel"
-                  value={contactDraft.phone}
-                  onChange={(e) => setContactDraft((d) => ({ ...d, phone: e.target.value }))}
-                  className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
-                  placeholder="+1 555 000 0000"
-                />
-              </div>
-            </div>
-            <div className="mt-5 flex flex-wrap justify-end gap-2">
+            <div className="flex items-start justify-between border-b border-[#ebebeb] px-5 py-4">
+              <h2 id="contact-info-title" className="text-lg font-semibold leading-tight text-[#191919]">
+                {contactModalScreen === 'view' ? 'Contact info' : 'Edit contact info'}
+              </h2>
               <button
                 type="button"
-                className="rounded-full border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
-                onClick={() => setContactModalOpen(false)}
-                disabled={contactSaving}
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                className="rounded-full bg-[#0a66c2] px-4 py-2 text-sm font-semibold text-white hover:bg-[#004182] disabled:opacity-50"
-                disabled={contactSaving}
-                onClick={async () => {
-                  const email = contactDraft.email.trim();
-                  const phone = contactDraft.phone.trim();
-                  if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-                    showToast('Please enter a valid email address or leave it blank.', 'error');
-                    return;
-                  }
-                  setContactSaving(true);
-                  try {
-                    await saveMemberFields({ email, phone });
-                    setContactModalOpen(false);
-                    showToast('Contact information saved.', 'success');
-                  } catch (e: unknown) {
-                    const msg = e instanceof Error ? e.message : 'Could not save contact information.';
-                    showToast(msg, 'error');
-                  } finally {
-                    setContactSaving(false);
-                  }
+                className="rounded-full p-1 text-[#666666] hover:bg-[#f3f2ef]"
+                aria-label="Close"
+                onClick={() => {
+                  setContactModalOpen(false);
+                  setContactModalScreen('view');
                 }}
               >
-                {contactSaving ? 'Saving…' : 'Save'}
+                <X size={22} strokeWidth={1.75} />
               </button>
             </div>
+
+            {contactModalScreen === 'view' ? (
+              <>
+                <div className="max-h-[min(70vh,520px)] overflow-y-auto px-5 pt-1">
+                  {(() => {
+                    const slug = defaultPublicProfileSlug({
+                      name: profile.name,
+                      public_profile_slug: profile.public_profile_slug,
+                      member_id: MEMBER_ID
+                    });
+                    const site = String(profile.website_url || '').trim();
+                    const siteLabel = String(profile.website_label || 'Portfolio').trim();
+                    const phone = String(profile.phone || '').trim();
+                    const loc = String(profile.location || '').trim();
+                    const em = String(profile.email || '').trim();
+                    const rowIcon = 'mt-0.5 h-[18px] w-[18px] shrink-0 text-[#666666]';
+                    return (
+                      <div className="pb-1">
+                        <div className="flex gap-3 border-t border-[#ebebeb] py-4">
+                          <UserCircle2 className={rowIcon} aria-hidden />
+                          <div className="min-w-0">
+                            <p className="text-sm font-semibold text-[#191919]">Your profile</p>
+                            <a
+                              href={`https://www.linkedin.com/in/${encodeURIComponent(slug)}`}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="mt-1 block text-sm font-semibold text-[#0a66c2] hover:underline"
+                            >
+                              linkedin.com/in/{slug}
+                            </a>
+                          </div>
+                        </div>
+                        <div className="flex gap-3 border-t border-[#ebebeb] py-4">
+                          <Globe className={rowIcon} aria-hidden />
+                          <div className="min-w-0">
+                            <p className="text-sm font-semibold text-[#191919]">Website</p>
+                            {site ? (
+                              <p className="mt-1 text-sm">
+                                <a
+                                  href={formatWebsiteHref(site)}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className="font-semibold text-[#0a66c2] hover:underline"
+                                >
+                                  {displayWebsiteHost(site)}
+                                </a>
+                                {siteLabel ? (
+                                  <span className="text-sm font-normal text-[#666666]"> ({siteLabel})</span>
+                                ) : null}
+                              </p>
+                            ) : (
+                              <p className="mt-1 text-sm text-[#666666]">Not added</p>
+                            )}
+                          </div>
+                        </div>
+                        <div className="flex gap-3 border-t border-[#ebebeb] py-4">
+                          <Phone className={rowIcon} aria-hidden />
+                          <div className="min-w-0">
+                            <p className="text-sm font-semibold text-[#191919]">Phone</p>
+                            {phone ? (
+                              <p className="mt-1 text-sm">
+                                <a href={`tel:${phone.replace(/\s/g, '')}`} className="font-semibold text-[#0a66c2] hover:underline">
+                                  {phone}
+                                </a>
+                                <span className="text-sm text-[#666666]"> (Mobile)</span>
+                              </p>
+                            ) : (
+                              <p className="mt-1 text-sm text-[#666666]">Not added</p>
+                            )}
+                          </div>
+                        </div>
+                        <div className="flex gap-3 border-t border-[#ebebeb] py-4">
+                          <MapPin className={rowIcon} aria-hidden />
+                          <div className="min-w-0">
+                            <p className="text-sm font-semibold text-[#191919]">Address</p>
+                            <p className="mt-1 text-sm text-[#191919]">{loc || 'Not added'}</p>
+                          </div>
+                        </div>
+                        <div className="flex gap-3 border-t border-[#ebebeb] py-4">
+                          <Mail className={rowIcon} aria-hidden />
+                          <div className="min-w-0">
+                            <p className="text-sm font-semibold text-[#191919]">Email</p>
+                            {em ? (
+                              <a href={`mailto:${em}`} className="mt-1 block text-sm font-semibold text-[#0a66c2] hover:underline">
+                                {em}
+                              </a>
+                            ) : (
+                              <p className="mt-1 text-sm text-[#666666]">Not added</p>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })()}
+                </div>
+                <div className="flex justify-end border-t border-[#ebebeb] bg-white px-5 py-3">
+                  <button
+                    type="button"
+                    className="rounded-full border-2 border-[#0a66c2] bg-white px-4 py-1.5 text-sm font-semibold text-[#0a66c2] hover:bg-[#eef3f8]"
+                    onClick={() => {
+                      setContactDraft({
+                        email: String(profile.email || '').trim(),
+                        phone: String(profile.phone || '').trim(),
+                        website_url: String(profile.website_url || '').trim(),
+                        website_label: String(profile.website_label || 'Portfolio').trim() || 'Portfolio',
+                        public_profile_slug: String(profile.public_profile_slug || '').trim(),
+                        location: String(profile.location || '').trim()
+                      });
+                      setContactModalScreen('edit');
+                    }}
+                  >
+                    Edit contact info
+                  </button>
+                </div>
+              </>
+            ) : (
+              <div className="px-5 pb-5 pt-2">
+                <p className="mb-4 text-sm text-[#666666]">
+                  Changes apply to your profile. Use a URL slug with letters, numbers, and hyphens only.
+                </p>
+                <div className="space-y-3">
+                  <div>
+                    <label htmlFor="profile-contact-slug" className="text-xs font-semibold text-[#666666]">
+                      Public profile URL (linkedin.com/in/…)
+                    </label>
+                    <input
+                      id="profile-contact-slug"
+                      type="text"
+                      value={contactDraft.public_profile_slug}
+                      onChange={(e) => setContactDraft((d) => ({ ...d, public_profile_slug: e.target.value }))}
+                      className="mt-1 w-full rounded border border-[#b6b6b6] px-3 py-2 text-sm text-[#191919] placeholder:text-[#999]"
+                      placeholder="e.g. jane-doe"
+                    />
+                  </div>
+                  <div>
+                    <label htmlFor="profile-contact-website" className="text-xs font-semibold text-[#666666]">
+                      Website
+                    </label>
+                    <input
+                      id="profile-contact-website"
+                      type="url"
+                      value={contactDraft.website_url}
+                      onChange={(e) => setContactDraft((d) => ({ ...d, website_url: e.target.value }))}
+                      className="mt-1 w-full rounded border border-[#b6b6b6] px-3 py-2 text-sm text-[#191919] placeholder:text-[#999]"
+                      placeholder="https://your-site.com"
+                    />
+                  </div>
+                  <div>
+                    <label htmlFor="profile-contact-website-label" className="text-xs font-semibold text-[#666666]">
+                      Website label
+                    </label>
+                    <input
+                      id="profile-contact-website-label"
+                      type="text"
+                      value={contactDraft.website_label}
+                      onChange={(e) => setContactDraft((d) => ({ ...d, website_label: e.target.value }))}
+                      className="mt-1 w-full rounded border border-[#b6b6b6] px-3 py-2 text-sm text-[#191919] placeholder:text-[#999]"
+                      placeholder="Portfolio"
+                    />
+                  </div>
+                  <div>
+                    <label htmlFor="profile-contact-phone" className="text-xs font-semibold text-[#666666]">
+                      Phone
+                    </label>
+                    <input
+                      id="profile-contact-phone"
+                      type="tel"
+                      autoComplete="tel"
+                      value={contactDraft.phone}
+                      onChange={(e) => setContactDraft((d) => ({ ...d, phone: e.target.value }))}
+                      className="mt-1 w-full rounded border border-[#b6b6b6] px-3 py-2 text-sm text-[#191919] placeholder:text-[#999]"
+                      placeholder="+1 555 000 0000"
+                    />
+                  </div>
+                  <div>
+                    <label htmlFor="profile-contact-address" className="text-xs font-semibold text-[#666666]">
+                      Address (shown on profile)
+                    </label>
+                    <input
+                      id="profile-contact-address"
+                      type="text"
+                      value={contactDraft.location}
+                      onChange={(e) => setContactDraft((d) => ({ ...d, location: e.target.value }))}
+                      className="mt-1 w-full rounded border border-[#b6b6b6] px-3 py-2 text-sm text-[#191919] placeholder:text-[#999]"
+                      placeholder="City, State"
+                    />
+                  </div>
+                  <div>
+                    <label htmlFor="profile-contact-email" className="text-xs font-semibold text-[#666666]">
+                      Email
+                    </label>
+                    <input
+                      id="profile-contact-email"
+                      type="email"
+                      autoComplete="email"
+                      value={contactDraft.email}
+                      onChange={(e) => setContactDraft((d) => ({ ...d, email: e.target.value }))}
+                      className="mt-1 w-full rounded border border-[#b6b6b6] px-3 py-2 text-sm text-[#191919] placeholder:text-[#999]"
+                      placeholder="you@example.com"
+                    />
+                  </div>
+                </div>
+                <div className="mt-5 flex flex-wrap justify-end gap-2">
+                  <button
+                    type="button"
+                    className="rounded-full border border-[#747474] bg-white px-4 py-1.5 text-sm font-semibold text-[#404040] hover:bg-[#f3f2ef]"
+                    onClick={() => setContactModalScreen('view')}
+                    disabled={contactSaving}
+                  >
+                    Back
+                  </button>
+                  <button
+                    type="button"
+                    className="rounded-full bg-[#0a66c2] px-4 py-1.5 text-sm font-semibold text-white hover:bg-[#004182] disabled:opacity-50"
+                    disabled={contactSaving}
+                    onClick={async () => {
+                      const email = contactDraft.email.trim();
+                      const phone = contactDraft.phone.trim();
+                      const website_url = contactDraft.website_url.trim();
+                      const website_label = contactDraft.website_label.trim();
+                      const location = contactDraft.location.trim();
+                      const slugRaw = contactDraft.public_profile_slug.trim();
+                      if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+                        showToast('Please enter a valid email address or leave it blank.', 'error');
+                        return;
+                      }
+                      if (slugRaw && !/^[a-zA-Z0-9-]+$/.test(slugRaw)) {
+                        showToast('Profile URL may only contain letters, numbers, and hyphens.', 'error');
+                        return;
+                      }
+                      if (website_url) {
+                        try {
+                          new URL(formatWebsiteHref(website_url));
+                        } catch {
+                          showToast('Please enter a valid website URL.', 'error');
+                          return;
+                        }
+                      }
+                      setContactSaving(true);
+                      try {
+                        await saveMemberFields({
+                          email,
+                          phone,
+                          website_url: website_url || '',
+                          website_label: website_label || '',
+                          public_profile_slug: slugRaw,
+                          location
+                        });
+                        setContactModalScreen('view');
+                        showToast('Contact info saved.', 'success');
+                        window.dispatchEvent(new Event(MEMBER_CONTACT_UPDATED_EVENT));
+                      } catch (e: unknown) {
+                        const msg = e instanceof Error ? e.message : 'Could not save contact information.';
+                        showToast(msg, 'error');
+                      } finally {
+                        setContactSaving(false);
+                      }
+                    }}
+                  >
+                    {contactSaving ? 'Saving…' : 'Save'}
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       ) : null}

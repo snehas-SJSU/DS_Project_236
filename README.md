@@ -442,9 +442,7 @@ cd frontend && npm run dev
 3. `GET /api/auth/me` (requires `Authorization: Bearer <jwt_token>`)
 4. `POST /api/auth/logout`
 
-Auth status:
-1. Implemented: email/password signup/login/logout with JWT bearer tokens.
-2. Pending: real Google OAuth integration (`Continue with Google` is UI-only right now).
+Auth status: email/password signup/login/logout with JWT bearer tokens.
 
 ---
 

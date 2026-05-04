@@ -26,7 +26,30 @@ export function getViewerRecruiterId(): string {
   return getViewerMemberId();
 }
 
+/** Dispatched from Profile sidebar to open the Contact info modal (view mode). */
+export const OPEN_CONTACT_INFO_EVENT = 'li-open-contact-info';
+
+/** Dispatched after contact / public URL fields are saved so sidebars can refetch. */
+export const MEMBER_CONTACT_UPDATED_EVENT = 'li-member-contact-updated';
+
 export const LOCAL_AVATAR_KEY = 'li_sim_profile_avatar';
+
+/** Vanity path segment for `linkedin.com/in/{slug}` — matches Contact info modal. */
+export function defaultPublicProfileSlug(profile: {
+  name?: string | null;
+  public_profile_slug?: string | null;
+  member_id?: string | null;
+}): string {
+  const s = String(profile.public_profile_slug || '').trim();
+  if (s) return s;
+  const name = String(profile.name || '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '');
+  if (name) return name;
+  const mid = String(profile.member_id || '').trim();
+  return mid.replace(/^M-/i, '').toLowerCase() || 'profile';
+}
 
 export function defaultAvatarUrl(name?: string) {
   const label = (name || 'Me').trim().charAt(0).toUpperCase() || 'M';

@@ -36,7 +36,13 @@ import JobPostPage from './pages/JobPostPage';
 import JobApplyPage from './pages/JobApplyPage';
 import CompanyPage from './pages/CompanyPage';
 import { isAuthenticated } from './lib/auth';
-import { resolveAvatarUrl, resolveViewerAvatarUrl } from './lib/memberProfile';
+import {
+  defaultPublicProfileSlug,
+  MEMBER_CONTACT_UPDATED_EVENT,
+  OPEN_CONTACT_INFO_EVENT,
+  resolveAvatarUrl,
+  resolveViewerAvatarUrl
+} from './lib/memberProfile';
 import { showToast, ToastViewport } from './lib/toast';
 import AIAssistantPage from './pages/AIAssistantPage';
 import PostComposerModal from './components/feed/PostComposerModal';
@@ -994,19 +1000,42 @@ function ProfileShell({ children }: { children: React.ReactNode }) {
   const MEMBER_ID = sessionStorage.getItem('li_sim_member_id') || 'M-123';
   const location = useLocation();
   const PROFILE_LANGUAGE_KEY = 'li_sim_profile_language';
-  const PROFILE_URL_KEY = 'li_sim_profile_url';
   const [language, setLanguage] = useState(localStorage.getItem(PROFILE_LANGUAGE_KEY) || 'English');
-  const ownUrlDefault = `linkedin-sim.local/in/${MEMBER_ID.toLowerCase()}`;
-  const [publicUrl, setPublicUrl] = useState(localStorage.getItem(PROFILE_URL_KEY) || ownUrlDefault);
+  const [slugSource, setSlugSource] = useState<{ name?: string; public_profile_slug?: string | null } | null>(null);
+
+  const loadPublicSlug = React.useCallback(() => {
+    fetch('/api/members/get', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ member_id: MEMBER_ID })
+    })
+      .then((res) => res.json())
+      .then((data) => {
+        if (!data || data.error) return;
+        setSlugSource({ name: data.name, public_profile_slug: data.public_profile_slug });
+      })
+      .catch(() => undefined);
+  }, [MEMBER_ID]);
+
+  useEffect(() => {
+    loadPublicSlug();
+  }, [loadPublicSlug]);
+
+  useEffect(() => {
+    window.addEventListener(MEMBER_CONTACT_UPDATED_EVENT, loadPublicSlug);
+    return () => window.removeEventListener(MEMBER_CONTACT_UPDATED_EVENT, loadPublicSlug);
+  }, [loadPublicSlug]);
 
   const profilePathPrefix = '/profile/';
   const routeMemberId = location.pathname.startsWith(profilePathPrefix)
     ? decodeURIComponent(location.pathname.slice(profilePathPrefix.length))
     : MEMBER_ID;
   const isOwnProfile = routeMemberId === MEMBER_ID || location.pathname === '/profile';
-  const displayedPublicUrl = isOwnProfile
-    ? publicUrl
-    : `linkedin-sim.local/in/${routeMemberId.toLowerCase()}`;
+  const displayedLinkedInPath = `linkedin.com/in/${defaultPublicProfileSlug({
+    name: slugSource?.name,
+    public_profile_slug: slugSource?.public_profile_slug,
+    member_id: MEMBER_ID
+  })}`;
 
   const editLanguage = () => {
     const next = window.prompt('Update profile language', language);
@@ -1017,13 +1046,8 @@ function ProfileShell({ children }: { children: React.ReactNode }) {
     localStorage.setItem(PROFILE_LANGUAGE_KEY, value);
   };
 
-  const editPublicUrl = () => {
-    const next = window.prompt('Update public profile URL', publicUrl);
-    if (!next) return;
-    const value = next.trim();
-    if (!value) return;
-    setPublicUrl(value);
-    localStorage.setItem(PROFILE_URL_KEY, value);
+  const openContactInfoForUrl = () => {
+    window.dispatchEvent(new Event(OPEN_CONTACT_INFO_EVENT));
   };
 
   return (
@@ -1052,14 +1076,14 @@ function ProfileShell({ children }: { children: React.ReactNode }) {
                   <p className="font-semibold text-[#191919]">Public profile & URL</p>
                   <button
                     type="button"
-                    onClick={editPublicUrl}
+                    onClick={openContactInfoForUrl}
                     className="inline-flex h-7 w-7 items-center justify-center rounded-full text-[#666666] hover:bg-[#f3f2ef]"
-                    title="Edit public profile URL"
+                    title="Edit public URL in Contact info"
                   >
                     <Pencil size={14} />
                   </button>
                 </div>
-                <p className="mt-1 text-[#666666] break-all">{displayedPublicUrl}</p>
+                <p className="mt-1 text-[#666666] break-all">{displayedLinkedInPath}</p>
               </div>
             ) : null}
             <PeopleYouMayKnowCard />

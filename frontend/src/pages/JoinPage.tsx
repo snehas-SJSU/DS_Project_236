@@ -150,7 +150,7 @@ export default function JoinPage() {
               </label>
 
               <p className="text-[11px] text-[#666666]">
-                By clicking Agree &amp; Join or Continue, you agree to the LinkedIn User Agreement, Privacy Policy, and Cookie Policy.
+                By clicking Agree &amp; Join, you agree to the LinkedIn User Agreement, Privacy Policy, and Cookie Policy.
               </p>
 
               <button type="submit" className="li-btn-primary w-full py-3">
@@ -158,16 +158,6 @@ export default function JoinPage() {
               </button>
               {error ? <p className="text-xs font-medium text-[#c62828]">{error}</p> : null}
             </form>
-
-            <div className="my-4 flex items-center gap-3">
-              <div className="h-px flex-1 bg-[#d9d9d9]" />
-              <span className="text-xs text-[#666666]">or</span>
-              <div className="h-px flex-1 bg-[#d9d9d9]" />
-            </div>
-
-            <button type="button" className="li-btn-ghost w-full">
-              Continue with Google
-            </button>
 
             <p className="mt-4 text-center text-sm text-[#191919]">
               Already on LinkedIn?{' '}

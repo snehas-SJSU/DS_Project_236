@@ -59,10 +59,6 @@
 - Dynamic flow checks passed for profile update persistence, job posting/search visibility, and connect→accept lifecycle validation.
 - **`README.md`** is the operator-facing runbook: ports (**`:3000`** app, **`:4000`** API/Swagger direct), proxied Swagger on **`:3000/docs`**, smoke defaults to **`http://localhost:4000/api`**, and copy/paste startup commands.
 
-## Pending note (auth)
-
-- Google OAuth is not implemented yet. The `Continue with Google` button is currently UI-only and intentionally pending.
-
 ## Pending note (performance evidence)
 
 - Redis SQL caching is implemented in backend code paths (lookup caching + invalidation) and included in current runtime.
@@ -108,4 +104,4 @@ For split-origin deploys, set `VITE_API_BASE_URL` to the public API origin (see 
 
 ## Final note
 
-Non-AI implementation is complete and demo-ready. Remaining work is the intentionally excluded items (AI, JMeter, AWS), Google OAuth completion, and final submission packaging/screenshots/polish.
+Non-AI implementation is complete and demo-ready. Remaining work is the intentionally excluded items (AI, JMeter, AWS) and final submission packaging/screenshots/polish.
