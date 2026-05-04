@@ -261,9 +261,29 @@ paths:
     post:
       tags: [Job Service]
       summary: Close a job posting
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [job_id]
+              properties:
+                job_id:
+                  type: string
+                recruiter_id:
+                  type: string
+                  description: When set, must match the job's recruiter_id or the request returns 403.
+            example:
+              job_id: J-abc12345
+              recruiter_id: M-123
       responses:
         '200':
           description: OK
+        '403':
+          description: recruiter_id does not match job owner
+        '404':
+          description: Job not found
   /jobs/byRecruiter:
     post:
       tags: [Job Service]

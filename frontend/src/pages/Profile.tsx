@@ -1,11 +1,42 @@
-import { useEffect, useRef, useState } from 'react';
-import { BarChart3, Briefcase, Eye, GraduationCap, MapPin, Pencil, Search, Users } from 'lucide-react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  BarChart3,
+  Briefcase,
+  Eye,
+  GraduationCap,
+  MapPin,
+  MessageCircle,
+  Pencil,
+  Repeat2,
+  Search,
+  ThumbsUp,
+  Users
+} from 'lucide-react';
 import { Link } from 'react-router-dom';
-import { LOCAL_AVATAR_KEY, resolveViewerAvatarUrl } from '../lib/memberProfile';
+import PostComposerModal from '../components/feed/PostComposerModal';
+import { LOCAL_AVATAR_KEY, resolveAvatarUrl, resolveViewerAvatarUrl } from '../lib/memberProfile';
 import { showToast } from '../lib/toast';
 
 type LoadState = { status: 'loading' } | { status: 'ok'; data: any } | { status: 'error'; message: string };
-type EditSection = 'profile' | 'suggested' | 'about' | 'activity' | 'experience' | 'education' | 'skills';
+type EditSection = 'profile' | 'suggested' | 'about' | 'experience' | 'education' | 'skills';
+
+type ActivityTab = 'all' | 'posts' | 'comments' | 'reposts' | 'likes';
+
+type ActivityApiRow = {
+  activity_type: string;
+  activity_at: string;
+  comment_preview?: string | null;
+  post: {
+    post_id: string;
+    member_id: string;
+    author_name: string | null;
+    author_headline?: string | null;
+    author_profile_photo_url?: string | null;
+    body: string;
+    image_data: string | null;
+    created_at: string;
+  };
+};
 const AVATAR_OPTIONS = ['Avery', 'Morgan', 'Noah', 'Sophia', 'Liam', 'Maya'];
 const COVER_THEMES: Record<string, string> = {
   blue: 'from-blue-400 to-indigo-500',
@@ -26,6 +57,11 @@ export default function Profile() {
   const [skillsDraftText, setSkillsDraftText] = useState('');
   const coverFileInputRef = useRef<HTMLInputElement | null>(null);
   const avatarFileInputRef = useRef<HTMLInputElement | null>(null);
+  const [activityTab, setActivityTab] = useState<ActivityTab>('all');
+  const [activityRows, setActivityRows] = useState<ActivityApiRow[]>([]);
+  const [activityLoading, setActivityLoading] = useState(false);
+  const [composerOpen, setComposerOpen] = useState(false);
+  const [editPost, setEditPost] = useState<{ post_id: string; body: string } | null>(null);
 
   const loadDashboard = () => {
     fetch('/api/analytics/member/dashboard', {
@@ -106,11 +142,48 @@ export default function Profile() {
     loadDashboard();
   }, []);
 
+  const loadActivity = useCallback(async () => {
+    setActivityLoading(true);
+    try {
+      const res = await fetch('/api/posts/memberActivity', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          member_id: MEMBER_ID,
+          viewer_member_id: MEMBER_ID,
+          scope: 'full',
+          limit: 60
+        })
+      });
+      const data = await res.json().catch(() => []);
+      setActivityRows(Array.isArray(data) ? data : []);
+    } catch {
+      setActivityRows([]);
+    } finally {
+      setActivityLoading(false);
+    }
+  }, [MEMBER_ID]);
+
+  useEffect(() => {
+    void loadActivity();
+  }, [loadActivity]);
+
   useEffect(() => {
     const onFocus = () => loadDashboard();
     window.addEventListener('focus', onFocus);
     return () => window.removeEventListener('focus', onFocus);
   }, []);
+
+  const filteredActivity = useMemo(() => {
+    if (activityTab === 'all') return activityRows;
+    const m: Record<Exclude<ActivityTab, 'all'>, string> = {
+      posts: 'created',
+      comments: 'commented',
+      reposts: 'reposted',
+      likes: 'liked'
+    };
+    return activityRows.filter((r) => r.activity_type === m[activityTab]);
+  }, [activityRows, activityTab]);
 
   if (state.status === 'loading') return <div className="li-card p-5 text-sm text-slate-500">Loading profile...</div>;
   if (state.status === 'error') {
@@ -129,6 +202,35 @@ export default function Profile() {
     '';
   const headlineText = profile.headline || profile.title || 'Full Stack AI Engineer';
   const avatarUrl = resolveViewerAvatarUrl((draft.profile_photo_url || profile.profile_photo_url) as string | undefined, displayName);
+
+  const activityVerb = (row: ActivityApiRow) => {
+    const name = row.post.author_name || row.post.member_id;
+    switch (row.activity_type) {
+      case 'created':
+        return 'You shared a post';
+      case 'liked':
+        return `You liked ${name}'s post`;
+      case 'commented':
+        return `You commented on ${name}'s post`;
+      case 'reposted':
+        return `You reposted ${name}'s post`;
+      default:
+        return 'Activity';
+    }
+  };
+
+  const activityIcon = (t: string) => {
+    switch (t) {
+      case 'liked':
+        return <ThumbsUp className="h-4 w-4 text-[#0a66c2]" aria-hidden />;
+      case 'commented':
+        return <MessageCircle className="h-4 w-4 text-[#0a66c2]" aria-hidden />;
+      case 'reposted':
+        return <Repeat2 className="h-4 w-4 text-[#057642]" aria-hidden />;
+      default:
+        return <Pencil className="h-4 w-4 text-slate-500" aria-hidden />;
+    }
+  };
   const coverClass = COVER_THEMES[draft.cover_theme || profile.cover_theme || 'blue'] || COVER_THEMES.blue;
   const onUploadImage = (file: File, key: 'profile_photo_url' | 'cover_photo_url') => {
     const reader = new FileReader();
@@ -212,14 +314,12 @@ export default function Profile() {
     profile: 'Profile basics',
     suggested: 'Suggested for you',
     about: 'About',
-    activity: 'Activity',
     experience: 'Experience',
     education: 'Education',
     skills: 'Top skills'
   };
   const showBasics = editSection === 'profile';
   const showAbout = editSection === 'about';
-  const showActivity = editSection === 'activity';
   const showExperience = editSection === 'experience';
   const showEducation = editSection === 'education';
   const showSkills = editSection === 'skills';
@@ -394,9 +494,9 @@ export default function Profile() {
           <p className="text-sm text-slate-600">
             Update your headline, location, avatar, cover, and key details below. The pencil icon now opens this editor for its section.
           </p>
-          {(showBasics || showAbout || showActivity) && (
+          {(showBasics || showAbout) && (
             <>
-              {(showBasics || showActivity) && (
+              {showBasics && (
                 <input
                   value={draft.headline || draft.title || ''}
                   onChange={(e) => setDraft({ ...draft, headline: e.target.value, title: e.target.value })}
@@ -413,7 +513,7 @@ export default function Profile() {
                   rows={4}
                 />
               )}
-              {(showBasics || showActivity) && (
+              {showBasics && (
                 <input
                   value={draft.location || ''}
                   onChange={(e) => setDraft({ ...draft, location: e.target.value })}
@@ -572,52 +672,181 @@ export default function Profile() {
         )}
       </section>
       <section className="li-card p-5">
-        <div className="flex items-center justify-between">
-          <h3 className="text-lg font-semibold text-slate-900">Activity</h3>
-          <div className="flex items-center gap-2">
-            <button className="rounded-full border border-slate-300 px-3 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-50">Create a post</button>
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h3 className="text-lg font-semibold text-slate-900">Activity</h3>
+            <p className="mt-0.5 text-xs text-slate-500">{activityRows.length} recent updates</p>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
             <button
               type="button"
-              onClick={() => openEditor('activity')}
-              className="inline-flex h-8 w-8 items-center justify-center rounded-full text-slate-500 hover:bg-slate-100"
-              title="Edit activity"
+              onClick={() => setComposerOpen(true)}
+              className="rounded-full border border-slate-300 px-3 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-50"
             >
-              <Pencil size={15} />
+              Create a post
             </button>
+            <Link
+              to="/feed"
+              className="rounded-full border border-[#0a66c2] px-3 py-1 text-xs font-semibold text-[#0a66c2] hover:bg-[#edf3f8]"
+            >
+              Go to feed
+            </Link>
           </div>
         </div>
-        {isInline && editSection === 'activity' ? (
-          <div className="mt-3 space-y-3">
-            <input
-              value={draft.headline || draft.title || ''}
-              onChange={(e) => setDraft((d: any) => ({ ...d, headline: e.target.value, title: e.target.value }))}
-              className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
-              placeholder="Activity headline"
+        <div className="mt-4 flex flex-wrap gap-1 border-b border-slate-200 pb-2">
+          {(
+            [
+              ['all', 'All'],
+              ['posts', 'Posts'],
+              ['comments', 'Comments'],
+              ['reposts', 'Reposts'],
+              ['likes', 'Likes']
+            ] as const
+          ).map(([id, label]) => (
+            <button
+              key={id}
+              type="button"
+              onClick={() => setActivityTab(id)}
+              className={`rounded-full px-3 py-1 text-xs font-semibold ${
+                activityTab === id ? 'bg-slate-900 text-white' : 'text-slate-600 hover:bg-slate-100'
+              }`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+        {activityLoading ? (
+          <p className="mt-4 text-sm text-slate-500">Loading activity…</p>
+        ) : filteredActivity.length === 0 ? (
+          <p className="mt-4 text-sm text-slate-600">
+            {activityTab === 'all'
+              ? 'No activity yet. Create a post or engage with the feed — likes, comments, and reposts show up here.'
+              : `No ${activityTab} to show yet.`}
+          </p>
+        ) : (
+          <ul className="mt-4 space-y-3">
+            {filteredActivity.map((row, idx) => {
+              const p = row.post;
+              const href = `/feed#${encodeURIComponent(p.post_id)}`;
+              const canEditPost = p.member_id === MEMBER_ID;
+              const authorPhoto = resolveAvatarUrl(p.author_profile_photo_url, p.author_name || p.member_id);
+              return (
+                <li key={`${idx}-${row.activity_type}-${p.post_id}-${String(row.activity_at)}`} className="rounded-lg border border-slate-200 bg-white">
+                  <div className="flex items-center gap-2 border-b border-slate-100 px-3 py-2 text-xs text-slate-600">
+                    <span className="text-slate-500">{activityIcon(row.activity_type)}</span>
+                    <span className="font-semibold text-[#191919]">{activityVerb(row)}</span>
+                    <span className="ml-auto shrink-0 text-slate-400">
+                      {new Date(row.activity_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
+                    </span>
+                  </div>
+                  <Link to={href} className="block px-3 py-3 hover:bg-slate-50">
+                    <div className="flex gap-3">
+                      <img src={authorPhoto} alt="" className="h-10 w-10 shrink-0 rounded-full border border-slate-200 object-cover" />
+                      <div className="min-w-0 flex-1">
+                        <p className="text-sm font-semibold text-[#191919]">{p.author_name || p.member_id}</p>
+                        {p.author_headline ? <p className="text-xs text-slate-500">{p.author_headline}</p> : null}
+                        <p className="mt-2 line-clamp-3 whitespace-pre-wrap text-sm text-slate-800">{p.body}</p>
+                        {row.activity_type === 'commented' && row.comment_preview ? (
+                          <p className="mt-2 rounded border border-slate-200 bg-slate-50 px-2 py-1.5 text-xs text-slate-700">
+                            Your comment: {row.comment_preview}
+                          </p>
+                        ) : null}
+                      </div>
+                    </div>
+                  </Link>
+                  {canEditPost ? (
+                    <div className="flex justify-end border-t border-slate-100 px-2 py-1">
+                      <button
+                        type="button"
+                        title="Edit your post"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          setEditPost({ post_id: p.post_id, body: p.body });
+                        }}
+                        className="inline-flex h-8 w-8 items-center justify-center rounded-full text-slate-500 hover:bg-slate-100"
+                      >
+                        <Pencil size={15} />
+                      </button>
+                    </div>
+                  ) : null}
+                </li>
+              );
+            })}
+          </ul>
+        )}
+      </section>
+
+      <PostComposerModal
+        open={composerOpen}
+        onClose={() => setComposerOpen(false)}
+        memberId={MEMBER_ID}
+        authorName={displayName}
+        onPosted={() => loadActivity()}
+      />
+
+      {editPost ? (
+        <div
+          className="fixed inset-0 z-[100] flex items-start justify-center bg-black/50 p-4 pt-16"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="edit-post-title"
+        >
+          <div className="w-full max-w-lg rounded-lg bg-white p-5 shadow-xl">
+            <h2 id="edit-post-title" className="text-lg font-semibold text-[#191919]">
+              Edit post
+            </h2>
+            <textarea
+              value={editPost.body}
+              onChange={(e) => setEditPost({ ...editPost, body: e.target.value })}
+              rows={8}
+              className="mt-3 w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
             />
-            <div className="flex gap-2">
+            <div className="mt-4 flex justify-end gap-2">
               <button
-                className="rounded-md bg-blue-600 px-3 py-1.5 text-sm font-semibold text-white"
+                type="button"
+                className="rounded-full border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+                onClick={() => setEditPost(null)}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="rounded-full bg-[#0a66c2] px-4 py-2 text-sm font-semibold text-white hover:bg-[#004182]"
                 onClick={async () => {
+                  const text = editPost.body.trim();
+                  if (!text) {
+                    showToast('Post cannot be empty.', 'error');
+                    return;
+                  }
                   try {
-                    await saveMemberFields({ headline: draft.headline, title: draft.title });
-                    setEditing(false);
-                  } catch (e: any) {
-                    showToast(String(e.message || 'Could not update activity'), 'error');
+                    const res = await fetch('/api/posts/update', {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({
+                        post_id: editPost.post_id,
+                        member_id: MEMBER_ID,
+                        body: text
+                      })
+                    });
+                    if (!res.ok) {
+                      const err = await res.json().catch(() => ({}));
+                      showToast(String(err.message || err.error || 'Could not save post'), 'error');
+                      return;
+                    }
+                    showToast('Post updated.', 'success');
+                    setEditPost(null);
+                    await loadActivity();
+                  } catch {
+                    showToast('Could not save post.', 'error');
                   }
                 }}
               >
                 Save
               </button>
-              <button className="rounded-md border border-slate-300 px-3 py-1.5 text-sm" onClick={() => setEditing(false)}>Cancel</button>
             </div>
           </div>
-        ) : (
-          <>
-            <p className="mt-2 text-sm font-semibold text-[#0a66c2]">{displayName} posted yet</p>
-            <p className="text-xs text-slate-600">Posts you share will be displayed here.</p>
-          </>
-        )}
-      </section>
+        </div>
+      ) : null}
       <section className="li-card overflow-hidden border border-[#e0dfdc] p-0 shadow-sm">
         <div className="px-4 pb-1 pt-4">
           <h3 className="text-[20px] font-semibold leading-tight text-[#191919]">Analytics</h3>

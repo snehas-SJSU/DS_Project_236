@@ -194,7 +194,7 @@ if [[ -z "${closed_job_id}" ]]; then
   exit 1
 fi
 wait_until_job_in_db "${closed_job_id}"
-post "/jobs/close" "{\"job_id\":\"${closed_job_id}\"}" >/dev/null
+post "/jobs/close" "{\"job_id\":\"${closed_job_id}\",\"recruiter_id\":\"${SMOKE_RECRUITER_ID}\"}" >/dev/null
 wait_until_job_closed "${closed_job_id}"
 closed_apply="$(post "/applications/submit" "{\"job_id\":\"${closed_job_id}\",\"member_id\":\"${SMOKE_MEMBER_ID}\"}")"
 fatal_if_bad_response "applications/submit (closed)" "$closed_apply"

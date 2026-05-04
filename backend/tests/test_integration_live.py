@@ -124,7 +124,7 @@ def test_apply_closed_job_returns_job_closed():
             break
         time.sleep(0.35)
 
-    _post("/jobs/close", {"job_id": job_id})
+    _post("/jobs/close", {"job_id": job_id, "recruiter_id": "R-123"})
     for _ in range(80):
         gr, gj = _post("/jobs/get", {"job_id": job_id})
         if gr == 200 and gj.get("status") == "closed":

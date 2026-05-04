@@ -7,7 +7,7 @@ import {
   aiApi,
   connectTaskWebSocket,
 } from '../../lib/aiApi';
-import { RECRUITER_ID } from '../../lib/memberProfile';
+import { getViewerRecruiterId } from '../../lib/memberProfile';
 import { showToast } from '../../lib/toast';
 
 function idFromMatch(c: CandidateMatch): string {
@@ -18,7 +18,14 @@ function isTerminal(state: TaskState): boolean {
   return state === 'completed' || state === 'failed' || state === 'rejected';
 }
 
-export default function RecruiterAiJobPanel({ jobId }: { jobId: string }) {
+export default function RecruiterAiJobPanel({
+  jobId,
+  canManage = false
+}: {
+  jobId: string;
+  /** Only the member who posted the job (recruiter_id) should see AI hiring actions. */
+  canManage?: boolean;
+}) {
   const trimmedJob = jobId.trim();
   const [findBusy, setFindBusy] = useState(false);
   const [outreachBusy, setOutreachBusy] = useState(false);
@@ -188,7 +195,7 @@ export default function RecruiterAiJobPanel({ jobId }: { jobId: string }) {
       const res = await aiApi.submitTask({
         task_type: 'candidate_shortlist',
         job_id: trimmedJob,
-        actor_id: RECRUITER_ID,
+        actor_id: getViewerRecruiterId(),
       });
       setShortTaskId(res.task_id);
     } catch (e: unknown) {
@@ -211,7 +218,7 @@ export default function RecruiterAiJobPanel({ jobId }: { jobId: string }) {
       const res = await aiApi.submitTask({
         task_type: 'generate_outreach',
         job_id: trimmedJob,
-        actor_id: RECRUITER_ID,
+        actor_id: getViewerRecruiterId(),
         candidate_ids: ids,
       });
       setOutreachTaskId(res.task_id);
@@ -230,19 +237,19 @@ export default function RecruiterAiJobPanel({ jobId }: { jobId: string }) {
       if (decision === 'edit') {
         await aiApi.approveTask(outreachTaskId, {
           decision: 'edit',
-          reviewer_id: RECRUITER_ID,
+          reviewer_id: getViewerRecruiterId(),
           edited_drafts: draftEdits,
         });
       } else if (decision === 'approve') {
         await aiApi.approveTask(outreachTaskId, {
           decision: 'approve',
-          reviewer_id: RECRUITER_ID,
+          reviewer_id: getViewerRecruiterId(),
           edited_drafts: draftEdits,
         });
       } else {
         await aiApi.approveTask(outreachTaskId, {
           decision: 'reject',
-          reviewer_id: RECRUITER_ID,
+          reviewer_id: getViewerRecruiterId(),
         });
       }
       const t = await aiApi.getTask(outreachTaskId);
@@ -260,6 +267,10 @@ export default function RecruiterAiJobPanel({ jobId }: { jobId: string }) {
   const outreachDone = outreachTask && isTerminal(outreachTask.state);
 
   if (!trimmedJob) {
+    return null;
+  }
+
+  if (!canManage) {
     return null;
   }
 

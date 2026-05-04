@@ -36,7 +36,7 @@ import {
   aiApi,
   connectTaskWebSocket,
 } from '../lib/aiApi';
-import { RECRUITER_ID } from '../lib/memberProfile';
+import { getViewerMemberId, getViewerRecruiterId } from '../lib/memberProfile';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -563,10 +563,48 @@ function SubmitTaskForm({
   const [jobId, setJobId] = useState(prefillJobId ?? 'J-1001');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const viewerMid = getViewerMemberId();
+  const viewerRecruiter = getViewerRecruiterId();
+  const [ownerCheck, setOwnerCheck] = useState<'pending' | 'owner' | 'not_owner' | 'no_job'>('pending');
+
+  useEffect(() => {
+    const id = jobId.trim();
+    if (!id) {
+      setOwnerCheck('no_job');
+      return;
+    }
+    let cancelled = false;
+    setOwnerCheck('pending');
+    fetch('/api/jobs/get', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ job_id: id, member_id: viewerMid }),
+    })
+      .then((r) => r.json())
+      .then((data: { error?: string; job_id?: string; recruiter_id?: string }) => {
+        if (cancelled) return;
+        if (!data || data.error || !data.job_id) {
+          setOwnerCheck('no_job');
+          return;
+        }
+        const rid = String(data.recruiter_id ?? '').trim();
+        setOwnerCheck(rid === String(viewerRecruiter).trim() ? 'owner' : 'not_owner');
+      })
+      .catch(() => {
+        if (!cancelled) setOwnerCheck('no_job');
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [jobId, viewerMid, viewerRecruiter]);
 
   const handleSubmit = async () => {
     if (!jobId.trim()) {
       setError('Job ID is required.');
+      return;
+    }
+    if (ownerCheck !== 'owner') {
+      setError('Only the recruiter who posted this job can run Find top candidates.');
       return;
     }
 
@@ -576,7 +614,7 @@ function SubmitTaskForm({
       const res = await aiApi.submitTask({
         task_type: 'candidate_shortlist',
         job_id: jobId.trim(),
-        actor_id: RECRUITER_ID,
+        actor_id: getViewerRecruiterId(),
       });
       onSubmitted(res.task_id);
     } catch (e: unknown) {
@@ -631,6 +669,19 @@ function SubmitTaskForm({
         </div>
       </div>
 
+      {ownerCheck === 'not_owner' ? (
+        <div className="flex items-center gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+          <Shield size={14} className="shrink-0" />
+          Only the person who posted this job can use Find top candidates. Open the job from Jobs while signed in as that recruiter.
+        </div>
+      ) : null}
+
+      {ownerCheck === 'no_job' && jobId.trim() ? (
+        <div className="flex items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600">
+          No job found for that ID. Check the job listing or paste the ID from the URL.
+        </div>
+      ) : null}
+
       {error && (
         <div className="flex items-center gap-2 rounded-lg bg-red-50 border border-red-200 px-3 py-2 text-sm text-red-700">
           <AlertTriangle size={14} className="shrink-0" />
@@ -639,12 +690,12 @@ function SubmitTaskForm({
       )}
 
       <button
-        disabled={loading}
+        disabled={loading || ownerCheck !== 'owner'}
         onClick={handleSubmit}
         className="flex w-full items-center justify-center gap-2 rounded-full bg-[#0a66c2] px-4 py-2.5 text-sm font-semibold text-white hover:bg-[#004182] disabled:opacity-50 transition-colors shadow-sm"
       >
         {loading ? <Loader2 size={16} className="animate-spin" /> : <Sparkles size={16} />}
-        {loading ? 'Finding…' : 'Find top candidates'}
+        {loading ? 'Finding…' : ownerCheck === 'pending' ? 'Checking job…' : 'Find top candidates'}
       </button>
     </div>
   );
@@ -744,7 +795,7 @@ function TaskMonitor({
       await aiApi.approveTask(task.task_id, {
         decision,
         edited_text: editedText,
-        reviewer_id: RECRUITER_ID,
+        reviewer_id: getViewerRecruiterId(),
       });
       await fetchTask(); // will flip view to 'final'
     } catch (e: unknown) {
@@ -964,7 +1015,7 @@ function TaskHistory({ onSelect }: { onSelect: (taskId: string) => void }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    aiApi.listTasks(RECRUITER_ID)
+    aiApi.listTasks(getViewerRecruiterId())
       .then(setTasks)
       .catch(() => setTasks([]))
       .finally(() => setLoading(false));

@@ -223,7 +223,6 @@ async def jobs_search(body: dict):
                 "salary": r.get("salary"),
                 "type": r.get("type"),
                 "posted_datetime": r.get("created_at"),
-                "postedAt": "Just now",
                 "skills": sk,
                 "description": r.get("description"),
                 "status": r.get("status"),
@@ -563,8 +562,19 @@ async def jobs_update(body: dict):
 @router.post("/jobs/close")
 async def jobs_close(body: dict):
     job_id = body.get("job_id")
+    recruiter_id = body.get("recruiter_id")
     if not job_id:
         return JSONResponse(status_code=400, content={"error": "BAD_REQUEST", "message": "job_id required", "trace_id": _tid()})
+    row = await dbm.fetch_one("SELECT recruiter_id, status FROM jobs WHERE job_id = %s LIMIT 1", (job_id,))
+    if not row:
+        return JSONResponse(status_code=404, content={"error": "NOT_FOUND", "message": "Job not found", "trace_id": _tid()})
+    if recruiter_id is not None and str(row.get("recruiter_id") or "").strip() != str(recruiter_id).strip():
+        return JSONResponse(
+            status_code=403,
+            content={"error": "FORBIDDEN", "message": "Only the job poster can close this listing", "trace_id": _tid()},
+        )
+    if row.get("status") == "closed":
+        return {"message": "Already closed", "job_id": job_id, "trace_id": _tid()}
     trace_id = _tid()
     # Update DB synchronously so status is immediately visible
     await dbm.execute("UPDATE jobs SET status = 'closed' WHERE job_id = %s", (job_id,))

@@ -11,6 +11,7 @@ from fastapi.responses import JSONResponse
 
 from app import db as dbm
 from app.kafka_bus import send_kafka
+from app.redis_client import get_redis
 from app.routers.members import _iso_z
 
 router = APIRouter()
@@ -91,6 +92,16 @@ async def applications_submit(request: Request, body: dict):
             json.dumps(answers) if answers is not None else None,
         ),
     )
+    # Keep count in sync here: the Kafka worker also tries to INSERT and hits DUPLICATE, so it never reached UPDATE.
+    await dbm.execute(
+        "UPDATE jobs SET applicants_count = COALESCE(applicants_count, 0) + 1 WHERE job_id = %s",
+        (job_id,),
+    )
+    try:
+        r = get_redis()
+        await r.delete(f"job:{job_id}")
+    except Exception:
+        pass
     ev = app_env(
         "application.submitted",
         trace_id,
