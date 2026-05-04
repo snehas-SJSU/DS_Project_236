@@ -92,7 +92,7 @@ export default function RecruiterDashboard() {
         <Link to="/jobs/post" className="rounded-full border border-[#0a66c2] px-4 py-1.5 font-semibold text-[#0a66c2] hover:bg-[#edf3f8]">
           Post a job
         </Link>
-        <Link to="/applications" className="rounded-full border border-slate-300 px-4 py-1.5 font-semibold text-slate-700 hover:bg-slate-50">
+        <Link to="/applications?tab=review" className="rounded-full border border-slate-300 px-4 py-1.5 font-semibold text-slate-700 hover:bg-slate-50">
           Review applications
         </Link>
         <Link to="/jobs/tracker" className="rounded-full border border-slate-300 px-4 py-1.5 font-semibold text-slate-700 hover:bg-slate-50">
@@ -131,7 +131,7 @@ export default function RecruiterDashboard() {
             </div>
             <h3 className="text-slate-500 text-sm font-medium">{kpi.title}</h3>
             <div className="text-2xl font-bold text-slate-900 mt-1">{kpi.value}</div>
-            <Link to="/applications" className="mt-3 inline-block text-xs font-semibold text-[#0a66c2] hover:underline">
+            <Link to="/applications?tab=review" className="mt-3 inline-block text-xs font-semibold text-[#0a66c2] hover:underline">
               View details
             </Link>
           </div>
@@ -189,7 +189,7 @@ export default function RecruiterDashboard() {
         <div className="bg-white p-6 rounded-lg shadow-sm border border-slate-200">
           <div className="mb-4 flex items-center justify-between">
             <h3 className="font-bold text-lg text-slate-800">Applications by City ({selectedJobId || 'No Job'})</h3>
-            <Link to="/applications" className="text-sm font-semibold text-[#0a66c2] hover:underline">View applicants</Link>
+            <Link to="/applications?tab=review" className="text-sm font-semibold text-[#0a66c2] hover:underline">View applicants</Link>
           </div>
           <div className="h-72">
             <ResponsiveContainer width="100%" height="100%">
@@ -229,7 +229,7 @@ export default function RecruiterDashboard() {
         <div className="space-y-2">
           {lowJobs.map((job: any) => (
             <div key={job.job_id} className="flex items-center justify-between rounded border border-slate-200 p-3 text-sm">
-              <Link to="/applications" className="font-medium text-slate-800 hover:text-[#0a66c2] hover:underline">
+              <Link to="/applications?tab=review" className="font-medium text-slate-800 hover:text-[#0a66c2] hover:underline">
                 {job.title || job.job_id}
               </Link>
               <span className="font-semibold">{job.c}</span>

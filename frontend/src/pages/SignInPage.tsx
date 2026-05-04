@@ -74,6 +74,7 @@ export default function SignInPage() {
                 }
                 if (data?.token) {
                   setAuthToken(data.token);
+                  sessionStorage.removeItem('li_sim_member_id');
                   if (data?.user?.user_id) {
                     try {
                       const mr = await fetch('/api/members/by-user', {
@@ -82,9 +83,11 @@ export default function SignInPage() {
                         body: JSON.stringify({ user_id: data.user.user_id })
                       });
                       const m = await mr.json();
-                      sessionStorage.setItem('li_sim_member_id', m?.member_id || data.user.user_id);
+                      if (mr.ok && m?.member_id) {
+                        sessionStorage.setItem('li_sim_member_id', m.member_id);
+                      }
                     } catch {
-                      sessionStorage.setItem('li_sim_member_id', data.user.user_id);
+                      /* leave unset; never store auth user_id as member_id */
                     }
                   }
                 }

@@ -145,7 +145,14 @@ async def applications_by_member(body: dict):
     if not member_id:
         return JSONResponse(status_code=400, content={"error": "BAD_REQUEST", "message": "member_id required", "trace_id": _tid()})
     rows = await dbm.fetch_all(
-        "SELECT * FROM applications WHERE member_id = %s ORDER BY applied_at DESC", (member_id,)
+        """
+        SELECT a.*, j.title AS job_title, j.company AS job_company, j.location AS job_location
+        FROM applications a
+        LEFT JOIN jobs j ON j.job_id = a.job_id
+        WHERE a.member_id = %s
+        ORDER BY a.applied_at DESC
+        """,
+        (member_id,),
     )
     return [map_app_row(dict(r)) for r in rows]
 

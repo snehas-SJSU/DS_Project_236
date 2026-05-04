@@ -204,6 +204,8 @@ Infra services started by this command:
 4. MongoDB (`27017`)
 5. Redis (`6379`)
 
+**Demo jobs inside Docker (first MySQL volume only):** On a **new** `mysql-data` volume, the MySQL container runs `docker/mysql/init/` once: it creates the `jobs` table and imports `scripts/seed-demo-jobs.sql` (Bay Area demo roles + `company_logo_url` favicons). If your team already has an old volume, run `npm run seed:demo-jobs` once, or reset data with `docker compose down -v` (destructive) and `docker compose up -d` again.
+
 ### 2.2.1 Optional: run API + workers + AI in Docker (rubrics / AWS images)
 
 After infra is up:
@@ -485,7 +487,7 @@ chmod +x scripts/smoke-test.sh
 Notes:
 1. By default the script calls **`http://localhost:4000/api`** (FastAPI directly), not port `3000`. That validates backends regardless of the Vite proxy.
 2. Keep **`npm run start:all`** running so FastAPI, Python workers, and the AI service are up before running smoke.
-3. After smoke, known test jobs (**Smoke Duplicate Apply Job**, **Smoke Closed Job**) are **deleted from MySQL** so `/jobs` is not flooded with duplicates. To keep them for debugging, run: `SMOKE_CLEANUP=0 bash scripts/smoke-test.sh`. Anytime: **`npm run cleanup:smoke`** removes those rows if they are still present.
+3. After smoke, **`npm run cleanup:smoke`** (same script the shell step runs) removes from MySQL: known test jobs (**Smoke Duplicate Apply Job**, **Smoke Closed Job**) and related rows, plus **smoke feed posts** (`author_name` **Smoke** and body **`smoke post …`** from `scripts/smoke-test.sh` step [10]), including likes/comments/reposts/sends on those posts. To **skip** the automatic job/post cleanup at the end of smoke, run: `SMOKE_CLEANUP=0 bash scripts/smoke-test.sh`. Anytime later you can still run **`npm run cleanup:smoke`** to delete leftovers.
 
 ### 8.1 Automated tests (pytest)
 

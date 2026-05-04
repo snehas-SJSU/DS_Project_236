@@ -455,7 +455,7 @@ async def _seed_baseline_member() -> None:
             "San Jose",
             "California",
             "United States",
-            "sneha.singh@example.com",
+            "admin@test.com",
             "Passionate software engineer focused on building scalable distributed systems and integrating Agentic AI workflows.",
             "Passionate software engineer focused on building scalable distributed systems and integrating Agentic AI workflows.",
             '["Distributed Systems", "React.js", "Kafka & APIs", "Node.js", "Python", "MySQL"]',

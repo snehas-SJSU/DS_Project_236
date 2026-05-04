@@ -71,7 +71,7 @@ export default function Profile() {
             setState({
               status: 'error',
               message:
-                'No profile for member M-123 yet. With Docker + npm run start:all running, wait for FastAPI to finish schema init, then refresh. Baseline member is created on API startup.'
+                `No profile for member ${MEMBER_ID} yet. Wait for FastAPI schema init, refresh, then sign in again if needed (admin@test.com maps to baseline M-123).`
             });
             return;
           }

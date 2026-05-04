@@ -43,6 +43,10 @@ services:
       - MYSQL_PASSWORD=linkedin_pass
     volumes:
       - mysql-data:/var/lib/mysql
+      # First-time DB init only: create jobs table + import demo jobs (logos/metadata). Re-run after
+      # `docker compose down -v` or use `npm run seed:demo-jobs` on existing volumes.
+      - ./docker/mysql/init:/docker-entrypoint-initdb.d:ro
+      - ./scripts/seed-demo-jobs.sql:/seed-demo-jobs.sql:ro
     networks:
       - linkedin-net
 

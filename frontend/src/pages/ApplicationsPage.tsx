@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
+import { jobsResultsPath } from '../lib/jobRoutes';
 
 const normalizeStatus = (value: string) => {
   const lower = (value || '').toLowerCase().trim();
@@ -7,9 +8,14 @@ const normalizeStatus = (value: string) => {
   return lower || 'submitted';
 };
 
+type ApplicationsTab = 'applicant' | 'recruiter';
+
 export default function ApplicationsPage() {
   const MEMBER_ID = sessionStorage.getItem('li_sim_member_id') || 'M-123';
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [tab, setTab] = useState<ApplicationsTab>(() =>
+    searchParams.get('tab') === 'review' ? 'recruiter' : 'applicant'
+  );
   const [memberApps, setMemberApps] = useState<any[]>([]);
   const [jobId, setJobId] = useState('');
   const [jobKeyword, setJobKeyword] = useState('');
@@ -36,7 +42,21 @@ export default function ApplicationsPage() {
     if (fromUrl) {
       setJobId(fromUrl);
     }
+    if (searchParams.get('tab') === 'review') {
+      setTab('recruiter');
+    }
   }, [searchParams]);
+
+  const setTabAndUrl = (next: ApplicationsTab) => {
+    setTab(next);
+    const q = new URLSearchParams(searchParams);
+    if (next === 'recruiter') {
+      q.set('tab', 'review');
+    } else {
+      q.delete('tab');
+    }
+    setSearchParams(q, { replace: true });
+  };
 
   useEffect(() => {
     const k = jobKeyword.trim();
@@ -88,14 +108,53 @@ export default function ApplicationsPage() {
             Analytics dashboard
           </Link>
         </div>
+        <div className="mt-5 flex flex-wrap gap-1 border-b border-[#e0dfdc]">
+          <button
+            type="button"
+            onClick={() => setTabAndUrl('applicant')}
+            className={`rounded-t-md px-4 py-2 text-sm font-semibold transition-colors ${
+              tab === 'applicant'
+                ? 'border-b-2 border-[#0a66c2] text-[#0a66c2]'
+                : 'border-b-2 border-transparent text-[#666] hover:bg-[#f3f2ef]'
+            }`}
+          >
+            My applications
+          </button>
+          <button
+            type="button"
+            onClick={() => setTabAndUrl('recruiter')}
+            className={`rounded-t-md px-4 py-2 text-sm font-semibold transition-colors ${
+              tab === 'recruiter'
+                ? 'border-b-2 border-[#0a66c2] text-[#0a66c2]'
+                : 'border-b-2 border-transparent text-[#666] hover:bg-[#f3f2ef]'
+            }`}
+          >
+            Review applicants
+          </button>
+        </div>
+        <p className="mt-3 text-xs text-[#666]">
+          {tab === 'applicant'
+            ? 'Jobs you have applied to as this member. (LinkedIn keeps this separate from hiring tools.)'
+            : 'Hiring workflow for class demos: load everyone who applied to a job posting, then update status or add notes.'}
+        </p>
       </section>
+
+      {tab === 'applicant' ? (
       <section className="li-card p-5">
         <h2 className="li-section-title">My applications</h2>
         <div className="mt-3 space-y-2">
           {memberApps.length === 0 ? <p className="text-sm text-slate-500">No applications yet.</p> : memberApps.map((app) => (
             <div key={app.app_id} className="rounded-md border border-[#e0dfdc] p-3">
-              <Link to="/jobs" className="font-medium text-[#0a66c2] hover:underline">{app.job_id}</Link>
-              <p className="text-sm text-slate-600">Status: {normalizeStatus(app.status)}</p>
+              <Link to={jobsResultsPath(app.job_id)} className="block text-base font-semibold text-[#0a66c2] hover:underline">
+                {String(app.job_title || '').trim() || app.job_id}
+              </Link>
+              {app.job_company ? <p className="mt-0.5 text-sm text-[#444]">{app.job_company}</p> : null}
+              {app.job_location ? <p className="mt-0.5 text-xs text-[#666]">{app.job_location}</p> : null}
+              <p className="mt-1 text-xs text-slate-500">
+                Job ID:{' '}
+                <span className="font-mono text-[#555]">{app.job_id}</span>
+              </p>
+              <p className="mt-1 text-sm text-slate-600">Status: {normalizeStatus(app.status)}</p>
               {app.resume_url ? (
                 <p className="text-xs text-slate-600">Resume URL: <a href={app.resume_url} target="_blank" rel="noreferrer" className="text-[#0a66c2] hover:underline">{app.resume_url}</a></p>
               ) : null}
@@ -103,8 +162,9 @@ export default function ApplicationsPage() {
           ))}
         </div>
       </section>
+      ) : (
       <section className="li-card p-5">
-        <h2 className="li-section-title">Recruiter review panel</h2>
+        <h2 className="li-section-title">Review applicants</h2>
         <div className="mt-3 flex gap-2">
           <div className="relative flex-1">
             <input
@@ -226,6 +286,7 @@ export default function ApplicationsPage() {
           ))}
         </div>
       </section>
+      )}
     </div>
   );
 }
