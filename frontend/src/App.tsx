@@ -1115,6 +1115,8 @@ function App() {
           <Route path="/recruiter" element={<RequireAuth><AppShell><RecruiterDashboard /></AppShell></RequireAuth>} />
           <Route path="/recruiter/admin" element={<RequireAuth><AppShell><RecruiterAdminPage /></AppShell></RequireAuth>} />
           <Route path="/recruiter/ai" element={<RequireAuth><AppShell><AIAssistantPage /></AppShell></RequireAuth>} />
+          <Route path="/recruiters" element={<Navigate to="/recruiter" replace />} />
+          <Route path="/recruiters/admin" element={<Navigate to="/recruiter/admin" replace />} />
           <Route path="/messaging" element={<RequireAuth><MessagingPage /></RequireAuth>} />
           <Route path="/messaging/compose" element={<RequireAuth><MessagingPage /></RequireAuth>} />
           <Route path="/messaging/filter/focused" element={<RequireAuth><MessagingPage /></RequireAuth>} />

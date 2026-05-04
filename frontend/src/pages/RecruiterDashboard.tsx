@@ -1,7 +1,11 @@
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, PieChart, Pie, Cell, LineChart, Line } from 'recharts';
-import { useEffect, useMemo, useState } from 'react';
-import { Users, MousePointerClick, BookmarkCheck, TrendingUp } from 'lucide-react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { Briefcase, Loader2, Users, MousePointerClick, BookmarkCheck, TrendingUp } from 'lucide-react';
 import { Link } from 'react-router-dom';
+import { getViewerRecruiterId } from '../lib/memberProfile';
+import { normalizeJobListRows } from '../lib/jobNormalize';
+import type { Job } from '../mockData/jobs';
+import { showToast } from '../lib/toast';
 
 const COLORS = ['#2563EB', '#3B82F6', '#60A5FA', '#93C5FD'];
 
@@ -16,8 +20,34 @@ export default function RecruiterDashboard() {
   const [savedTrend, setSavedTrend] = useState<any[]>([]);
   const [clickTrend, setClickTrend] = useState<any[]>([]);
   const [funnel, setFunnel] = useState<{ view: number; save: number; apply_start: number; submit: number } | null>(null);
+  const [myPostings, setMyPostings] = useState<Job[]>([]);
+  const [myPostingsLoading, setMyPostingsLoading] = useState(true);
+  const [closingJobId, setClosingJobId] = useState<string | null>(null);
 
   const selectedJobId = useMemo(() => topJobs[0]?.job_id || lowJobs[0]?.job_id, [topJobs, lowJobs]);
+
+  const loadMyPostings = useCallback(async () => {
+    const recruiterId = getViewerRecruiterId();
+    setMyPostingsLoading(true);
+    try {
+      const res = await fetch('/api/jobs/byRecruiter', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ recruiter_id: recruiterId })
+      });
+      const data = await res.json().catch(() => []);
+      const rows = Array.isArray(data) ? data : [];
+      setMyPostings(normalizeJobListRows(rows));
+    } catch {
+      setMyPostings([]);
+    } finally {
+      setMyPostingsLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void loadMyPostings();
+  }, [loadMyPostings]);
 
   useEffect(() => {
     const body = { window_days: windowDays };
@@ -102,6 +132,111 @@ export default function RecruiterDashboard() {
           Recruiter admin
         </Link>
       </div>
+
+      <section className="mb-8 rounded-lg border border-slate-200 bg-white p-6 shadow-sm">
+        <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
+          <div className="flex items-start gap-3">
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-[#edf3f8] text-[#0a66c2]">
+              <Briefcase size={20} aria-hidden />
+            </div>
+            <div>
+              <h2 className="text-lg font-bold text-slate-900">Your job postings</h2>
+              <p className="mt-0.5 text-sm text-slate-500">
+              </p>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={() => void loadMyPostings()}
+            className="rounded-full border border-slate-300 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+          >
+            Refresh
+          </button>
+        </div>
+        {myPostingsLoading ? (
+          <div className="flex items-center gap-2 py-8 text-sm text-slate-500">
+            <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
+            Loading your postings…
+          </div>
+        ) : myPostings.length === 0 ? (
+          <p className="py-6 text-sm text-slate-600">
+            No job postings yet.{' '}
+            <Link to="/jobs/post" className="font-semibold text-[#0a66c2] hover:underline">
+              Post a job
+            </Link>{' '}
+            to see it here.
+          </p>
+        ) : (
+          <ul className="divide-y divide-slate-100">
+            {myPostings.map((job) => {
+              const isClosed = String(job.status || '').toLowerCase() === 'closed';
+              return (
+                <li key={job.id} className="flex flex-wrap items-center justify-between gap-3 py-4 first:pt-0">
+                  <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Link
+                        to={`/jobs/search-results?jobId=${encodeURIComponent(job.id)}`}
+                        className="font-semibold text-[#0a66c2] hover:underline"
+                      >
+                        {job.title}
+                      </Link>
+                      {isClosed ? (
+                        <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-semibold text-slate-600">Closed</span>
+                      ) : (
+                        <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-semibold text-emerald-800">Open</span>
+                      )}
+                    </div>
+                    <p className="mt-1 text-sm text-slate-600">
+                      {job.company} · {job.location}
+                    </p>
+                    <p className="mt-0.5 text-xs text-slate-500">
+                      Posted {job.postedAt} · {job.applicants ?? 0} applicants
+                    </p>
+                  </div>
+                  {!isClosed ? (
+                    <button
+                      type="button"
+                      disabled={closingJobId === job.id}
+                      onClick={async () => {
+                        const rid = getViewerRecruiterId();
+                        setClosingJobId(job.id);
+                        try {
+                          const res = await fetch('/api/jobs/close', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ job_id: job.id, recruiter_id: rid })
+                          });
+                          const data = await res.json().catch(() => ({}));
+                          if (!res.ok) {
+                            showToast(String(data.message || data.error || 'Could not close job'), 'error');
+                            return;
+                          }
+                          showToast('Job closed. It will no longer accept applications.', 'success');
+                          await loadMyPostings();
+                        } catch {
+                          showToast('Could not close job.', 'error');
+                        } finally {
+                          setClosingJobId(null);
+                        }
+                      }}
+                      className="shrink-0 rounded-full border border-red-200 bg-white px-4 py-2 text-sm font-semibold text-red-700 hover:bg-red-50 disabled:opacity-50"
+                    >
+                      {closingJobId === job.id ? (
+                        <span className="inline-flex items-center gap-2">
+                          <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
+                          Closing…
+                        </span>
+                      ) : (
+                        'Close job'
+                      )}
+                    </button>
+                  ) : null}
+                </li>
+              );
+            })}
+          </ul>
+        )}
+      </section>
 
       {/* KPI Cards */}
       <div className="grid grid-cols-4 gap-6 mb-8">
