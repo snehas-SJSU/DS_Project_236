@@ -16,6 +16,8 @@ export interface Job {
   employment_type?: string;
   recruiter_id?: string;
   status?: string;
+  /** Job listing views (from `jobs.views_count`). */
+  views_count?: number;
 }
 
 export const MOCK_JOBS: Job[] = [

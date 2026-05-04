@@ -14,6 +14,45 @@ import CompanyLogoTile from '../components/shared/CompanyLogoTile';
 const chips = ['Date posted', 'Remote', 'Inside Sales', 'Outside Sales', 'Healthcare', 'Biotech', 'Easy Apply', 'Employment type', 'Company', 'Under 10 applicants', 'In my network'];
 type DatePostedFilter = '24h' | 'week' | null;
 
+function jobViewsCount(job: Job): number {
+  const n = job.views_count ?? (job as unknown as { views_count?: unknown }).views_count;
+  if (typeof n === 'number' && !Number.isNaN(n)) return n;
+  const parsed = Number(n);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function formatEmploymentLabel(job: Job): string {
+  const raw = String(job.employment_type || job.type || '').trim();
+  if (!raw) return '—';
+  return raw
+    .split(/[-_]/)
+    .filter(Boolean)
+    .map((w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
+    .join('-');
+}
+
+function formatSeniorityLabel(raw?: string | null): string {
+  const s = String(raw || '').trim();
+  if (!s) return '—';
+  return s.replace(/-/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+function jobStatusOpen(job: Job): boolean {
+  return String(job.status || 'open').trim().toLowerCase() !== 'closed';
+}
+
+/** Single-line role facts (employment · seniority · salary) for the detail header. */
+function jobInsightParts(job: Job): string[] {
+  const et = formatEmploymentLabel(job);
+  const sen = formatSeniorityLabel(job.seniority_level);
+  const sal = String(job.salary || '').trim();
+  const parts: string[] = [];
+  if (et !== '—') parts.push(et);
+  if (sen !== '—') parts.push(sen);
+  if (sal) parts.push(sal);
+  return parts;
+}
+
 export default function JobsSearchPage() {
   const MEMBER_ID = sessionStorage.getItem('li_sim_member_id') || 'M-123';
   const location = useLocation();
@@ -245,6 +284,8 @@ export default function JobsSearchPage() {
     networkOnly,
     networkCompanies
   ]);
+
+  const jobInsightPartsList = useMemo(() => (activeJob ? jobInsightParts(activeJob) : []), [activeJob]);
 
   useEffect(() => {
     if (!filteredJobs.length) {
@@ -575,7 +616,18 @@ export default function JobsSearchPage() {
               <div className="flex gap-4">
                 <CompanyLogoTile logoUrl={activeJob.logoUrl} companyName={activeJob.company} className="h-16 w-16 shrink-0" />
                 <div className="min-w-0 flex-1">
-                  <h1 className="text-[44px] leading-[1.05] font-semibold text-[#191919]">{activeJob.title}</h1>
+                  <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-2">
+                    <h1 className="min-w-0 flex-1 text-[44px] leading-[1.05] font-semibold text-[#191919]">{activeJob.title}</h1>
+                    <span
+                      className={`mt-2 shrink-0 rounded-full border px-2.5 py-0.5 text-xs font-semibold ${
+                        jobStatusOpen(activeJob)
+                          ? 'border-[#b7dfc4] bg-[#f0faf2] text-[#146c2e]'
+                          : 'border-[#e0dfdc] bg-[#f3f2ef] text-[#5c5c5c]'
+                      }`}
+                    >
+                      {jobStatusOpen(activeJob) ? 'Open' : 'Closed'}
+                    </span>
+                  </div>
                   <p className="mt-2 text-lg text-[#444]">
                     <Link to={companyProfilePath(activeJob.company)} className="hover:text-[#0a66c2] hover:underline">
                       {activeJob.company}
@@ -589,7 +641,13 @@ export default function JobsSearchPage() {
                       {activeJob.location}
                     </Link>
                   </p>
-                  <p className="mt-2 text-sm text-[#666]">{activeJob.postedAt} · {activeJob.applicants ?? 0} applicants</p>
+                  <p className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-[#666]">
+                    <span>{activeJob.postedAt}</span>
+                    <span className="text-[#d0d0d0]">·</span>
+                    <span>{activeJob.applicants ?? 0} applicants</span>
+                    <span className="text-[#d0d0d0]">·</span>
+                    <span>{jobViewsCount(activeJob)} views</span>
+                  </p>
                 </div>
               </div>
               <div className="mt-6 flex gap-2">
@@ -614,7 +672,34 @@ export default function JobsSearchPage() {
                   {isSaving ? 'Saving...' : ((activeJob as any).saved ? 'Saved' : 'Save')}
                 </button>
               </div>
-              <div className="mt-6">
+              {jobInsightPartsList.length ? (
+                <p className="mt-5 border-t border-[#f3f2ef] pt-5 text-sm leading-relaxed text-[#191919]">
+                  {jobInsightPartsList.map((part, i) => (
+                    <span key={`${part}-${i}`}>
+                      {i > 0 ? <span className="text-[#bdbdbd]"> · </span> : null}
+                      {part}
+                    </span>
+                  ))}
+                </p>
+              ) : null}
+              <div className="mt-6 border-t border-[#f3f2ef] pt-6">
+                <h3 className="text-base font-semibold text-[#191919]">Skills</h3>
+                {Array.isArray(activeJob.skills) && activeJob.skills.length ? (
+                  <ul className="mt-2 flex flex-wrap gap-2">
+                    {activeJob.skills.map((skill) => (
+                      <li
+                        key={skill}
+                        className="rounded-full border border-[#e0dfdc] px-3 py-1 text-sm text-[#333]"
+                      >
+                        {skill}
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p className="mt-2 text-sm text-[#666]">No skills listed for this role.</p>
+                )}
+              </div>
+              <div className="mt-8">
                 <h2 className="mb-2 text-[34px] leading-tight font-semibold text-[#191919]">Job description</h2>
                 <p className="text-sm leading-relaxed text-[#333]">{activeJob.description}</p>
               </div>
