@@ -1406,15 +1406,19 @@ def _career_coach_skill(body: Dict[str, Any]) -> Dict[str, Any]:
 # External outreach delivery
 # ===========================================================================
 
-def _fetch_applicant_rows(job_id: str) -> List[Dict[str, Any]]:
+def _fetch_applicant_rows(job_id: str, recruiter_id: Optional[str] = None) -> List[Dict[str, Any]]:
     job_id = (job_id or "").strip()
     if not job_id:
         return []
+    rid = (recruiter_id or "").strip()
+    payload: Dict[str, Any] = {"job_id": job_id}
+    if rid:
+        payload["recruiter_id"] = rid
 
     try:
         response = _post_json(
             cfg.URLS["applications"],
-            {"job_id": job_id},
+            payload,
             timeout_seconds=5.0
         )
 
@@ -1542,7 +1546,9 @@ def _run_pipeline(task: Dict[str, Any]):
                     ids = list(existing)
                     app_resume_map: Dict[str, str] = {}
                     if not ids:
-                        applicant_rows = _fetch_applicant_rows(task["job_id"])
+                        applicant_rows = _fetch_applicant_rows(
+                            task["job_id"], str(task.get("actor_id") or "").strip() or None
+                        )
                         seen_ids: set = set()
                         for row in applicant_rows:
                             mid = str(row.get("member_id") or row.get("memberId") or "").strip()

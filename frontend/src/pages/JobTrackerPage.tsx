@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { ArrowLeft, ExternalLink, Lock, MoreHorizontal } from 'lucide-react';
 import { jobsResultsPath } from '../lib/jobRoutes';
+import { getViewerRecruiterId } from '../lib/memberProfile';
 import { showToast } from '../lib/toast';
 
 type TrackedJob = {
@@ -324,7 +325,11 @@ export default function JobTrackerPage() {
       const res = await fetch('/api/applications/updateStatus', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ application_id: job.application_id, status })
+        body: JSON.stringify({
+          application_id: job.application_id,
+          status,
+          recruiter_id: getViewerRecruiterId()
+        })
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
