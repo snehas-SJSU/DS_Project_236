@@ -1,0 +1,120 @@
+%%{init: {"theme":"default","themeVariables":{"fontSize":"24px","fontFamily":"Arial","primaryTextColor":"#111","lineColor":"#333","tertiaryColor":"#f7f7f7"}}}%%
+erDiagram
+    MEMBERS {
+        varchar member_id PK
+        varchar email
+        varchar full_name
+        varchar headline
+        varchar location
+        text about
+        text skills_csv
+        datetime created_at
+        datetime updated_at
+    }
+
+    RECRUITERS {
+        varchar recruiter_id PK
+        varchar member_id FK
+        varchar company
+        varchar title
+        datetime created_at
+    }
+
+    JOBS {
+        varchar job_id PK
+        varchar recruiter_id FK
+        varchar title
+        varchar company
+        varchar location
+        varchar type
+        varchar employment_type
+        varchar industry
+        decimal salary_min
+        decimal salary_max
+        varchar status
+        int views_count
+        int saves_count
+        int applies_count
+        datetime created_at
+        datetime updated_at
+    }
+
+    APPLICATIONS {
+        varchar application_id PK
+        varchar job_id FK
+        varchar member_id FK
+        varchar status
+        text resume_ref
+        text note
+        datetime created_at
+        datetime updated_at
+    }
+
+    SAVED_JOBS {
+        varchar job_id PK, FK
+        varchar member_id PK, FK
+        datetime saved_at
+    }
+
+    CONNECTION_REQUESTS {
+        varchar request_id PK
+        varchar from_member_id FK
+        varchar to_member_id FK
+        varchar status
+        datetime created_at
+        datetime acted_at
+    }
+
+    CONNECTIONS {
+        varchar connection_id PK
+        varchar member_id FK
+        varchar other_member_id FK
+        datetime created_at
+    }
+
+    THREADS {
+        varchar thread_id PK
+        datetime created_at
+        datetime updated_at
+    }
+
+    THREAD_PARTICIPANTS {
+        varchar thread_id PK, FK
+        varchar member_id PK, FK
+        datetime joined_at
+    }
+
+    POSTS {
+        varchar post_id PK
+        varchar author_id FK
+        text body
+        text media_url
+        varchar visibility
+        varchar quoted_post_id FK
+        datetime created_at
+    }
+
+    JOB_TRACKER_NOTES {
+        varchar note_id PK
+        varchar member_id FK
+        varchar job_id FK
+        text note
+        varchar stage
+        datetime updated_at
+    }
+
+    MEMBERS ||--o{ APPLICATIONS : applies
+    JOBS ||--o{ APPLICATIONS : receives
+    MEMBERS ||--o{ SAVED_JOBS : saves
+    JOBS ||--o{ SAVED_JOBS : saved_in
+    MEMBERS ||--o{ CONNECTION_REQUESTS : sends
+    MEMBERS ||--o{ CONNECTION_REQUESTS : receives
+    MEMBERS ||--o{ CONNECTIONS : connects
+    THREADS ||--o{ THREAD_PARTICIPANTS : has
+    MEMBERS ||--o{ THREAD_PARTICIPANTS : joins
+    MEMBERS ||--o{ POSTS : creates
+    POSTS ||--o| POSTS : quotes
+    RECRUITERS ||--o{ JOBS : posts
+    MEMBERS ||--o| RECRUITERS : can_be
+    MEMBERS ||--o{ JOB_TRACKER_NOTES : writes
+    JOBS ||--o{ JOB_TRACKER_NOTES : annotated
