@@ -6,6 +6,7 @@ import json
 import re
 import secrets
 import uuid
+from collections import defaultdict
 from datetime import datetime, timedelta, timezone
 from typing import Any, Optional
 
@@ -436,6 +437,56 @@ async def members_suggest(body: dict):
         ]
     except Exception:
         return []
+
+
+@router.post("/members/peopleYouMayKnow")
+async def members_people_you_may_know(body: dict):
+    """Personalized suggestions: not self, not already connected; includes mutual connection count."""
+    member_id = str((body or {}).get("member_id") or "").strip()
+    if not member_id:
+        return JSONResponse(status_code=400, content={"error": "BAD_REQUEST", "message": "member_id required", "trace_id": _tid()})
+    limit = min(max(int((body or {}).get("limit") or 6), 1), 12)
+    try:
+        all_con = await dbm.fetch_all("SELECT user_a, user_b FROM connections")
+    except Exception:
+        all_con = []
+    adj: dict[str, set[str]] = defaultdict(set)
+    for r in all_con or []:
+        a, b = str(r.get("user_a") or ""), str(r.get("user_b") or "")
+        if a and b:
+            adj[a].add(b)
+            adj[b].add(a)
+    viewer_conn = adj.get(member_id, set())
+    exclude = viewer_conn | {member_id}
+    placeholders = ",".join(["%s"] * len(exclude))
+    try:
+        candidates = await dbm.fetch_all(
+            f"""SELECT member_id, name, headline, title, location, profile_photo_url
+                FROM members WHERE status != 'deleted' AND member_id NOT IN ({placeholders})
+                ORDER BY created_at DESC LIMIT 80""",
+            tuple(exclude),
+        )
+    except Exception:
+        return []
+    scored: list[dict[str, Any]] = []
+    for c in candidates or []:
+        cid = str(c.get("member_id") or "").strip()
+        if not cid:
+            continue
+        cand_conn = adj.get(cid, set())
+        mutual = len(viewer_conn & cand_conn)
+        scored.append(
+            {
+                "member_id": cid,
+                "name": c.get("name") or cid,
+                "headline": str(c.get("headline") or c.get("title") or "").strip(),
+                "location": str(c.get("location") or "").strip(),
+                "profile_photo_url": c.get("profile_photo_url"),
+                "mutual_connections": mutual,
+            }
+        )
+    scored.sort(key=lambda x: (-int(x.get("mutual_connections") or 0), x.get("name") or ""))
+    return scored[:limit]
 
 
 @router.post("/members/settings/get")

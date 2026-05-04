@@ -57,8 +57,10 @@ export default function MemberPublicProfilePage() {
 
   useEffect(() => {
     let cancelled = false;
-    async function load() {
-      setLoading(true);
+    /** Background refresh must not set `loading` or the whole page flashes every poll interval. */
+    async function load(options?: { showSpinner?: boolean }) {
+      const showSpinner = options?.showSpinner !== false;
+      if (showSpinner) setLoading(true);
       try {
         const [memberRes, conRes, reqRes] = await Promise.all([
           fetch('/api/members/get', {
@@ -103,20 +105,27 @@ export default function MemberPublicProfilePage() {
           setConnections(Array.isArray(conData) ? conData : []);
           setIncoming(reqData.incoming || []);
           setSent(reqData.sent || []);
+          if (profile && memberId && memberId !== MEMBER_ID) {
+            fetch('/api/analytics/member/recordProfileView', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ viewed_member_id: memberId, viewer_member_id: MEMBER_ID })
+            }).catch(() => undefined);
+          }
         }
       } finally {
         if (!cancelled) setLoading(false);
       }
     }
-    if (memberId) load();
+    if (memberId) load({ showSpinner: true });
     const timer = window.setInterval(() => {
-      if (memberId) load();
+      if (memberId) load({ showSpinner: false });
     }, 4000);
     return () => {
       cancelled = true;
       window.clearInterval(timer);
     };
-  }, [memberId, viewerId]);
+  }, [memberId, viewerId, MEMBER_ID]);
 
   const relation = useMemo<'connect' | 'pending' | 'incoming' | 'connected'>(() => {
     if (!memberId) return 'connect';

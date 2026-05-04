@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { BrowserRouter, Link, Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
 import { Briefcase, Image as ImageIcon, Link2, MessageCircle, Newspaper, Pencil, Repeat2, Search, Send as SendIcon, ThumbsUp, Video, X } from 'lucide-react';
 import Navbar from './components/layout/Navbar';
+import PeopleYouMayKnowCard from './components/sidebar/PeopleYouMayKnowCard';
 import JobsBoard from './pages/JobsBoard';
 import JobsSearchPage from './pages/JobsSearchPage';
 import ApplicationsPage from './pages/ApplicationsPage';
@@ -1153,23 +1154,7 @@ function AppShell({ children }: { children: React.ReactNode }) {
                 </Link>
               </div>
             </div>
-            <div className="li-card p-4">
-              <p className="li-section-title text-sm">People you may know</p>
-              <div className="mt-2 space-y-2 text-sm">
-                <div>
-                  <Link to={`/profile/${encodeURIComponent('M-DEMO-01')}`} className="font-semibold text-[#191919] hover:text-[#0a66c2] hover:underline">
-                    Alex Chen
-                  </Link>
-                  <p className="text-[#666666]">Senior Engineer at Acme</p>
-                </div>
-                <div>
-                  <Link to={`/profile/${encodeURIComponent('M-DEMO-02')}`} className="font-semibold text-[#191919] hover:text-[#0a66c2] hover:underline">
-                    Priya Kapoor
-                  </Link>
-                  <p className="text-[#666666]">Recruiter at Nova Labs</p>
-                </div>
-              </div>
-            </div>
+            <PeopleYouMayKnowCard />
           </div>
         </aside>
       </div>
@@ -1249,23 +1234,7 @@ function ProfileShell({ children }: { children: React.ReactNode }) {
                 <p className="mt-1 text-[#666666] break-all">{displayedPublicUrl}</p>
               </div>
             ) : null}
-            <div className="li-card p-4">
-              <p className="li-section-title text-sm">People you may know</p>
-              <div className="mt-2 space-y-2 text-sm">
-                <div>
-                  <Link to={`/profile/${encodeURIComponent('M-DEMO-01')}`} className="font-semibold text-[#191919] hover:text-[#0a66c2] hover:underline">
-                    Alex Chen
-                  </Link>
-                  <p className="text-[#666666]">Senior Engineer at Acme</p>
-                </div>
-                <div>
-                  <Link to={`/profile/${encodeURIComponent('M-DEMO-02')}`} className="font-semibold text-[#191919] hover:text-[#0a66c2] hover:underline">
-                    Priya Kapoor
-                  </Link>
-                  <p className="text-[#666666]">Recruiter at Nova Labs</p>
-                </div>
-              </div>
-            </div>
+            <PeopleYouMayKnowCard />
           </div>
         </aside>
       </div>

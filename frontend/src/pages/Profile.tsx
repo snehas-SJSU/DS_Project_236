@@ -1,11 +1,11 @@
 import { useEffect, useRef, useState } from 'react';
-import { Briefcase, GraduationCap, MapPin, Pencil } from 'lucide-react';
+import { BarChart3, Briefcase, Eye, GraduationCap, MapPin, Pencil, Search, Users } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { LOCAL_AVATAR_KEY, resolveViewerAvatarUrl } from '../lib/memberProfile';
 import { showToast } from '../lib/toast';
 
 type LoadState = { status: 'loading' } | { status: 'ok'; data: any } | { status: 'error'; message: string };
-type EditSection = 'profile' | 'suggested' | 'about' | 'activity' | 'analytics' | 'experience' | 'education' | 'skills';
+type EditSection = 'profile' | 'suggested' | 'about' | 'activity' | 'experience' | 'education' | 'skills';
 const AVATAR_OPTIONS = ['Avery', 'Morgan', 'Noah', 'Sophia', 'Liam', 'Maya'];
 const COVER_THEMES: Record<string, string> = {
   blue: 'from-blue-400 to-indigo-500',
@@ -26,6 +26,37 @@ export default function Profile() {
   const [skillsDraftText, setSkillsDraftText] = useState('');
   const coverFileInputRef = useRef<HTMLInputElement | null>(null);
   const avatarFileInputRef = useRef<HTMLInputElement | null>(null);
+
+  const loadDashboard = () => {
+    fetch('/api/analytics/member/dashboard', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ member_id: MEMBER_ID })
+    })
+      .then((res) => res.json().then((data) => ({ ok: res.ok, data })))
+      .then(({ ok, data }) => {
+        if (!ok || data?.error) {
+          setDashboard({
+            profile_views_30d: 0,
+            post_impressions_7d: 0,
+            search_appearances_30d: 0,
+            applications_by_status: [],
+            _loadError: data?.message || data?.error || 'Analytics unavailable'
+          });
+          return;
+        }
+        setDashboard(data);
+      })
+      .catch(() =>
+        setDashboard({
+          profile_views_30d: 0,
+          post_impressions_7d: 0,
+          search_appearances_30d: 0,
+          applications_by_status: [],
+          _loadError: 'Could not load analytics'
+        })
+      );
+  };
 
   useEffect(() => {
     fetch('/api/members/get', {
@@ -72,14 +103,13 @@ export default function Profile() {
             'Could not reach the API. Open this app at http://localhost:3000 (npm run dev) and start the backend (npm run start:all from the repo root).'
         });
       });
-    fetch('/api/analytics/member/dashboard', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ member_id: MEMBER_ID })
-    })
-      .then((res) => res.json())
-      .then((data) => setDashboard(data))
-      .catch(() => setDashboard(null));
+    loadDashboard();
+  }, []);
+
+  useEffect(() => {
+    const onFocus = () => loadDashboard();
+    window.addEventListener('focus', onFocus);
+    return () => window.removeEventListener('focus', onFocus);
   }, []);
 
   if (state.status === 'loading') return <div className="li-card p-5 text-sm text-slate-500">Loading profile...</div>;
@@ -183,7 +213,6 @@ export default function Profile() {
     suggested: 'Suggested for you',
     about: 'About',
     activity: 'Activity',
-    analytics: 'Member analytics',
     experience: 'Experience',
     education: 'Education',
     skills: 'Top skills'
@@ -191,7 +220,6 @@ export default function Profile() {
   const showBasics = editSection === 'profile';
   const showAbout = editSection === 'about';
   const showActivity = editSection === 'activity';
-  const showAnalytics = editSection === 'analytics';
   const showExperience = editSection === 'experience';
   const showEducation = editSection === 'education';
   const showSkills = editSection === 'skills';
@@ -461,12 +489,11 @@ export default function Profile() {
             </>
           )}
 
-          {(showExperience || showEducation || showSkills || showAnalytics || showSuggested) && (
+          {(showExperience || showEducation || showSkills || showSuggested) && (
             <div className="rounded-md border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700">
               {showExperience && 'Experience is editable inline in the Experience section card.'}
               {showEducation && 'Education is editable inline in the Education section card.'}
               {showSkills && 'Skills are editable inline in the Top skills section card.'}
-              {showAnalytics && 'Analytics are computed from activity and applications; visibility can be controlled later.'}
               {showSuggested && 'Suggested cards are recommendation UI blocks; no profile field write needed.'}
             </div>
           )}
@@ -591,37 +618,51 @@ export default function Profile() {
           </>
         )}
       </section>
-      {dashboard && (
-        <section className="li-card p-5">
-        <div className="flex items-center justify-between">
-          <h3 className="text-lg font-semibold text-slate-900">Member analytics</h3>
-          <button
-            type="button"
-            onClick={() => openEditor('analytics')}
-            className="inline-flex h-8 w-8 items-center justify-center rounded-full text-slate-500 hover:bg-slate-100"
-            title="Edit analytics visibility"
-          >
-            <Pencil size={15} />
-          </button>
-        </div>
-          {isInline && editSection === 'analytics' ? (
-            <div className="mt-3 rounded-md border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700">
-              Analytics is computed data (views + applications). No direct profile field to edit here.
-              <div className="mt-2">
-                <button className="rounded-md border border-slate-300 px-3 py-1.5 text-sm" onClick={() => setEditing(false)}>Close</button>
-              </div>
-            </div>
-          ) : null}
-          <p className="text-sm text-slate-600">Profile views (30d): {dashboard.profile_views_30d ?? 0}</p>
-          <div className="mt-2 flex flex-wrap gap-2">
-            {(dashboard.applications_by_status || []).map((row: any) => (
-              <span key={row.status} className="rounded-full bg-slate-100 px-3 py-1 text-sm text-slate-700">
-                {row.status}: {row.c}
-              </span>
-            ))}
+      <section className="li-card overflow-hidden border border-[#e0dfdc] p-0 shadow-sm">
+        <div className="px-4 pb-1 pt-4">
+          <h3 className="text-[20px] font-semibold leading-tight text-[#191919]">Analytics</h3>
+          <div className="mt-1 flex items-center gap-1.5 text-xs text-[#666666]">
+            <Eye size={14} className="shrink-0 text-[#666]" aria-hidden />
+            <span>Private to you</span>
           </div>
-        </section>
-      )}
+        </div>
+        {dashboard?._loadError ? (
+          <p className="px-4 pb-2 text-xs text-amber-800">{dashboard._loadError} (showing zeros).</p>
+        ) : null}
+        <div className="grid grid-cols-1 gap-6 px-4 py-5 sm:grid-cols-3 sm:gap-4">
+          <div className="min-w-0">
+            <Users size={20} className="text-[#404040]" aria-hidden />
+            <p className="mt-2 text-[15px] font-semibold leading-snug text-[#191919]">
+              {(dashboard?.profile_views_30d ?? 0).toLocaleString()} profile views
+            </p>
+            <p className="mt-1 text-xs leading-snug text-[#666666]">Discover who&apos;s viewed your profile.</p>
+          </div>
+          <div className="min-w-0">
+            <BarChart3 size={20} className="text-[#404040]" aria-hidden />
+            <p className="mt-2 text-[15px] font-semibold leading-snug text-[#191919]">
+              {(dashboard?.post_impressions_7d ?? 0).toLocaleString()} post impressions
+            </p>
+            <p className="mt-1 text-xs leading-snug text-[#666666]">Check out who&apos;s engaging with your posts.</p>
+            <p className="mt-1.5 text-xs text-[#999999]">Past 7 days</p>
+          </div>
+          <div className="min-w-0">
+            <Search size={20} className="text-[#404040]" aria-hidden />
+            <p className="mt-2 text-[15px] font-semibold leading-snug text-[#191919]">
+              {(dashboard?.search_appearances_30d ?? 0).toLocaleString()} search appearances
+            </p>
+            <p className="mt-1 text-xs leading-snug text-[#666666]">See how often you appear in search results.</p>
+          </div>
+        </div>
+        <div className="border-t border-[#ebebeb] px-4 py-3 text-center">
+          <Link
+            to="/analytics/member"
+            className="text-sm font-semibold text-[#666666] hover:text-[#0a66c2] hover:underline"
+          >
+            Show all<span className="sr-only"> analytics</span>
+            <span aria-hidden> →</span>
+          </Link>
+        </div>
+      </section>
 
       <section className="li-card p-5">
         <div className="mb-4 flex items-center justify-between">

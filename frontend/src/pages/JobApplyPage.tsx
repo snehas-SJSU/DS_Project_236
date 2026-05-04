@@ -1,6 +1,6 @@
-import { FormEvent, useEffect, useMemo, useState } from 'react';
+import { FormEvent, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
-import { jobFromGetPayload, mergeJobDetail, normalizeJobListRows } from '../lib/jobNormalize';
+import { jobFromGetPayload, mergeJobDetail } from '../lib/jobNormalize';
 import { companyProfilePath, jobsResultsPath, jobsSearchPath } from '../lib/jobRoutes';
 import { showToast } from '../lib/toast';
 import type { Job } from '../mockData/jobs';
@@ -21,6 +21,10 @@ export default function JobApplyPage() {
   const [coverLetter, setCoverLetter] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
+  /** True only after a successful submit this session (not when opening an already-applied job). */
+  const [afterFreshSubmit, setAfterFreshSubmit] = useState(false);
+  const [userCancelledRedirect, setUserCancelledRedirect] = useState(false);
+  const redirectRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     if (!jobId) {
@@ -32,6 +36,8 @@ export default function JobApplyPage() {
     let cancelled = false;
     setLoadingJob(true);
     setError('');
+    setAfterFreshSubmit(false);
+    setUserCancelledRedirect(false);
 
     fetch('/api/jobs/get', {
       method: 'POST',
@@ -70,6 +76,27 @@ export default function JobApplyPage() {
     };
   }, [jobId]);
 
+  useEffect(() => {
+    if (!afterFreshSubmit || userCancelledRedirect) return;
+    redirectRef.current = setTimeout(() => {
+      navigate('/applications');
+    }, 4000);
+    return () => {
+      if (redirectRef.current) {
+        clearTimeout(redirectRef.current);
+        redirectRef.current = null;
+      }
+    };
+  }, [afterFreshSubmit, userCancelledRedirect, navigate]);
+
+  const cancelRedirect = () => {
+    if (redirectRef.current) {
+      clearTimeout(redirectRef.current);
+      redirectRef.current = null;
+    }
+    setUserCancelledRedirect(true);
+  };
+
   const onSubmit = async (event: FormEvent) => {
     event.preventDefault();
     if (!job) return;
@@ -104,6 +131,7 @@ export default function JobApplyPage() {
       }
 
       setSubmitted(true);
+      setAfterFreshSubmit(true);
       setJob((prev) => (prev ? ({ ...prev, applied: true } as any) : prev));
       showToast('Application submitted successfully', 'success');
     } catch {
@@ -168,6 +196,56 @@ export default function JobApplyPage() {
 
       <section className="li-card p-5">
         <h2 className="text-xl font-semibold text-[#191919]">Application form</h2>
+        {submitted ? (
+          <div className="mt-4 rounded-lg border border-[#057642] bg-[#eef7f1] px-4 py-3 text-sm text-[#191919]">
+            <p className="font-semibold text-[#114e2f]">
+              {afterFreshSubmit ? 'Application sent' : 'You already applied to this job'}
+            </p>
+            <p className="mt-1 text-[#333]">
+              {afterFreshSubmit
+                ? 'You can review status under My applications, or keep browsing open roles.'
+                : 'Your application is on file. You can view it anytime under My applications.'}
+            </p>
+            {afterFreshSubmit && !userCancelledRedirect ? (
+              <p className="mt-2 text-xs text-[#555]">Taking you to My applications in a few seconds…</p>
+            ) : null}
+            <div className="mt-3 flex flex-wrap gap-2">
+              <Link
+                to="/applications"
+                onClick={cancelRedirect}
+                className="inline-flex rounded-full bg-[#0a66c2] px-4 py-2 text-sm font-semibold text-white hover:bg-[#004182]"
+              >
+                My applications
+              </Link>
+              <Link
+                to="/jobs"
+                onClick={cancelRedirect}
+                className="inline-flex rounded-full border border-[#0a66c2] px-4 py-2 text-sm font-semibold text-[#0a66c2] hover:bg-[#edf3f8]"
+              >
+                More jobs
+              </Link>
+              <button
+                type="button"
+                onClick={() => {
+                  cancelRedirect();
+                  navigate(jobsResultsPath(job.id));
+                }}
+                className="inline-flex rounded-full border border-[#d0d7de] px-4 py-2 text-sm font-semibold text-[#444] hover:bg-[#f3f2ef]"
+              >
+                Back to job posting
+              </button>
+              {afterFreshSubmit && !userCancelledRedirect ? (
+                <button
+                  type="button"
+                  onClick={cancelRedirect}
+                  className="inline-flex rounded-full border border-transparent px-4 py-2 text-sm font-semibold text-[#666] underline hover:text-[#191919]"
+                >
+                  Stay on this page
+                </button>
+              ) : null}
+            </div>
+          </div>
+        ) : null}
         <form className="mt-4 space-y-4" onSubmit={onSubmit}>
           <label className="block">
             <span className="mb-1 block text-sm font-semibold text-[#191919]">Resume Text</span>
