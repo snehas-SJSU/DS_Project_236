@@ -6,6 +6,7 @@ import { CheckCircle2, X } from 'lucide-react';
 import { addActivity, readJson, SAVED_JOBS_KEY, writeJson } from '../lib/localData';
 import { companyProfilePath, jobsResultsPath, jobsSearchPath } from '../lib/jobRoutes';
 import { mergeJobDetail, normalizeJobListRows } from '../lib/jobNormalize';
+import { getViewerRecruiterId } from '../lib/memberProfile';
 import { showToast } from '../lib/toast';
 import RecruiterAiJobPanel from '../components/recruiter/RecruiterAiJobPanel';
 import CompanyLogoTile from '../components/shared/CompanyLogoTile';
@@ -617,7 +618,12 @@ export default function JobsSearchPage() {
                 <h2 className="mb-2 text-[34px] leading-tight font-semibold text-[#191919]">Job description</h2>
                 <p className="text-sm leading-relaxed text-[#333]">{activeJob.description}</p>
               </div>
-              <RecruiterAiJobPanel jobId={activeJob.id} />
+              <RecruiterAiJobPanel
+                jobId={activeJob.id}
+                canManage={
+                  String(activeJob.recruiter_id || '').trim() === String(getViewerRecruiterId()).trim()
+                }
+              />
             </div>
           ) : (
             <div className="p-6 text-slate-500">Select a job to view details</div>

@@ -137,6 +137,33 @@ def format_post_row(r: dict, viewer_id: str | None) -> dict:
     }
 
 
+async def viewer_engagement_sets(viewer_id: str | None, post_ids: list[str]) -> tuple[set[str], set[str], set[str]]:
+    if not viewer_id or not post_ids:
+        return set(), set(), set()
+    ph = ",".join(["%s"] * len(post_ids))
+    args: tuple[Any, ...] = (viewer_id, *post_ids)
+    like_rows = await dbm.fetch_all(
+        f"SELECT post_id FROM post_likes WHERE member_id = %s AND post_id IN ({ph})", args
+    )
+    rep_rows = await dbm.fetch_all(
+        f"SELECT post_id FROM post_reposts WHERE member_id = %s AND post_id IN ({ph})", args
+    )
+    send_rows = await dbm.fetch_all(
+        f"SELECT post_id FROM post_sends WHERE member_id = %s AND post_id IN ({ph})", args
+    )
+    liked = {str(r["post_id"]) for r in like_rows}
+    reposted = {str(r["post_id"]) for r in rep_rows}
+    sent = {str(r["post_id"]) for r in send_rows}
+    return liked, reposted, sent
+
+
+def apply_viewer_engagement(item: dict, liked: set[str], reposted: set[str], sent: set[str]) -> None:
+    pid = item["post_id"]
+    item["liked"] = pid in liked
+    item["reposted"] = pid in reposted
+    item["sent"] = pid in sent
+
+
 @router.post("/posts/create")
 async def posts_create(body: dict):
     await ensure_tables()
@@ -169,23 +196,12 @@ async def posts_list(body: dict):
     out = []
     for r in rows:
         item = format_post_row(dict(r), viewer_id)
-        if viewer_id:
-            L = await dbm.fetch_one(
-                "SELECT 1 AS x FROM post_likes WHERE post_id = %s AND member_id = %s LIMIT 1",
-                (r["post_id"], viewer_id),
-            )
-            item["liked"] = bool(L)
-            R = await dbm.fetch_one(
-                "SELECT 1 AS x FROM post_reposts WHERE post_id = %s AND member_id = %s LIMIT 1",
-                (r["post_id"], viewer_id),
-            )
-            item["reposted"] = bool(R)
-            S = await dbm.fetch_one(
-                "SELECT 1 AS x FROM post_sends WHERE post_id = %s AND member_id = %s LIMIT 1",
-                (r["post_id"], viewer_id),
-            )
-            item["sent"] = bool(S)
         out.append(item)
+    if viewer_id and out:
+        pids = [o["post_id"] for o in out]
+        lk, rp, sn = await viewer_engagement_sets(viewer_id, pids)
+        for item in out:
+            apply_viewer_engagement(item, lk, rp, sn)
     return out
 
 
@@ -202,18 +218,131 @@ async def posts_get(body: dict):
     r = dict(rows[0])
     item = format_post_row(r, viewer_id)
     if viewer_id:
-        L = await dbm.fetch_one(
-            "SELECT 1 AS x FROM post_likes WHERE post_id = %s AND member_id = %s LIMIT 1", (post_id, viewer_id)
+        lk, rp, sn = await viewer_engagement_sets(viewer_id, [post_id])
+        apply_viewer_engagement(item, lk, rp, sn)
+    return item
+
+
+@router.post("/posts/memberActivity")
+async def posts_member_activity(body: dict):
+    """Activity for a profile: authored posts, likes, comments, reposts (LinkedIn-style)."""
+    await ensure_tables()
+    member_id = body.get("member_id")
+    viewer_id = body.get("viewer_member_id")
+    scope = str(body.get("scope") or "full").strip().lower()
+    limit = min(int(body.get("limit") or 40), 100)
+    if not member_id:
+        return JSONResponse(status_code=400, content={"error": "BAD_REQUEST", "message": "member_id required"})
+
+    raw: list[dict[str, Any]] = []
+    if scope == "public":
+        rows = await dbm.fetch_all(
+            "SELECT post_id, created_at AS activity_at, 'created' AS activity_kind, NULL AS comment_body "
+            "FROM posts WHERE member_id = %s ORDER BY created_at DESC LIMIT %s",
+            (member_id, limit),
         )
-        item["liked"] = bool(L)
-        R = await dbm.fetch_one(
-            "SELECT 1 AS x FROM post_reposts WHERE post_id = %s AND member_id = %s LIMIT 1", (post_id, viewer_id)
+        raw = [dict(r) for r in rows]
+    else:
+        created = await dbm.fetch_all(
+            "SELECT post_id, created_at AS activity_at, 'created' AS activity_kind, NULL AS comment_body "
+            "FROM posts WHERE member_id = %s",
+            (member_id,),
         )
-        item["reposted"] = bool(R)
-        S = await dbm.fetch_one(
-            "SELECT 1 AS x FROM post_sends WHERE post_id = %s AND member_id = %s LIMIT 1", (post_id, viewer_id)
+        liked = await dbm.fetch_all(
+            "SELECT post_id, created_at AS activity_at, 'liked' AS activity_kind, NULL AS comment_body "
+            "FROM post_likes WHERE member_id = %s",
+            (member_id,),
         )
-        item["sent"] = bool(S)
+        commented = await dbm.fetch_all(
+            "SELECT post_id, created_at AS activity_at, 'commented' AS activity_kind, body AS comment_body "
+            "FROM post_comments WHERE member_id = %s",
+            (member_id,),
+        )
+        reposted = await dbm.fetch_all(
+            "SELECT post_id, created_at AS activity_at, 'reposted' AS activity_kind, NULL AS comment_body "
+            "FROM post_reposts WHERE member_id = %s",
+            (member_id,),
+        )
+        for group in (created, liked, commented, reposted):
+            raw.extend(dict(r) for r in group)
+
+    raw.sort(key=lambda x: x["activity_at"], reverse=True)
+    raw = raw[:limit]
+    if not raw:
+        return []
+
+    post_ids_ordered: list[str] = []
+    seen: set[str] = set()
+    for row in raw:
+        pid = str(row["post_id"])
+        if pid not in seen:
+            seen.add(pid)
+            post_ids_ordered.append(pid)
+    if not post_ids_ordered:
+        return []
+
+    ph = ",".join(["%s"] * len(post_ids_ordered))
+    prow = await dbm.fetch_all(LIST_SQL + f" WHERE p.post_id IN ({ph})", tuple(post_ids_ordered))
+    by_id = {str(dict(r)["post_id"]): dict(r) for r in prow}
+
+    out: list[dict] = []
+    for row in raw:
+        pid = str(row["post_id"])
+        pr = by_id.get(pid)
+        if not pr:
+            continue
+        item = format_post_row(pr, viewer_id)
+        out.append(
+            {
+                "activity_type": row["activity_kind"],
+                "activity_at": row["activity_at"],
+                "comment_preview": row.get("comment_body"),
+                "post": item,
+            }
+        )
+
+    if viewer_id and out:
+        all_pids = list({str(o["post"]["post_id"]) for o in out})
+        lk, rp, sn = await viewer_engagement_sets(viewer_id, all_pids)
+        for o in out:
+            apply_viewer_engagement(o["post"], lk, rp, sn)
+    return out
+
+
+@router.post("/posts/update")
+async def posts_update(body: dict):
+    await ensure_tables()
+    post_id = body.get("post_id")
+    member_id = body.get("member_id")
+    text_body = body.get("body")
+    image_data = body.get("image_data")
+    author_headline = body.get("author_headline")
+    if not post_id or not member_id:
+        return JSONResponse(status_code=400, content={"error": "BAD_REQUEST", "message": "post_id and member_id required"})
+    row = await dbm.fetch_one("SELECT member_id FROM posts WHERE post_id = %s LIMIT 1", (post_id,))
+    if not row:
+        return JSONResponse(status_code=404, content={"error": "NOT_FOUND", "message": "Post not found"})
+    if str(row["member_id"]) != str(member_id):
+        return JSONResponse(status_code=403, content={"error": "FORBIDDEN", "message": "Only the author can edit this post"})
+    if text_body is None or not str(text_body).strip():
+        return JSONResponse(status_code=400, content={"error": "BAD_REQUEST", "message": "body required"})
+    fields: list[str] = ["body = %s"]
+    vals: list[Any] = [str(text_body).strip()]
+    if image_data is not None:
+        fields.append("image_data = %s")
+        vals.append(image_data)
+    if author_headline is not None:
+        fields.append("author_headline = %s")
+        vals.append(author_headline)
+    vals.append(post_id)
+    await dbm.execute(f"UPDATE posts SET {', '.join(fields)} WHERE post_id = %s", tuple(vals))
+    rows = await dbm.fetch_all(LIST_SQL + " WHERE p.post_id = %s", (post_id,))
+    if not rows:
+        return {"ok": True, "post_id": post_id}
+    r = dict(rows[0])
+    item = format_post_row(r, member_id)
+    lk, rp, sn = await viewer_engagement_sets(member_id, [post_id])
+    apply_viewer_engagement(item, lk, rp, sn)
     return item
 
 

@@ -223,7 +223,6 @@ async def jobs_search(body: dict):
                 "salary": r.get("salary"),
                 "type": r.get("type"),
                 "posted_datetime": r.get("created_at"),
-                "postedAt": "Just now",
                 "skills": sk,
                 "description": r.get("description"),
                 "status": r.get("status"),

@@ -3,6 +3,22 @@ import { Briefcase, GraduationCap, MapPin } from 'lucide-react';
 import { Link, Navigate, useParams } from 'react-router-dom';
 import { getCurrentMemberId } from '../lib/auth';
 import { resolveAvatarUrl } from '../lib/memberProfile';
+
+type PublicActivityRow = {
+  activity_type: string;
+  activity_at: string;
+  comment_preview?: string | null;
+  post: {
+    post_id: string;
+    member_id: string;
+    author_name: string | null;
+    author_headline?: string | null;
+    author_profile_photo_url?: string | null;
+    body: string;
+    image_data: string | null;
+    created_at: string;
+  };
+};
 import { addActivity } from '../lib/localData';
 import { showToast } from '../lib/toast';
 
@@ -54,6 +70,37 @@ export default function MemberPublicProfilePage() {
   const [connections, setConnections] = useState<string[]>([]);
   const [incoming, setIncoming] = useState<any[]>([]);
   const [sent, setSent] = useState<any[]>([]);
+  const [publicActivity, setPublicActivity] = useState<PublicActivityRow[]>([]);
+  const [activityLoading, setActivityLoading] = useState(false);
+
+  useEffect(() => {
+    if (!memberId) return;
+    let cancelled = false;
+    setActivityLoading(true);
+    fetch('/api/posts/memberActivity', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        member_id: memberId,
+        viewer_member_id: viewerId,
+        scope: 'public',
+        limit: 25
+      })
+    })
+      .then((r) => r.json())
+      .then((data) => {
+        if (!cancelled) setPublicActivity(Array.isArray(data) ? data : []);
+      })
+      .catch(() => {
+        if (!cancelled) setPublicActivity([]);
+      })
+      .finally(() => {
+        if (!cancelled) setActivityLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [memberId, viewerId]);
 
   useEffect(() => {
     let cancelled = false;
@@ -227,8 +274,40 @@ export default function MemberPublicProfilePage() {
         </section>
         <section className="li-card p-5">
           <h2 className="text-lg font-semibold text-slate-900">Activity</h2>
-          <p className="mt-2 text-sm font-semibold text-[#0a66c2]">{member.name} posted recently</p>
-          <p className="text-xs text-slate-600">Public posts and interactions appear here.</p>
+          <p className="mt-1 text-xs text-slate-500">Posts {member.name} has shared</p>
+          {activityLoading ? (
+            <p className="mt-3 text-sm text-slate-500">Loading activity…</p>
+          ) : publicActivity.length === 0 ? (
+            <p className="mt-3 text-sm text-slate-600">No public posts yet.</p>
+          ) : (
+            <ul className="mt-4 space-y-3">
+              {publicActivity.map((row, idx) => {
+                const p = row.post;
+                const href = `/feed#${encodeURIComponent(p.post_id)}`;
+                const authorPhoto = resolveAvatarUrl(p.author_profile_photo_url, p.author_name || p.member_id);
+                return (
+                  <li key={`${idx}-${p.post_id}`} className="rounded-lg border border-slate-200 bg-white">
+                    <div className="flex items-center gap-2 border-b border-slate-100 px-3 py-2 text-xs text-slate-600">
+                      <span className="font-semibold text-[#191919]">{member.name} shared a post</span>
+                      <span className="ml-auto text-slate-400">
+                        {new Date(row.activity_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
+                      </span>
+                    </div>
+                    <Link to={href} className="block px-3 py-3 hover:bg-slate-50">
+                      <div className="flex gap-3">
+                        <img src={authorPhoto} alt="" className="h-10 w-10 shrink-0 rounded-full border border-slate-200 object-cover" />
+                        <div className="min-w-0 flex-1">
+                          <p className="text-sm font-semibold text-[#191919]">{p.author_name || p.member_id}</p>
+                          {p.author_headline ? <p className="text-xs text-slate-500">{p.author_headline}</p> : null}
+                          <p className="mt-2 line-clamp-4 whitespace-pre-wrap text-sm text-slate-800">{p.body}</p>
+                        </div>
+                      </div>
+                    </Link>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
         </section>
         <section className="li-card p-5">
           <div className="mb-4 flex items-center gap-2">

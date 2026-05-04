@@ -1,8 +1,30 @@
+import { getCurrentMemberId } from './auth';
+
+/** Captured at first module load; prefer `getViewerMemberId()` when ownership must match the live session. */
 export const MEMBER_ID = sessionStorage.getItem('li_sim_member_id') || 'M-123';
 
-/** Logged-in recruiter for hiring / AI workflows (override with VITE_RECRUITER_ID). */
+/** Captured at first module load; prefer `getViewerRecruiterId()` for APIs tied to the current user. */
 export const RECRUITER_ID =
   (typeof import.meta !== 'undefined' && import.meta.env?.VITE_RECRUITER_ID) || MEMBER_ID;
+
+/** Member id for the signed-in user (session + JWT fallback — not frozen at module load). */
+export function getViewerMemberId(): string {
+  if (typeof window === 'undefined') return 'M-123';
+  const sid = sessionStorage.getItem('li_sim_member_id');
+  if (sid && String(sid).trim()) return String(sid).trim();
+  const fromAuth = getCurrentMemberId();
+  if (fromAuth && String(fromAuth).trim()) return String(fromAuth).trim();
+  return 'M-123';
+}
+
+/** Job poster / AI actor id: `VITE_RECRUITER_ID` when set, otherwise current member id. */
+export function getViewerRecruiterId(): string {
+  const raw =
+    typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.VITE_RECRUITER_ID;
+  const trimmed = raw != null ? String(raw).trim() : '';
+  if (trimmed) return trimmed;
+  return getViewerMemberId();
+}
 
 export const LOCAL_AVATAR_KEY = 'li_sim_profile_avatar';
 

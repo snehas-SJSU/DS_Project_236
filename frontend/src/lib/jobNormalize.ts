@@ -1,5 +1,32 @@
 import type { Job } from '../mockData/jobs';
 
+/** Parse DB/API datetime (ISO or `YYYY-MM-DD HH:mm:ss`) for `Date`. */
+function parseJobDate(raw: unknown): Date | null {
+  if (raw == null) return null;
+  if (raw instanceof Date) return Number.isNaN(raw.getTime()) ? null : raw;
+  const s = String(raw).trim();
+  if (!s) return null;
+  const normalized = s.includes('T') || s.endsWith('Z') ? s : s.replace(' ', 'T');
+  const d = new Date(normalized);
+  return Number.isNaN(d.getTime()) ? null : d;
+}
+
+/** Human-readable posted time in the viewer's locale (actual post time, not a placeholder). */
+export function formatJobPostedAt(raw: unknown): string {
+  const d = parseJobDate(raw);
+  if (!d) return 'Date unknown';
+  return d.toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });
+}
+
+/** Prefer real `created_at`; fall back to legacy `postedAt` string (e.g. mock data). */
+function postedLabelFromRow(row: any): string {
+  const fromDt = formatJobPostedAt(row?.posted_datetime ?? row?.created_at);
+  if (fromDt !== 'Date unknown') return fromDt;
+  const legacy = row?.postedAt ?? row?.posted_at;
+  if (legacy != null && String(legacy).trim()) return String(legacy).trim();
+  return 'Date unknown';
+}
+
 /** Normalize rows returned by POST /jobs/search to consistent Job shape. */
 export function normalizeJobListRows(rows: any[]): Job[] {
   return (Array.isArray(rows) ? rows : [])
@@ -23,7 +50,7 @@ export function normalizeJobListRows(rows: any[]): Job[] {
         location: String(row?.location ?? ''),
         salary: String(row?.salary ?? ''),
         type: String(row?.type ?? row?.employment_type ?? ''),
-        postedAt: String(row?.postedAt ?? row?.posted_at ?? 'Just now'),
+        postedAt: postedLabelFromRow(row),
         skills,
         description: String(row?.description ?? ''),
         applicants: row?.applicants ?? row?.applicants_count ?? 0,
@@ -50,13 +77,15 @@ export function mergeJobDetail(job: Job, detail: any): Job {
     (detail?.company_logo_url && String(detail.company_logo_url)) ||
     (detail?.logoUrl && String(detail.logoUrl)) ||
     job.logoUrl;
+  const detailPosted = formatJobPostedAt(detail?.posted_datetime ?? detail?.created_at);
   return {
     ...job,
     ...detail,
     id,
     skills,
     logoUrl: mergedLogo || undefined,
-    applicants: detail?.applicants_count ?? detail?.applicants ?? job.applicants
+    applicants: detail?.applicants_count ?? detail?.applicants ?? job.applicants,
+    postedAt: detailPosted !== 'Date unknown' ? detailPosted : job.postedAt
   };
 }
 
@@ -81,7 +110,7 @@ export function jobFromGetPayload(detail: any): Job | null {
     location: String(detail.location ?? ''),
     salary: String(detail.salary ?? ''),
     type: String(detail.type ?? detail.employment_type ?? ''),
-    postedAt: 'Just now',
+    postedAt: postedLabelFromRow(detail),
     skills,
     description: String(detail.description ?? ''),
     applicants: detail.applicants_count ?? detail.applicants ?? 0,
