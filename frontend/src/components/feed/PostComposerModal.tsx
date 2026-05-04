@@ -16,23 +16,22 @@ type Props = {
 export default function PostComposerModal({ open, onClose, memberId, authorName, onPosted }: Props) {
   const [draftPost, setDraftPost] = useState('');
   const [attachedImage, setAttachedImage] = useState<string | undefined>(undefined);
-  const [scheduledAt, setScheduledAt] = useState('');
   const [audience, setAudience] = useState<Audience>('Anyone');
+  const [audienceModalOpen, setAudienceModalOpen] = useState(false);
   const imageInputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
     if (open) {
       setDraftPost('');
       setAttachedImage(undefined);
-      setScheduledAt('');
       setAudience('Anyone');
+      setAudienceModalOpen(false);
     }
   }, [open]);
 
   const publishPost = async () => {
     const text = draftPost.trim();
     if (!text) return;
-    const bodyText = scheduledAt ? `[Scheduled: ${scheduledAt}] ${text}` : text;
     try {
       const res = await fetch('/api/posts/create', {
         method: 'POST',
@@ -40,15 +39,16 @@ export default function PostComposerModal({ open, onClose, memberId, authorName,
         body: JSON.stringify({
           member_id: memberId,
           author_name: authorName || memberId,
-          body: bodyText,
-          image_data: attachedImage || undefined
+          body: text,
+          image_data: attachedImage || undefined,
+          visibility: audience === 'Anyone' ? 'anyone' : 'connections'
         })
       });
       if (!res.ok) {
         showToast('Could not publish post.', 'error');
         return;
       }
-      showToast(scheduledAt ? `Post scheduled for ${scheduledAt}.` : 'Post published.', 'success');
+      showToast('Post published.', 'success');
       onClose();
       await onPosted?.();
     } catch {
@@ -68,7 +68,13 @@ export default function PostComposerModal({ open, onClose, memberId, authorName,
             </div>
             <div>
               <p className="text-base font-semibold text-[#191919]">{authorName || 'You'}</p>
-              <p className="text-xs text-slate-600">Post to {audience}</p>
+              <button
+                type="button"
+                onClick={() => setAudienceModalOpen(true)}
+                className="text-left text-xs text-[#0a66c2] hover:underline"
+              >
+                Post to {audience === 'Anyone' ? 'anyone' : 'connections only'} · Change
+              </button>
             </div>
           </div>
           <button
@@ -104,75 +110,18 @@ export default function PostComposerModal({ open, onClose, memberId, authorName,
               </button>
               <button
                 type="button"
-                title="Rewrite with AI"
-                className="rounded-full border border-[#d0d7de] px-3 py-1 font-semibold text-[#444] hover:bg-slate-100"
-                onClick={() => {
-                  if (!draftPost.trim()) {
-                    showToast('Write something first for AI rewrite.', 'info');
-                    return;
-                  }
-                  setDraftPost((prev) => `Polished update: ${prev.trim()}`);
-                  showToast('AI rewrite applied (demo).', 'success');
-                }}
-              >
-                ✨ Rewrite with AI
-              </button>
-              <button
-                type="button"
                 title="Add image"
                 className="rounded-full px-2 py-1 hover:bg-slate-100"
                 onClick={() => imageInputRef.current?.click()}
               >
                 🖼️
               </button>
-              <button
-                type="button"
-                title="Schedule post date/time"
-                className="rounded-full px-2 py-1 hover:bg-slate-100"
-                onClick={() => {
-                  const next = window.prompt('Schedule (example: 2026-04-20 09:30)', scheduledAt || '');
-                  if (next !== null) setScheduledAt(next.trim());
-                }}
-              >
-                📅
-              </button>
-              <button
-                type="button"
-                title="Post audience settings"
-                className="rounded-full px-2 py-1 hover:bg-slate-100"
-                onClick={() => {
-                  const next = window.prompt('Audience: Anyone or Connections', audience);
-                  if (!next) return;
-                  const normalized = next.toLowerCase().trim();
-                  if (normalized === 'anyone') setAudience('Anyone');
-                  else if (normalized === 'connections') setAudience('Connections');
-                  else showToast('Use "Anyone" or "Connections".', 'error');
-                }}
-              >
-                ⚙️
-              </button>
-              <button
-                type="button"
-                title="Insert hashtag"
-                className="rounded-full px-2 py-1 hover:bg-slate-100"
-                onClick={() => setDraftPost((prev) => `${prev}${prev ? ' ' : ''}#hiring`)}
-              >
-                ➕
-              </button>
             </div>
             <div className="flex shrink-0 items-center gap-2">
               <button
                 type="button"
-                title="Posting time"
-                className="rounded-full px-2 py-1 text-slate-500 hover:bg-slate-100"
-                onClick={() => showToast(scheduledAt ? `Scheduled: ${scheduledAt}` : 'Posting now', 'info')}
-              >
-                🕒
-              </button>
-              <button
-                type="button"
                 onClick={() => void publishPost()}
-                title={scheduledAt ? `Schedule post (${scheduledAt})` : 'Publish now'}
+                title="Publish now"
                 disabled={!draftPost.trim()}
                 className="rounded-full bg-[#0a66c2] px-5 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:bg-slate-300"
               >
@@ -200,6 +149,61 @@ export default function PostComposerModal({ open, onClose, memberId, authorName,
           />
         </div>
       </div>
+      {audienceModalOpen ? (
+        <div
+          className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40 p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="audience-dialog-title"
+          onMouseDown={(e) => {
+            if (e.target === e.currentTarget) setAudienceModalOpen(false);
+          }}
+        >
+          <div className="w-full max-w-md rounded-lg bg-white p-5 shadow-xl" onMouseDown={(e) => e.stopPropagation()}>
+            <h2 id="audience-dialog-title" className="text-lg font-semibold text-[#191919]">
+              Who can see your post?
+            </h2>
+            <p className="mt-1 text-sm text-slate-600">Choose where this post may appear in the feed.</p>
+            <div className="mt-4 space-y-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setAudience('Anyone');
+                  setAudienceModalOpen(false);
+                }}
+                className={`w-full rounded-lg border px-4 py-3 text-left transition ${
+                  audience === 'Anyone' ? 'border-[#0a66c2] bg-[#eef6fc]' : 'border-slate-200 hover:bg-slate-50'
+                }`}
+              >
+                <span className="font-semibold text-[#191919]">Anyone</span>
+                <span className="mt-0.5 block text-sm text-slate-600">Anyone on the platform can see this post after it is published.</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setAudience('Connections');
+                  setAudienceModalOpen(false);
+                }}
+                className={`w-full rounded-lg border px-4 py-3 text-left transition ${
+                  audience === 'Connections' ? 'border-[#0a66c2] bg-[#eef6fc]' : 'border-slate-200 hover:bg-slate-50'
+                }`}
+              >
+                <span className="font-semibold text-[#191919]">Connections only</span>
+                <span className="mt-0.5 block text-sm text-slate-600">
+                  Only people you are connected with can see this post after it is published.
+                </span>
+              </button>
+            </div>
+            <button
+              type="button"
+              onClick={() => setAudienceModalOpen(false)}
+              className="mt-4 w-full rounded-full border border-slate-300 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }
