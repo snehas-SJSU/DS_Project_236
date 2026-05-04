@@ -58,6 +58,37 @@ def map_req_row(r: dict) -> dict:
     return out
 
 
+async def _member_name(member_id: str) -> str:
+    row = await dbm.fetch_one("SELECT name FROM members WHERE member_id = %s LIMIT 1", (member_id,))
+    return str((row or {}).get("name") or member_id)
+
+
+async def _create_notification(
+    *,
+    member_id: str,
+    source_key: str,
+    title: str,
+    body: str,
+    route_path: str = "/network",
+    category: str = "mentions",
+    priority: int = 10,
+) -> None:
+    notification_id = "N-" + uuid.uuid4().hex[:8]
+    await dbm.execute(
+        """INSERT INTO notifications
+        (notification_id, member_id, source_key, category, title, body, route_path, is_read, priority)
+        VALUES (%s,%s,%s,%s,%s,%s,%s,0,%s)
+        ON DUPLICATE KEY UPDATE
+          title=VALUES(title),
+          body=VALUES(body),
+          route_path=VALUES(route_path),
+          category=VALUES(category),
+          priority=VALUES(priority),
+          is_read=0""",
+        (notification_id, member_id, source_key, category, title, body, route_path, priority),
+    )
+
+
 @router.post("/connections/request")
 async def connections_request(body: dict):
     await ensure_schema()
@@ -74,6 +105,16 @@ async def connections_request(body: dict):
     except pymysql.err.IntegrityError:
         return JSONResponse(status_code=409, content={"error": "DUPLICATE_REQUEST", "message": "Request already exists", "trace_id": _tid()})
     trace_id = _tid()
+    requester_name = await _member_name(requester_id)
+    await _create_notification(
+        member_id=receiver_id,
+        source_key=f"connection_request:{rid}",
+        title="New connection request",
+        body=f"{requester_name} sent you a connection request.",
+        route_path="/network",
+        category="mentions",
+        priority=15,
+    )
     try:
         await send_kafka(
             "connection.events",
@@ -101,6 +142,26 @@ async def connections_accept(body: dict):
     a, b = pair_key(requester_id, receiver_id)
     await dbm.execute("UPDATE connection_requests SET status = 'accepted' WHERE request_id = %s", (request_id,))
     await dbm.execute("INSERT IGNORE INTO connections (user_a, user_b) VALUES (%s,%s)", (a, b))
+    requester_name = await _member_name(requester_id)
+    receiver_name = await _member_name(receiver_id)
+    await _create_notification(
+        member_id=requester_id,
+        source_key=f"connection_accept:{request_id}:requester",
+        title="Connection request accepted",
+        body=f"{receiver_name} accepted your connection request.",
+        route_path="/network",
+        category="mentions",
+        priority=20,
+    )
+    await _create_notification(
+        member_id=receiver_id,
+        source_key=f"connection_accept:{request_id}:receiver",
+        title="You're now connected",
+        body=f"You are now connected with {requester_name}.",
+        route_path="/network",
+        category="mentions",
+        priority=12,
+    )
     trace_id = _tid()
     try:
         await send_kafka(

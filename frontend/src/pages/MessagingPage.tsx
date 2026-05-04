@@ -935,27 +935,30 @@ export default function MessagingPage() {
                       if (!draft.trim()) return;
                       let threadId = activeThreadId;
 
-                      if (!threadId && isComposeMode) {
+                      if (isComposeMode) {
                         const receiverId = composeToId.trim();
                         if (!receiverId) {
                           showToast('Select a recipient from the list.', 'error');
                           return;
                         }
-                        await startOrOpenConversation(receiverId, composeQuery);
-                        threadId = activeThreadId || threadId;
-                        if (!threadId) {
-                          const latest = await fetch('/api/threads/byUser', {
+                        const existing = threads.find((t) => t.participants.includes(receiverId));
+                        if (existing) {
+                          threadId = existing.id;
+                          if (activeThreadId !== existing.id) setActiveThreadId(existing.id);
+                        } else {
+                          const openRes = await fetch('/api/threads/open', {
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ user_id: memberId })
-                          }).then((res) => res.json()).catch(() => []);
-                          const found = (Array.isArray(latest) ? latest : []).find(
-                            (t: any) => t.participant_a === receiverId || t.participant_b === receiverId
-                          );
-                          if (found?.thread_id) {
-                            threadId = found.thread_id;
-                            setActiveThreadId(found.thread_id);
+                            body: JSON.stringify({ participant_a: memberId, participant_b: receiverId })
+                          });
+                          const openData = await openRes.json().catch(() => ({}));
+                          if (!openRes.ok || !openData.thread_id) {
+                            showToast('Unable to open conversation right now.', 'error');
+                            return;
                           }
+                          threadId = openData.thread_id;
+                          setActiveThreadId(openData.thread_id);
+                          await loadThreads().catch(() => undefined);
                         }
                       }
 

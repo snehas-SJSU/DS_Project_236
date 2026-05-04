@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { resolveAvatarUrl, resolveViewerAvatarUrl } from '../lib/memberProfile';
 import Navbar from '../components/layout/Navbar';
 import { CalendarDays, FileText, MessageCircle, MoreHorizontal, Rss, ThumbsUp, UserRoundPlus, Users, UsersRound } from 'lucide-react';
-import { Link } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 import { addActivity } from '../lib/localData';
 import { showToast } from '../lib/toast';
 
@@ -94,9 +94,11 @@ function buildCatchUpRowsFromSuggestions(rows: Suggestion[]): CatchUpRow[] {
 
 export default function NetworkPage() {
   const MEMBER_ID = sessionStorage.getItem('li_sim_member_id') || 'M-123';
+  const location = useLocation();
   const [incoming, setIncoming] = useState<any[]>([]);
   const [sent, setSent] = useState<any[]>([]);
   const [connections, setConnections] = useState<string[]>([]);
+  const [memberCardMap, setMemberCardMap] = useState<Record<string, { name: string; headline: string; photo: string }>>({});
   const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
   const [memberNameMap, setMemberNameMap] = useState<Record<string, string>>({});
   const [mutualCountMap, setMutualCountMap] = useState<Record<string, number>>({});
@@ -110,6 +112,7 @@ export default function NetworkPage() {
   const memberId = MEMBER_ID;
   const avatarFor = (seed: string) => `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(seed)}`;
   const displayNameFor = (id: string) => memberNameMap[id] || id;
+  const isConnectionsPage = location.pathname === '/network/connections';
   const catchUpPills = ['All', 'Job changes', 'Birthdays', 'Work anniversaries', 'Education'] as const;
   const filteredCatchUp = useMemo(() => {
     if (catchUpFilter === 'All') return catchUpRows;
@@ -150,6 +153,17 @@ export default function NetworkPage() {
       nextNameMap[m.member_id] = name;
     });
     setMemberNameMap(nextNameMap);
+    const nextCards: Record<string, { name: string; headline: string; photo: string }> = {};
+    (Array.isArray(members) ? members : []).forEach((m: any) => {
+      if (!m?.member_id) return;
+      const name = m.name || `${m.first_name || ''} ${m.last_name || ''}`.trim() || m.member_id;
+      nextCards[m.member_id] = {
+        name,
+        headline: m.headline || m.title || 'LinkedIn member',
+        photo: resolveAvatarUrl(m.profile_photo_url, name),
+      };
+    });
+    setMemberCardMap(nextCards);
     const connected = new Set(Array.isArray(listData) ? listData : []);
     const sentPending = new Set(
       (reqData.sent || [])
@@ -320,6 +334,50 @@ export default function NetworkPage() {
             </section>
           </aside>
           <main className="space-y-3 lg:col-span-9">
+            {isConnectionsPage ? (
+              <section className="li-card overflow-hidden p-0">
+                <div className="flex items-center justify-between border-b border-[#e0dfdc] px-5 py-3">
+                  <h3 className="font-semibold text-[#191919]">Connections ({connections.length})</h3>
+                  <Link to="/network/search" className="text-sm font-semibold text-[#0a66c2] hover:underline">
+                    Find more people
+                  </Link>
+                </div>
+                {connections.length === 0 ? (
+                  <p className="px-5 py-4 text-sm text-slate-500">No connections yet.</p>
+                ) : (
+                  <div className="divide-y divide-[#f0efec]">
+                    {connections.map((cid) => {
+                      const card = memberCardMap[cid];
+                      return (
+                        <div key={cid} className="flex items-center justify-between gap-3 px-5 py-3">
+                          <Link
+                            to={`/profile/${encodeURIComponent(cid)}`}
+                            className="flex min-w-0 items-center gap-3"
+                          >
+                            <div className="h-12 w-12 shrink-0 overflow-hidden rounded-full border border-slate-200 bg-slate-100">
+                              <img src={card?.photo || avatarFor(cid)} alt="" className="h-full w-full object-cover" />
+                            </div>
+                            <div className="min-w-0">
+                              <p className="truncate text-[15px] font-semibold text-[#191919] hover:text-[#0a66c2] hover:underline">
+                                {card?.name || displayNameFor(cid)}
+                              </p>
+                              <p className="truncate text-xs text-[#666]">{card?.headline || 'LinkedIn member'}</p>
+                            </div>
+                          </Link>
+                          <Link
+                            to="/messaging"
+                            className="rounded-full border border-[#0a66c2] px-4 py-1.5 text-sm font-semibold text-[#0a66c2] hover:bg-[#edf3f8]"
+                          >
+                            Message
+                          </Link>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </section>
+            ) : null}
+            {!isConnectionsPage ? (
             <section className="li-card overflow-hidden p-0">
               <div className="flex border-b border-[#e0dfdc] bg-white px-0">
                 <button
@@ -423,7 +481,9 @@ export default function NetworkPage() {
                 </>
               )}
             </section>
+            ) : null}
             {activeTab === 'grow' ? (
+              !isConnectionsPage ? (
               <>
             <section className="li-card overflow-hidden p-0">
               <div className="flex items-center justify-between border-b border-[#e0dfdc] px-5 py-3">
@@ -590,7 +650,9 @@ export default function NetworkPage() {
               </div>
             </section>
               </>
+              ) : null
             ) : (
+              !isConnectionsPage ? (
               <>
                 <section className="li-card overflow-hidden p-0">
                   <div className="flex items-center justify-between border-b border-[#e0dfdc] px-5 py-3">
@@ -646,6 +708,7 @@ export default function NetworkPage() {
                   )}
                 </section>
               </>
+              ) : null
             )}
           </main>
         </div>

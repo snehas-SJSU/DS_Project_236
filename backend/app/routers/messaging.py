@@ -157,4 +157,11 @@ async def messages_list(body: dict):
     limit = int(body.get("limit") or 50)
     mongo = get_mongo_db()
     cur = mongo["messages"].find({"thread_id": tid}).sort("timestamp", 1).limit(limit)
-    return await cur.to_list(length=limit)
+    rows = await cur.to_list(length=limit)
+    out: list[dict[str, Any]] = []
+    for row in rows:
+        doc = dict(row)
+        # Mongo ObjectId is not JSON-serializable for FastAPI responses.
+        doc.pop("_id", None)
+        out.append(doc)
+    return out
