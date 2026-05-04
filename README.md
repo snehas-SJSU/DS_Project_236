@@ -187,6 +187,8 @@ npm run seed:demo-jobs
 
 That runs **`scripts/seed-demo-jobs.sql`** (15 Bay Area–style open roles, `R-123`). Safe to re-run (`ON DUPLICATE KEY UPDATE`).
 
+**Teammate stuck on “Smoke Duplicate Apply Job” or missing job logos?** With Docker MySQL up (`linkedin-mysql` container name unchanged), from repo root run **`npm run jobs:fix-teammate`** — it runs **`cleanup:smoke`** then **`seed:demo-jobs`**. Each laptop uses its own database; this must be run on **her** machine, not yours.
+
 ### 2.2 Start infrastructure (DB + broker)
 
 ```bash
@@ -520,6 +522,8 @@ Mapping to the class rubric: `docs/RUBRIC_ALIGNMENT.md`.
 7. Premium page aliases supported: `/premium`, `/try-premium`, `/premium/free-trial`, `/premium/trial`.
 8. If Kafka worker logs show `ECONNREFUSED 127.0.0.1:9092`, Docker/Kafka is not up yet. Start Docker, run `docker compose up -d`, then restart `npm run start:all`.
 9. If frontend starts on `3001` (or another port), use that printed URL or free `3000` first.
+10. If **`RuntimeError: 'cryptography' package is required for sha256_password or caching_sha2_password`**: MySQL 8 uses that auth plugin by default. Reinstall backend deps so **`cryptography`** is present: **`npm run bootstrap:python`** (or `cd backend && .venv/bin/pip install -r requirements.txt`).
+11. If **`start:all`** prints **`.venv/bin/python: No such file or directory`** for the AI service: create that venv once with **`npm run bootstrap:ai-service`**.
 
 ### 9.1 Additional port/startup diagnostics
 

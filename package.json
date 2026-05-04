@@ -15,6 +15,7 @@
     "seed:demo-jobs": "docker exec -i linkedin-mysql mysql -ulinkedin_user -plinkedin_pass linkedin_db < scripts/seed-demo-jobs.sql",
 
     "cleanup:smoke": "node scripts/cleanup-smoke-artifacts.js",
+    "jobs:fix-teammate": "npm run cleanup:smoke && npm run seed:demo-jobs",
 
     "dev:ai-service": "cd services/ai-service && .venv/bin/python -m uvicorn main:app --reload --host 127.0.0.1 --port 8001",
 

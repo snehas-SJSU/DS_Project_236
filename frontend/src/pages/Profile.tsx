@@ -444,10 +444,6 @@ export default function Profile() {
                 Add section
               </button>
             </div>
-            <div className="mt-3 flex items-center gap-3 text-xs text-slate-600">
-              <span className="rounded bg-slate-100 px-2 py-0.5">Mercedes-Benz Research and Development India</span>
-              <span className="rounded bg-slate-100 px-2 py-0.5">San Jose State University</span>
-            </div>
           </div>
         </div>
       </section>
