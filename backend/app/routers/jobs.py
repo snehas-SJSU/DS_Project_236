@@ -251,6 +251,7 @@ async def jobs_search(body: dict):
                 "seniority_level": r.get("seniority_level"),
                 "employment_type": r.get("employment_type"),
                 "applicants": r.get("applicants_count") or 0,
+                "views_count": int(r.get("views_count") or 0),
             })
         try:
             r = get_redis()

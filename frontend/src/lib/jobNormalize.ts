@@ -59,7 +59,8 @@ export function normalizeJobListRows(rows: any[]): Job[] {
         seniority_level: row?.seniority_level,
         employment_type: row?.employment_type,
         recruiter_id: row?.recruiter_id,
-        status: row?.status
+        status: row?.status,
+        views_count: Number(row?.views_count ?? 0) || 0
       } as Job;
     })
     .filter((j): j is Job => Boolean(j));
@@ -85,7 +86,8 @@ export function mergeJobDetail(job: Job, detail: any): Job {
     skills,
     logoUrl: mergedLogo || undefined,
     applicants: detail?.applicants_count ?? detail?.applicants ?? job.applicants,
-    postedAt: detailPosted !== 'Date unknown' ? detailPosted : job.postedAt
+    postedAt: detailPosted !== 'Date unknown' ? detailPosted : job.postedAt,
+    views_count: Number(detail?.views_count ?? job.views_count ?? 0) || 0
   };
 }
 
@@ -119,6 +121,7 @@ export function jobFromGetPayload(detail: any): Job | null {
     seniority_level: detail.seniority_level,
     employment_type: detail.employment_type,
     recruiter_id: detail.recruiter_id,
-    status: detail.status
+    status: detail.status,
+    views_count: Number(detail?.views_count ?? 0) || 0
   };
 }
