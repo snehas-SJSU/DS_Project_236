@@ -11,6 +11,7 @@ from aiokafka import AIOKafkaConsumer
 from app import db as dbm
 from app.config import settings
 from app.idempotency import already_processed, mark_processed
+from app.redis_client import get_redis
 
 log = logging.getLogger(__name__)
 
@@ -91,7 +92,20 @@ async def run() -> None:
                 elif et == "job.updated" and jid:
                     sets = []
                     vals = []
-                    for k in ("title", "company_id", "company", "location", "salary", "type", "description"):
+                    for k in (
+                        "title",
+                        "company_id",
+                        "company",
+                        "location",
+                        "salary",
+                        "type",
+                        "description",
+                        "industry",
+                        "remote_mode",
+                        "seniority_level",
+                        "employment_type",
+                        "recruiter_id",
+                    ):
                         if k in p:
                             sets.append(f"`{k}` = %s")
                             vals.append(p[k])
@@ -101,6 +115,12 @@ async def run() -> None:
                     if sets:
                         vals.append(jid)
                         await dbm.execute(f"UPDATE jobs SET {', '.join(sets)} WHERE job_id = %s", tuple(vals))
+                        # /jobs/get is cached in Redis; clear the key after projection update.
+                        try:
+                            r = get_redis()
+                            await r.delete(f"job:{jid}")
+                        except Exception:
+                            pass
                     if idem:
                         await mark_processed(f"job-worker:{idem}")
 
