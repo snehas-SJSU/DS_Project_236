@@ -1,11 +1,15 @@
 from __future__ import annotations
 
 import json
+import logging
 from typing import Any, Optional
 
 from aiokafka import AIOKafkaProducer
 
 from app.config import settings
+from app.kafka_envelope import validate_kafka_envelope
+
+log = logging.getLogger(__name__)
 
 _producer: Optional[AIOKafkaProducer] = None
 
@@ -23,6 +27,9 @@ async def get_producer() -> AIOKafkaProducer:
 
 
 async def send_kafka(topic: str, key: str | None, value_obj: dict[str, Any]) -> None:
+    ok, errs = validate_kafka_envelope(value_obj)
+    if not ok:
+        log.warning("kafka envelope validation failed for topic=%s errors=%s", topic, errs)
     prod = await get_producer()
     payload = json.dumps(value_obj).encode("utf-8")
     key_b = key.encode("utf-8") if key else None

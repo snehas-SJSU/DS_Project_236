@@ -150,9 +150,18 @@ async def analytics_geo(body: dict):
             WHERE a.job_id = %s AND a.applied_at >= DATE_SUB(NOW(), INTERVAL %s DAY) GROUP BY m.location""",
             (job_id, window_days),
         )
-        return {"job_id": job_id, "window_days": window_days, "distribution": rows}
+        by_month = await dbm.fetch_all(
+            """SELECT COALESCE(m.location, 'unknown') AS location,
+               DATE_FORMAT(a.applied_at, '%%Y-%%m') AS month, COUNT(*) AS applicants
+            FROM applications a LEFT JOIN members m ON a.member_id = m.member_id
+            WHERE a.job_id = %s AND a.applied_at >= DATE_SUB(NOW(), INTERVAL %s DAY)
+            GROUP BY m.location, DATE_FORMAT(a.applied_at, '%%Y-%%m')
+            ORDER BY month ASC""",
+            (job_id, window_days),
+        )
+        return {"job_id": job_id, "window_days": window_days, "distribution": rows, "by_month": by_month}
     except Exception:
-        return {"job_id": (body or {}).get("job_id"), "distribution": []}
+        return {"job_id": (body or {}).get("job_id"), "distribution": [], "by_month": []}
 
 
 @router.post("/analytics/member/dashboard")
@@ -164,6 +173,7 @@ async def analytics_member_dashboard(body: dict):
             return JSONResponse(status_code=400, content={"error": "BAD_REQUEST", "message": "member_id required", "trace_id": _tid()})
 
         views_mongo = 0
+        profile_views_daily: list[dict] = []
         try:
             mongo = get_mongo_db()
             since = datetime.now(timezone.utc) - timedelta(days=30)
@@ -177,8 +187,20 @@ async def analytics_member_dashboard(body: dict):
                     }
                 )
             )
+            daily_agg = await mongo["events"].aggregate([
+                {"$match": {
+                    "event_type": "profile.viewed",
+                    "payload.member_id": member_id,
+                    "timestamp": {"$gte": since_z},
+                }},
+                {"$addFields": {"date_str": {"$substr": ["$timestamp", 0, 10]}}},
+                {"$group": {"_id": "$date_str", "count": {"$sum": 1}}},
+                {"$sort": {"_id": 1}},
+            ]).to_list(31)
+            profile_views_daily = [{"date": d["_id"], "count": int(d["count"])} for d in daily_agg]
         except Exception:
             views_mongo = 0
+            profile_views_daily = []
 
         status_rows = await dbm.fetch_all(
             "SELECT status, COUNT(*) AS c FROM applications WHERE member_id = %s GROUP BY status",
@@ -248,6 +270,7 @@ async def analytics_member_dashboard(body: dict):
         return {
             "member_id": member_id,
             "profile_views_30d": profile_views_30d,
+            "profile_views_daily": profile_views_daily,
             "post_impressions_7d": post_impressions_7d,
             "search_appearances_30d": search_appearances_30d,
             "applications_by_status": rows_out,

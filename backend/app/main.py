@@ -13,7 +13,7 @@ from fastapi.responses import Response
 from app import db as dbm
 from app.config import settings
 from app.kafka_bus import stop_producer
-from app.mongo_db import close_mongo
+from app.mongo_db import close_mongo, ensure_mongo_indexes
 from app.redis_client import close_redis
 from app.schema_init import init_all_schemas
 from app.routers import analytics, applications, connections, jobs, members, messaging, posts
@@ -28,6 +28,10 @@ async def lifespan(app: FastAPI):
         await init_all_schemas()
     except Exception as e:
         log.warning("schema init (will retry on demand): %s", e)
+    try:
+        await ensure_mongo_indexes()
+    except Exception as e:
+        log.warning("mongo index init: %s", e)
     yield
     await stop_producer()
     await close_redis()

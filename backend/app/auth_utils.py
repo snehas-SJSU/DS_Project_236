@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+import json
 import uuid
 from datetime import datetime, timedelta, timezone
 from typing import Annotated, Any, Optional
@@ -35,7 +36,48 @@ def verify_jwt(token: str) -> Optional[dict[str, Any]]:
         return None
 
 
+_SESSION_CACHE_PREFIX = "session:"
+_SESSION_CACHE_TTL = 3600  # 1 hour; refresh on access
+
+
+async def _session_cache_key(token: str) -> str:
+    return _SESSION_CACHE_PREFIX + hashlib.sha256(token.encode()).hexdigest()[:32]
+
+
+async def cache_session(token: str, user_id: str, email: str) -> None:
+    """Write session to Redis so subsequent auth checks skip MySQL."""
+    try:
+        from app.redis_client import get_redis
+        r = get_redis()
+        k = await _session_cache_key(token)
+        await r.setex(k, _SESSION_CACHE_TTL, json.dumps({"user_id": user_id, "email": email}))
+    except Exception:
+        pass
+
+
+async def invalidate_session_cache(token: str) -> None:
+    """Remove session from Redis on logout."""
+    try:
+        from app.redis_client import get_redis
+        r = get_redis()
+        await r.delete(await _session_cache_key(token))
+    except Exception:
+        pass
+
+
 async def get_session(token: str) -> Optional[dict[str, Any]]:
+    # Check Redis first — avoids MySQL round-trip on every auth check
+    try:
+        from app.redis_client import get_redis
+        r = get_redis()
+        k = await _session_cache_key(token)
+        cached = await r.get(k)
+        if cached:
+            return json.loads(cached)
+    except Exception:
+        pass
+
+    # Fall back to MySQL
     row = await dbm.fetch_one(
         "SELECT user_id, email, expires_at FROM auth_sessions WHERE token = %s LIMIT 1",
         (token,),
@@ -46,6 +88,8 @@ async def get_session(token: str) -> Optional[dict[str, Any]]:
     if isinstance(exp, datetime) and exp.timestamp() < datetime.now(timezone.utc).timestamp():
         await dbm.execute("DELETE FROM auth_sessions WHERE token = %s", (token,))
         return None
+    # Warm the cache for next time
+    await cache_session(token, row["user_id"], row["email"])
     return row
 
 

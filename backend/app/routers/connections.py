@@ -3,7 +3,7 @@ from __future__ import annotations
 import uuid
 
 import pymysql.err
-from fastapi import APIRouter
+from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse
 
 from app import db as dbm
@@ -90,7 +90,7 @@ async def _create_notification(
 
 
 @router.post("/connections/request")
-async def connections_request(body: dict):
+async def connections_request(request: Request, body: dict):
     await ensure_schema()
     requester_id = body.get("requester_id")
     receiver_id = body.get("receiver_id")
@@ -104,7 +104,7 @@ async def connections_request(body: dict):
         )
     except pymysql.err.IntegrityError:
         return JSONResponse(status_code=409, content={"error": "DUPLICATE_REQUEST", "message": "Request already exists", "trace_id": _tid()})
-    trace_id = _tid()
+    trace_id = request.headers.get("x-trace-id") or _tid()
     requester_name = await _member_name(requester_id)
     await _create_notification(
         member_id=receiver_id,
@@ -127,7 +127,7 @@ async def connections_request(body: dict):
 
 
 @router.post("/connections/accept")
-async def connections_accept(body: dict):
+async def connections_accept(request: Request, body: dict):
     await ensure_schema()
     request_id = body.get("request_id")
     if not request_id:
@@ -162,7 +162,7 @@ async def connections_accept(body: dict):
         category="mentions",
         priority=12,
     )
-    trace_id = _tid()
+    trace_id = request.headers.get("x-trace-id") or _tid()
     try:
         await send_kafka(
             "connection.events",
@@ -175,7 +175,7 @@ async def connections_accept(body: dict):
 
 
 @router.post("/connections/reject")
-async def connections_reject(body: dict):
+async def connections_reject(request: Request, body: dict):
     await ensure_schema()
     request_id = body.get("request_id")
     if not request_id:
@@ -186,7 +186,7 @@ async def connections_reject(body: dict):
     row = rows[0]
     requester_id, receiver_id = row["requester_id"], row["receiver_id"]
     await dbm.execute("UPDATE connection_requests SET status = 'rejected' WHERE request_id = %s", (request_id,))
-    trace_id = _tid()
+    trace_id = request.headers.get("x-trace-id") or _tid()
     try:
         await send_kafka(
             "connection.events",

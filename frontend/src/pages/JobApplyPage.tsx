@@ -60,7 +60,27 @@ export default function JobApplyPage() {
         }
         const merged = mergeJobDetail(base, data);
         setJob(merged);
-        if ((merged as any).applied) setSubmitted(true);
+        if ((merged as any).applied) {
+          setSubmitted(true);
+        } else {
+          // Emit apply.start for funnel analytics (fire-and-forget, once per job/member/day)
+          const ts = new Date().toISOString().replace(/\.\d+Z$/, '.000Z');
+          const today = ts.slice(0, 10);
+          const traceId = crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}`;
+          fetch('/api/events/ingest', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              event_type: 'apply.start',
+              trace_id: traceId,
+              timestamp: ts,
+              actor_id: MEMBER_ID,
+              entity: { entity_type: 'job', entity_id: jobId },
+              payload: { job_id: jobId, member_id: MEMBER_ID },
+              idempotency_key: `apply-start:${jobId}:${MEMBER_ID}:${today}`
+            })
+          }).catch(() => undefined);
+        }
       })
       .catch(() => {
         if (cancelled) return;
@@ -108,9 +128,10 @@ export default function JobApplyPage() {
 
     setIsSubmitting(true);
     try {
+      const traceId = crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
       const res = await fetch('/api/applications/submit', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', 'x-trace-id': traceId },
         body: JSON.stringify({
           job_id: job.id,
           member_id: MEMBER_ID,

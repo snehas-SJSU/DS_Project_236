@@ -14,7 +14,7 @@ from fastapi import APIRouter, Header, Request
 from fastapi.responses import JSONResponse
 
 from app import db as dbm
-from app.auth_utils import create_jwt, get_session, hash_password, verify_jwt
+from app.auth_utils import cache_session, create_jwt, get_session, hash_password, invalidate_session_cache, verify_jwt
 from app.config import settings
 from app.kafka_bus import send_kafka
 from app.redis_client import get_redis
@@ -182,6 +182,7 @@ async def auth_signup(request: Request, body: dict):
         "INSERT INTO auth_sessions (token, user_id, email, expires_at) VALUES (%s,%s,%s,%s)",
         (token, user_id, email, exp),
     )
+    await cache_session(token, user_id, email)
     return JSONResponse(status_code=201, content={"token": token, "user": {"user_id": user_id, "email": email, "name": name}, "message": "Signup successful"})
 
 
@@ -205,6 +206,7 @@ async def auth_login(body: dict):
         "INSERT INTO auth_sessions (token, user_id, email, expires_at) VALUES (%s,%s,%s,%s)",
         (token, row["user_id"], row["email"], exp),
     )
+    await cache_session(token, row["user_id"], row["email"])
     return JSONResponse(status_code=200, content={
             "token": token,
             "user": {"user_id": row["user_id"], "email": row["email"], "name": row.get("name")},
@@ -235,6 +237,7 @@ async def auth_logout(authorization: Optional[str] = Header(None)):
     token = (authorization or "").replace("Bearer ", "", 1) if (authorization or "").startswith("Bearer ") else ""
     if token:
         await dbm.execute("DELETE FROM auth_sessions WHERE token = %s", (token,))
+        await invalidate_session_cache(token)
     return {"message": "Logged out"}
 
 

@@ -24,6 +24,18 @@ async def _ensure_col(table: str, col: str, ddl: str) -> None:
                 log.warning("ensure_col %s.%s: %s", table, col, e)
 
 
+async def _ensure_index(table: str, index_name: str, cols: str, unique: bool = False) -> None:
+    """Add index if it doesn't already exist — safe to call on every startup."""
+    try:
+        uq = "UNIQUE " if unique else ""
+        await _exec(f"CREATE {uq}INDEX `{index_name}` ON `{table}` ({cols})")
+    except Exception as e:
+        if "1061" in str(e) or "Duplicate key name" in str(e):
+            pass  # already exists
+        else:
+            log.warning("ensure_index %s.%s: %s", table, index_name, e)
+
+
 async def init_all_schemas() -> None:
     await _members_tables()
     await _jobs_tables()
@@ -32,10 +44,37 @@ async def init_all_schemas() -> None:
     await _connections_tables()
     await _posts_tables()
     await _recruiters_table()
+    await _add_indexes()
     await _seed_auth_defaults()
     await _seed_baseline_member()
     await _seed_network_entities()
     await _seed_demo_posts()
+
+
+async def _add_indexes() -> None:
+    # jobs — used by search (status, location, industry, type) and recruiter dashboard
+    await _ensure_index("jobs", "idx_jobs_status", "status")
+    await _ensure_index("jobs", "idx_jobs_location", "location")
+    await _ensure_index("jobs", "idx_jobs_industry", "industry")
+    await _ensure_index("jobs", "idx_jobs_employment_type", "employment_type")
+    await _ensure_index("jobs", "idx_jobs_remote_mode", "remote_mode")
+    await _ensure_index("jobs", "idx_jobs_recruiter_id", "recruiter_id")
+    await _ensure_index("jobs", "idx_jobs_created_at", "created_at")
+    await _ensure_index("jobs", "idx_jobs_company", "company")
+
+    # members — used by member search (name, location, skills, status)
+    await _ensure_index("members", "idx_members_status", "status")
+    await _ensure_index("members", "idx_members_location", "location")
+    await _ensure_index("members", "idx_members_name", "name")
+
+    # connections — OR queries hit user_b without a dedicated index
+    await _ensure_index("connections", "idx_connections_user_b", "user_b")
+
+    # applications — recruiter dashboard and member view
+    await _ensure_index("applications", "idx_applications_status", "status")
+
+    # recruiters — lookup by company
+    await _ensure_index("recruiters", "idx_recruiters_company_id", "company_id")
 
 
 async def _members_tables() -> None:

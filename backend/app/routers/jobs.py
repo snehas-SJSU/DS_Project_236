@@ -171,6 +171,9 @@ async def jobs_create(request: Request, body: dict):
     return JSONResponse(status_code=201, content={"message": "Job creation requested", "job_id": job_id, "trace_id": trace_id})
 
 
+_SEARCH_CACHE_TTL = 60  # seconds — short TTL keeps results fresh while absorbing burst traffic
+
+
 @router.post("/jobs/search")
 async def jobs_search(body: dict):
     try:
@@ -180,6 +183,22 @@ async def jobs_search(body: dict):
         industry = str(body.get("industry") or "").strip()
         remote = str(body.get("remote") or "").strip()
         company = str(body.get("company") or "").strip()
+
+        # Build a deterministic cache key from the filter params
+        cache_fingerprint = json.dumps(
+            {"keyword": keyword, "type": typ, "location": location,
+             "industry": industry, "remote": remote, "company": company},
+            sort_keys=True,
+        )
+        cache_key = "search:jobs:" + hashlib.sha256(cache_fingerprint.encode()).hexdigest()[:24]
+        try:
+            r = get_redis()
+            cached = await r.get(cache_key)
+            if cached:
+                return json.loads(cached)
+        except Exception:
+            pass
+
         sql = "SELECT * FROM jobs WHERE status = 'open'"
         params: list[Any] = []
         if company:
@@ -233,6 +252,11 @@ async def jobs_search(body: dict):
                 "employment_type": r.get("employment_type"),
                 "applicants": r.get("applicants_count") or 0,
             })
+        try:
+            r = get_redis()
+            await r.setex(cache_key, _SEARCH_CACHE_TTL, json.dumps(out, default=str))
+        except Exception:
+            pass
         return out
     except Exception:
         return []
@@ -270,7 +294,7 @@ async def jobs_suggest(body: dict):
 
 
 @router.post("/jobs/get")
-async def jobs_get(body: dict):
+async def jobs_get(request: Request, body: dict):
     job_id = body.get("job_id")
     member_id = body.get("member_id")
     if not job_id:
@@ -303,7 +327,7 @@ async def jobs_get(body: dict):
     else:
         job = dict(job)
         job["company_logo_url"] = _resolved_company_logo_url(job)
-    trace_id = _tid()
+    trace_id = request.headers.get("x-trace-id") or _tid()
     idem = hashlib.sha256(f"view-{job_id}-{trace_id}".encode()).hexdigest()
     ev = job_env("job.viewed", trace_id, member_id or "anonymous", job_id, {"job_id": job_id, "viewer": member_id}, idem)
     try:

@@ -4,7 +4,7 @@ import asyncio
 import uuid
 from typing import Any
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse
 
 from app import db as dbm
@@ -112,7 +112,7 @@ async def threads_by_user(body: dict):
 
 
 @router.post("/messages/send")
-async def messages_send(body: dict):
+async def messages_send(request: Request, body: dict):
     tid = body.get("thread_id")
     sender_id = body.get("sender_id")
     text = body.get("text")
@@ -137,7 +137,7 @@ async def messages_send(body: dict):
         await dbm.execute(
             "UPDATE message_threads SET last_activity = CURRENT_TIMESTAMP WHERE thread_id = %s", (tid,)
         )
-        trace_id = _tid()
+        trace_id = request.headers.get("x-trace-id") or _tid()
         idem = str(uuid.uuid4())
         await send_kafka_retry(
             "message.events",

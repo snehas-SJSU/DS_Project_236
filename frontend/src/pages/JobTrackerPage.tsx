@@ -247,9 +247,10 @@ export default function JobTrackerPage() {
     }
     setApplyBusyJobId(job.id);
     try {
+      const traceId = crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
       const res = await fetch('/api/applications/submit', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', 'x-trace-id': traceId },
         body: JSON.stringify({ job_id: job.id, member_id: MEMBER_ID })
       });
       const data = await res.json().catch(() => ({}));

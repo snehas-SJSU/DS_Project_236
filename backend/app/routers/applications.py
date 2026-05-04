@@ -96,7 +96,7 @@ async def applications_submit(request: Request, body: dict):
     if ex:
         return JSONResponse(status_code=409, content={"error": "DUPLICATE_APPLICATION", "message": "Already applied to this job", "trace_id": _tid()})
     app_id = "APP-" + uuid.uuid4().hex[:8]
-    trace_id = _tid()
+    trace_id = request.headers.get("x-trace-id") or _tid()
     idem = request.headers.get("idempotency-key") or hashlib.sha256(f"{job_id}-{member_id}-{trace_id}".encode()).hexdigest()
     resume_url = body.get("resume_url")
     resume_text = body.get("resume_text")

@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import uuid
 
 import pymysql.err
 from aiokafka import AIOKafkaConsumer
@@ -66,9 +67,41 @@ async def run() -> None:
                         )
                     except pymysql.err.IntegrityError:
                         log.info("duplicate application skipped")
+                    # Always write notification — router already wrote the app to DB before
+                    # firing Kafka, so IntegrityError above is expected; the notification
+                    # must be idempotent (ON DUPLICATE KEY UPDATE) and always attempted.
+                    try:
+                        job_row = await dbm.fetch_one(
+                            "SELECT title, company FROM jobs WHERE job_id = %s LIMIT 1", (job_id,)
+                        )
+                        job_title = (job_row or {}).get("title") or job_id
+                        company = (job_row or {}).get("company") or ""
+                        notif_body = f"Your application for {job_title}"
+                        if company:
+                            notif_body += f" at {company}"
+                        notif_body += " has been received."
+                        notification_id = "N-" + uuid.uuid4().hex[:8]
+                        await dbm.execute(
+                            """INSERT INTO notifications
+                            (notification_id, member_id, source_key, category, title, body, route_path, is_read, priority)
+                            VALUES (%s,%s,%s,%s,%s,%s,%s,0,%s)
+                            ON DUPLICATE KEY UPDATE title=VALUES(title), body=VALUES(body), is_read=0""",
+                            (
+                                notification_id,
+                                member_id,
+                                f"application:{app_id}",
+                                "mentions",
+                                "Application received",
+                                notif_body,
+                                "/jobs/tracker",
+                                5,
+                            ),
+                        )
+                    except Exception as notif_err:
+                        log.warning("failed to write application notification: %s", notif_err)
                     if idem:
                         await mark_processed(f"app-worker:{idem}")
-                    log.info("saved application %s", app_id)
+                    log.info("processed application event %s", app_id)
 
                 elif et == "application.status_updated":
                     aid = p.get("application_id")

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { BarChart3, Eye, Search, Users } from 'lucide-react';
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer } from 'recharts';
 
 export default function MemberAnalyticsPage() {
   const MEMBER_ID = sessionStorage.getItem('li_sim_member_id') || 'M-123';
@@ -8,6 +9,7 @@ export default function MemberAnalyticsPage() {
 
   const emptyDash = {
     profile_views_30d: 0,
+    profile_views_daily: [] as Array<{ date: string; count: number }>,
     post_impressions_7d: 0,
     search_appearances_30d: 0,
     applications_by_status: [] as Array<{ status: string; c: number }>
@@ -38,6 +40,7 @@ export default function MemberAnalyticsPage() {
   }, []);
 
   const statuses = (dashboard?.applications_by_status || []) as Array<{ status: string; c: number }>;
+  const viewsDaily = (dashboard?.profile_views_daily || []) as Array<{ date: string; count: number }>;
 
   return (
     <div className="space-y-3">
@@ -81,6 +84,26 @@ export default function MemberAnalyticsPage() {
             Back to profile<span aria-hidden> →</span>
           </Link>
         </div>
+      </section>
+
+      <section className="li-card p-5">
+        <h2 className="text-base font-semibold text-[#191919]">Profile views — last 30 days</h2>
+        <p className="mt-1 text-sm text-[#666]">Daily profile view counts from your visitors.</p>
+        {viewsDaily.length === 0 ? (
+          <p className="mt-3 text-sm text-slate-500">No profile view events recorded yet.</p>
+        ) : (
+          <div className="mt-4 h-48">
+            <ResponsiveContainer width="100%" height="100%">
+              <LineChart data={viewsDaily}>
+                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E2E8F0" />
+                <XAxis dataKey="date" tick={{ fontSize: 10 }} tickFormatter={(v: string) => v.slice(5)} />
+                <YAxis allowDecimals={false} tick={{ fontSize: 10 }} />
+                <RechartsTooltip />
+                <Line type="monotone" dataKey="count" stroke="#0a66c2" strokeWidth={2} dot={false} />
+              </LineChart>
+            </ResponsiveContainer>
+          </div>
+        )}
       </section>
 
       <section className="li-card p-5">

@@ -230,7 +230,7 @@ TASKS_MAX_SIZE = 2000  # evict oldest terminal tasks beyond this
 # ===========================================================================
 
 def _now_iso() -> str:
-    return datetime.now(timezone.utc).isoformat()
+    return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
 def _parse_dt(value: Any) -> Optional[datetime]:
