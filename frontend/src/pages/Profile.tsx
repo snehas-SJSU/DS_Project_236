@@ -469,12 +469,23 @@ export default function Profile() {
           <div className="rounded-lg border border-slate-200 p-3">
             <p className="text-sm font-semibold text-slate-900">Stand out to employers</p>
             <p className="mt-1 text-xs text-slate-600">Get more profile views by adding key achievements.</p>
-            <button className="mt-2 rounded-full border border-slate-300 px-3 py-1 text-xs font-semibold text-slate-700">Try Premium</button>
+            <Link
+              to="/premium"
+              className="mt-2 inline-block rounded-full border border-[#0a66c2] px-3 py-1 text-xs font-semibold text-[#0a66c2] hover:bg-[#edf3f8]"
+            >
+              Try Premium
+            </Link>
           </div>
           <div className="rounded-lg border border-slate-200 p-3">
             <p className="text-sm font-semibold text-slate-900">Tell your network you are open to work</p>
             <p className="mt-1 text-xs text-slate-600">Posting can help you get more profile views.</p>
-            <button className="mt-2 rounded-full border border-slate-300 px-3 py-1 text-xs font-semibold text-slate-700">Start a post</button>
+            <button
+              type="button"
+              className="mt-2 rounded-full border border-slate-300 px-3 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+              onClick={() => setComposerOpen(true)}
+            >
+              Start a post
+            </button>
           </div>
         </div>
       </section>
