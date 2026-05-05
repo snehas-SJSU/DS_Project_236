@@ -78,6 +78,7 @@ export default function JobsSearchPage() {
   const [searchLocationInput, setSearchLocationInput] = useState('');
   const [keywordSuggestions, setKeywordSuggestions] = useState<Array<{ value: string; label: string }>>([]);
   const [showKeywordSuggestions, setShowKeywordSuggestions] = useState(false);
+  const [savedJobIds, setSavedJobIds] = useState<Set<string>>(new Set());
 
   const keyword = useMemo(() => {
     const q = new URLSearchParams(location.search);
@@ -156,6 +157,25 @@ export default function JobsSearchPage() {
   }, [searchKeywordInput]);
 
   useEffect(() => {
+    fetch('/api/jobs/saved', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ member_id: MEMBER_ID, limit: 200 })
+    })
+      .then((res) => res.json().then((data) => ({ ok: res.ok, data })))
+      .then(({ ok, data }) => {
+        if (!ok) return;
+        const ids = new Set(
+          (Array.isArray(data) ? data : [])
+            .map((row: any) => String(row?.job_id ?? row?.id ?? '').trim())
+            .filter(Boolean)
+        );
+        setSavedJobIds(ids);
+      })
+      .catch(() => undefined);
+  }, []);
+
+  useEffect(() => {
     setLoading(true);
     const basePayload = {
       keyword: keyword || undefined,
@@ -189,10 +209,11 @@ export default function JobsSearchPage() {
           const retryData = await retryRes.json().catch(() => []);
           rows = normalizeJobListRows(Array.isArray(retryData) ? retryData : []);
         }
-        setJobs(rows);
+        setJobs(rows.map((job) => ({ ...job, saved: savedJobIds.has(job.id) } as any)));
         if (rows.length) {
-          const selected = selectedJobId ? rows.find((j) => j.id === selectedJobId) : null;
-          setActiveJob(selected || rows[0]);
+          const hydratedRows = rows.map((job) => ({ ...job, saved: savedJobIds.has(job.id) } as any));
+          const selected = selectedJobId ? hydratedRows.find((j) => j.id === selectedJobId) : null;
+          setActiveJob(selected || hydratedRows[0]);
         } else {
           setActiveJob(null);
         }
@@ -202,7 +223,7 @@ export default function JobsSearchPage() {
         setJobs([]);
         setLoading(false);
       });
-  }, [keyword, locationParam, selectedJobId, typeParam, industryParam, remoteParam]);
+  }, [keyword, locationParam, selectedJobId, typeParam, industryParam, remoteParam, savedJobIds]);
 
   useEffect(() => {
     fetch('/api/connections/list', {
@@ -439,6 +460,12 @@ export default function JobsSearchPage() {
       }
       const existing = readJson<any[]>(SAVED_JOBS_KEY, []);
       if (isAlreadySaved) {
+        setSavedJobIds((prev) => {
+          const nextIds = new Set(prev);
+          nextIds.delete(activeJob.id);
+          return nextIds;
+        });
+        setJobs((prev) => prev.map((job) => (job.id === activeJob.id ? ({ ...job, saved: false } as any) : job)));
         writeJson(
           SAVED_JOBS_KEY,
           existing.filter((item) => item.id !== activeJob.id)
@@ -447,6 +474,12 @@ export default function JobsSearchPage() {
         setSaveBannerJob(null);
         showToast('Removed from saved jobs.', 'info');
       } else {
+        setSavedJobIds((prev) => {
+          const nextIds = new Set(prev);
+          nextIds.add(activeJob.id);
+          return nextIds;
+        });
+        setJobs((prev) => prev.map((job) => (job.id === activeJob.id ? ({ ...job, saved: true } as any) : job)));
         const next = [
           {
             id: activeJob.id,

@@ -36,6 +36,7 @@ export default function RecruiterAiJobPanel({
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [draftEdits, setDraftEdits] = useState<Record<string, string>>({});
   const [approveBusy, setApproveBusy] = useState(false);
+  const [shortlistReviewBusy, setShortlistReviewBusy] = useState(false);
   const [error, setError] = useState('');
   const shortPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const outreachPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -263,8 +264,31 @@ export default function RecruiterAiJobPanel({
 
   const findingDone = shortTask && isTerminal(shortTask.state);
   const findingFailed = shortTask?.state === 'failed';
+  const shortlistReview = shortTask?.state === 'awaiting_approval';
+  const shortlistReady = Boolean(shortTask) && (shortlistReview || shortTask?.state === 'completed');
   const outreachReview = outreachTask?.state === 'awaiting_approval';
   const outreachDone = outreachTask && isTerminal(outreachTask.state);
+
+  const onReviewShortlist = async (decision: 'approve' | 'reject') => {
+    if (!shortTaskId) return;
+    setShortlistReviewBusy(true);
+    setError('');
+    try {
+      await aiApi.approveTask(shortTaskId, {
+        decision,
+        reviewer_id: getViewerRecruiterId(),
+      });
+      const t = await aiApi.getTask(shortTaskId);
+      setShortTask(t);
+      if (decision === 'reject') {
+        setSelected(new Set());
+      }
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : 'Shortlist review failed.');
+    } finally {
+      setShortlistReviewBusy(false);
+    }
+  };
 
   if (!trimmedJob) {
     return null;
@@ -294,7 +318,7 @@ export default function RecruiterAiJobPanel({
           <div className="mt-3 flex flex-wrap gap-2">
           <button
             type="button"
-            disabled={findBusy || Boolean(shortTaskId && !findingDone)}
+            disabled={findBusy || Boolean(shortTaskId && !findingDone && !shortlistReview)}
             onClick={() => void onFindTop()}
             className="inline-flex items-center gap-2 rounded-full bg-[#0a66c2] px-4 py-2 text-xs font-semibold text-white hover:bg-[#004182] disabled:opacity-50"
           >
@@ -305,7 +329,7 @@ export default function RecruiterAiJobPanel({
             )}
             Find top candidates
           </button>
-          {findingDone && !findingFailed ? (
+          {shortTask?.state === 'completed' && !findingFailed ? (
             <button
               type="button"
               disabled={outreachBusy || selected.size === 0 || Boolean(outreachTaskId && !outreachDone)}
@@ -318,7 +342,7 @@ export default function RecruiterAiJobPanel({
           ) : null}
           </div>
 
-          {shortTaskId && shortTask && !findingDone ? (
+          {shortTaskId && shortTask && !shortlistReady && !findingDone ? (
             <p className="mt-2 text-xs text-slate-500">
               {shortTask.state === 'queued' ? 'Queued…' : 'Ranking applicants (resume parse → match → shortlist)…'}
             </p>
@@ -328,7 +352,7 @@ export default function RecruiterAiJobPanel({
             <p className="mt-2 text-xs text-red-600">{shortTask?.error || 'Ranking failed.'}</p>
           ) : null}
 
-          {findingDone && !findingFailed && shortlist.length > 0 ? (
+          {shortlistReady && !findingFailed && shortlist.length > 0 ? (
             <div className="mt-4">
               <p className="text-xs font-semibold text-slate-700">Top {shortlist.length} ranked applicants</p>
               <ul className="mt-2 space-y-2">
@@ -356,7 +380,32 @@ export default function RecruiterAiJobPanel({
                   );
                 })}
               </ul>
+              {shortlistReview ? (
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    disabled={shortlistReviewBusy}
+                    onClick={() => void onReviewShortlist('approve')}
+                    className="rounded-full bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-emerald-700 disabled:opacity-50"
+                  >
+                    {shortlistReviewBusy ? <Loader2 size={12} className="animate-spin inline" /> : <Check size={12} className="inline" />}{' '}
+                    Approve shortlist
+                  </button>
+                  <button
+                    type="button"
+                    disabled={shortlistReviewBusy}
+                    onClick={() => void onReviewShortlist('reject')}
+                    className="rounded-full border border-red-300 bg-white px-3 py-1.5 text-xs font-semibold text-red-600 hover:bg-red-50 disabled:opacity-50"
+                  >
+                    Reject shortlist
+                  </button>
+                </div>
+              ) : null}
             </div>
+          ) : null}
+
+          {shortTask?.state === 'rejected' ? (
+            <p className="mt-3 text-xs font-semibold text-slate-600">Shortlist rejected. Start again to rerun ranking.</p>
           ) : null}
 
           {outreachTaskId && outreachTask && !outreachReview && !outreachDone ? (

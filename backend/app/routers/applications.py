@@ -195,18 +195,23 @@ async def applications_by_member(body: dict):
 
 @router.post("/applications/updateStatus")
 async def applications_update_status(body: dict):
+    await ensure_applications_table()
     application_id = body.get("application_id")
     status = body.get("status")
     recruiter_note = body.get("recruiter_note")
     if not application_id or not status:
         return JSONResponse(status_code=400, content={"error": "BAD_REQUEST", "message": "application_id and status required", "trace_id": _tid()})
     await ensure_applications_table()
-    prow = await dbm.fetch_one("SELECT job_id FROM applications WHERE app_id = %s LIMIT 1", (application_id,))
+    prow = await dbm.fetch_one("SELECT app_id, job_id FROM applications WHERE app_id = %s LIMIT 1", (application_id,))
     if not prow:
         return JSONResponse(status_code=404, content={"error": "NOT_FOUND", "message": "Application not found", "trace_id": _tid()})
     banned = await _require_job_poster_for_job(str(prow.get("job_id")), body.get("recruiter_id"))
     if banned:
         return banned
+    await dbm.execute(
+        "UPDATE applications SET status = %s, recruiter_note = COALESCE(%s, recruiter_note) WHERE app_id = %s",
+        (status, recruiter_note, application_id),
+    )
     trace_id = _tid()
     idem = str(uuid.uuid4())
     ev = app_env(
@@ -220,8 +225,13 @@ async def applications_update_status(body: dict):
     try:
         await send_kafka("application.events", application_id, ev)
     except Exception as e:
-        return JSONResponse(status_code=503, content={"error": "KAFKA_UNAVAILABLE", "message": str(e), "trace_id": _tid()})
-    return {"message": "Status update queued", "trace_id": trace_id}
+        return {
+            "message": "Status updated locally; event publish skipped",
+            "trace_id": trace_id,
+            "event_queued": False,
+            "warning": str(e),
+        }
+    return {"message": "Status updated", "trace_id": trace_id, "event_queued": True}
 
 
 @router.post("/applications/addNote")

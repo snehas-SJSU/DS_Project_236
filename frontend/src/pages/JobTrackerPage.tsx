@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { ArrowLeft, ExternalLink, Lock, MoreHorizontal } from 'lucide-react';
 import { jobsResultsPath } from '../lib/jobRoutes';
 import { getViewerRecruiterId } from '../lib/memberProfile';
@@ -52,10 +52,11 @@ function jobTimestamp(job: TrackedJob): number | null {
 export default function JobTrackerPage() {
   const MEMBER_ID = sessionStorage.getItem('li_sim_member_id') || 'M-123';
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const appliedJobId = searchParams.get('appliedJobId')?.trim() || '';
   const [trackedJobs, setTrackedJobs] = useState<TrackedJob[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [applyBusyJobId, setApplyBusyJobId] = useState<string | null>(null);
   const [connectionCount, setConnectionCount] = useState(0);
   const [connectionIds, setConnectionIds] = useState<string[]>([]);
   const [connectionPeople, setConnectionPeople] = useState<Array<{ member_id: string; name: string; title: string }>>([]);
@@ -116,6 +117,11 @@ export default function JobTrackerPage() {
       .then((data) => setPremium({ is_active: Boolean(data?.is_active), plan_name: data?.plan_name || null }))
       .catch(() => setPremium({ is_active: false }));
   }, []);
+
+  useEffect(() => {
+    if (!appliedJobId) return;
+    refreshTracker().catch(() => undefined);
+  }, [appliedJobId]);
 
   useEffect(() => {
     if (!connectionsOpen || !connectionIds.length) {
@@ -245,32 +251,7 @@ export default function JobTrackerPage() {
       showToast('Already applied to this job.', 'info');
       return;
     }
-    setApplyBusyJobId(job.id);
-    try {
-      const traceId = crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
-      const res = await fetch('/api/applications/submit', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'x-trace-id': traceId },
-        body: JSON.stringify({ job_id: job.id, member_id: MEMBER_ID })
-      });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        const msg =
-          data.error === 'DUPLICATE_APPLICATION'
-            ? 'Already applied to this job.'
-            : data.error === 'JOB_CLOSED'
-              ? 'This job is closed.'
-              : 'Unable to apply right now.';
-        showToast(msg, 'error');
-        return;
-      }
-      await refreshTracker();
-      showToast('Application submitted.', 'success');
-    } catch {
-      showToast('Unable to apply right now.', 'error');
-    } finally {
-      setApplyBusyJobId(null);
-    }
+    navigate(`/jobs/apply?jobId=${encodeURIComponent(job.id)}&returnTo=tracker`);
   };
 
   const unsaveJob = async (job: TrackedJob) => {
@@ -451,10 +432,10 @@ export default function JobTrackerPage() {
                         <button
                           type="button"
                           onClick={() => applyFromTracker(job)}
-                          disabled={applyBusyJobId === job.id || Boolean(job.application_id) || Boolean(job.archived)}
+                          disabled={Boolean(job.application_id) || Boolean(job.archived)}
                           className="rounded-full border border-[#0a66c2] px-3 py-1 text-xs font-semibold text-[#0a66c2] hover:bg-[#edf3f8] disabled:cursor-not-allowed disabled:border-[#9ec6e5] disabled:text-[#9ec6e5]"
                         >
-                          {job.application_id ? 'Applied' : applyBusyJobId === job.id ? 'Applying...' : 'Apply'}
+                          {job.application_id ? 'Applied' : 'Apply'}
                         </button>
                         <button
                           type="button"

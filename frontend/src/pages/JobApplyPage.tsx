@@ -11,6 +11,7 @@ export default function JobApplyPage() {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const jobId = useMemo(() => searchParams.get('jobId')?.trim() || '', [searchParams]);
+  const returnTo = useMemo(() => searchParams.get('returnTo')?.trim() || '', [searchParams]);
 
   const [job, setJob] = useState<Job | null>(null);
   const [loadingJob, setLoadingJob] = useState(true);
@@ -142,8 +143,18 @@ export default function JobApplyPage() {
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
-        const msg = data.error === 'DUPLICATE_APPLICATION'
-          ? 'You already applied to this job.'
+        if (data.error === 'DUPLICATE_APPLICATION') {
+          setSubmitted(true);
+          setJob((prev) => (prev ? ({ ...prev, applied: true } as any) : prev));
+          showToast('You already applied to this job.', 'info');
+          if (returnTo === 'tracker') {
+            navigate(`/jobs/tracker?appliedJobId=${encodeURIComponent(job.id)}`, { replace: true });
+          }
+          return;
+        }
+        const msg =
+          data.error === 'DUPLICATE_APPLICATION'
+            ? 'You already applied to this job.'
           : data.error === 'JOB_CLOSED'
             ? 'This job is closed.'
             : data.message || 'Unable to submit application right now.';
@@ -155,6 +166,9 @@ export default function JobApplyPage() {
       setAfterFreshSubmit(true);
       setJob((prev) => (prev ? ({ ...prev, applied: true } as any) : prev));
       showToast('Application submitted successfully', 'success');
+      if (returnTo === 'tracker') {
+        navigate(`/jobs/tracker?appliedJobId=${encodeURIComponent(job.id)}`, { replace: true });
+      }
     } catch {
       showToast('Unable to submit application right now.', 'error');
     } finally {
