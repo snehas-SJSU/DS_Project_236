@@ -8,113 +8,54 @@ A distributed LinkedIn-style platform built with React, FastAPI, Kafka, MySQL, M
 
 ```mermaid
 graph TD
-    User((Browser · Recruiter · Member)) -->|HTTPS| FE[React Frontend :3000]
-    FE -->|/api/* proxy| CoreAPI[FastAPI Core API :4000]
+    User((User / Recruiter)) --> FE["React App  :3000"]
+    FE -->|"/api/* proxy"| API["FastAPI Core API  :4000\nauth · members · jobs · applications\nmessaging · connections · analytics · posts"]
+    API <-->|"/api/ai proxy"| AI["Agentic AI Service  :8001\nHiring Assistant Supervisor\nResume Parse · Match Score · Shortlist\nOutreach Draft · HITL Approval"]
 
-    subgraph CoreAPI_Routers["FastAPI :4000 — Route Groups"]
-      R1[members · auth · recruiters]
-      R2[jobs · applications · posts]
-      R3[messaging · connections · notifications]
-      R4[analytics · events/ingest]
-      R5[HTTP + WebSocket proxy → AI :8001]
-    end
-    CoreAPI --> CoreAPI_Routers
+    API -->|"publishes domain events"| Kafka[("Apache Kafka\nmember.events · job.events\napplication.events · connection.events\nmessage.events · ai.requests")]
+    AI -->|"ai.requests"| Kafka
 
-    subgraph Kafka_Topics["Kafka — Domain Topics"]
-      T1[member.events]
-      T2[job.events]
-      T3[application.events]
-      T4[connection.events]
-      T5[message.events]
-      T6[ai.requests]
-      T7[ai.results]
-    end
-    CoreAPI --> T1
-    CoreAPI --> T2
-    CoreAPI --> T3
-    CoreAPI --> T4
-    CoreAPI --> T5
+    Kafka -->|"consumed by"| Workers["6 Kafka Workers\nmember · job · application\nconnection · message · analytics"]
 
-    subgraph Workers["Python Kafka Workers — asyncio.gather"]
-      W1[member_worker · group: member-service-group]
-      W2[job_worker · group: job-service-group]
-      W3[application_worker · group: application-service-group]
-      W4[connection_worker · group: connection-service-group]
-      W5[message_worker · group: message-service-group]
-      W6[analytics_worker · group: analytics-service-group]
-    end
-    T1 --> W1
-    T2 --> W2
-    T3 --> W3
-    T4 --> W4
-    T5 --> W5
-    T1 --> W6
-    T2 --> W6
-    T3 --> W6
-    T4 --> W6
-    T5 --> W6
+    Workers --> MySQL[("MySQL\ntransactional records")]
+    Workers -->|"analytics worker"| Mongo[("MongoDB\nevents · messages · AI traces")]
 
-    subgraph AgenticAI["Agentic AI Service — FastAPI :8001"]
-      SUP[Hiring Assistant Supervisor]
-      SK1[Resume Parse Skill · Groq LLM + heuristic]
-      SK2[Match Score Skill · embedding + rules]
-      SK3[Shortlist Generator · top-K ranking]
-      SK4[Outreach Draft Skill · Groq LLM + template]
-      HITL[HITL Checkpoint · approve / edit / reject]
-    end
-    R5 --> AgenticAI
-    T6 --> SUP
-    SUP --> T7
-    SUP --> SK1 --> SK2 --> SK3 --> SK4 --> HITL
-
-    subgraph DataLayer["Data Layer"]
-      MySQL[(MySQL\ntransactional records)]
-      Mongo[(MongoDB\nevents · messages · AI traces)]
-      Redis[(Redis\nsession · search · embedding cache)]
-    end
-    CoreAPI --> MySQL
-    CoreAPI --> Mongo
-    CoreAPI --> Redis
-    W1 --> MySQL
-    W2 --> MySQL
-    W3 --> MySQL
-    W4 --> MySQL
-    W5 --> MySQL
-    W6 --> Mongo
-    AgenticAI --> Mongo
-    AgenticAI --> Redis
+    API --> MySQL
+    API --> Mongo
+    API --> Redis[("Redis\nsession cache · search cache\nidempotency keys")]
+    AI --> Mongo
+    AI --> Redis
 ```
 
 ---
 
-### 0.0.1 AI Agentic Workflow (Detailed)
+### 0.0.1 AI Agentic Workflow
 
 ```mermaid
 flowchart TD
-    RecruiterUI[Recruiter UI] -->|POST /api/ai/tasks/submit| CoreAPI[FastAPI :4000]
-    CoreAPI -->|proxy /api/ai| AIAPI[AI FastAPI :8001]
+    UI["Recruiter UI"] -->|"POST /api/ai/tasks/submit"| API["FastAPI Core :4000"]
+    API -->|"proxy"| AI["AI Service :8001"]
 
-    AIAPI -->|Publish ai.requested| KReq[(Kafka: ai.requests)]
-    AIAPI -->|Save task: queued| MongoDB[(MongoDB: ai_tasks)]
-    AIAPI -->|WebSocket progress stream| RecruiterUI
+    AI -->|"publish"| KReq[("Kafka: ai.requests")]
+    AI -->|"save task"| MDB[("MongoDB: ai_tasks")]
+    AI -.->|"WebSocket progress"| UI
 
-    KReq --> SUP[Hiring Assistant Supervisor]
+    KReq --> SUP["Hiring Assistant Supervisor"]
 
-    SUP -->|Step 1| D[discover_candidates\nFetch applicants from MySQL via REST]
-    D -->|Step 2| RP[resume_parse\nGroq LLM + heuristic · cache in parsed_resumes]
-    RP -->|Step 3| MS[match_score\nembedding cosine + rule score\nskills 50% · location 20% · seniority 20% · industry 10%]
-    MS -->|Step 4| SL[shortlist\nTop-K ranked candidates]
-    SL -->|Step 5| OD[outreach_draft\nGroq LLM generates per-candidate messages]
+    SUP --> S1["Step 1: discover_candidates\nFetch applicants from MySQL"]
+    S1 --> S2["Step 2: resume_parse\nGroq LLM + heuristic fallback"]
+    S2 --> S3["Step 3: match_score\nEmbedding + rule-based hybrid score"]
+    S3 --> S4["Step 4: shortlist\nTop-K ranked candidates"]
+    S4 --> S5["Step 5: outreach_draft\nGroq LLM per-candidate messages"]
 
-    OD -->|Awaiting human review| HITL{HITL Checkpoint}
-    HITL -->|approve| SEND[Deliver via messaging API\nopen thread + send message]
-    HITL -->|edit| OD
-    HITL -->|reject| DONE[Task: rejected]
-    SEND --> DONE2[Task: completed]
+    S5 --> HITL{"HITL Checkpoint"}
+    HITL -->|"approve"| SEND["Send via Messaging API"]
+    HITL -->|"edit"| S5
+    HITL -->|"reject"| REJ["Task: rejected"]
+    SEND --> DONE["Task: completed"]
 
-    SUP -->|Publish step events| KRes[(Kafka: ai.results)]
-    SUP -->|Persist step outputs| Steps[(MongoDB: ai_steps)]
-    SUP -->|Persist drafts| Drafts[(MongoDB: outreach_drafts)]
+    SUP -->|"step events"| KRes[("Kafka: ai.results")]
+    SUP -->|"persist"| OBS[("MongoDB\nai_steps · outreach_drafts\nparsed_resumes")]
 
     style HITL fill:#f0ad4e,color:#000
     style SUP fill:#0a66c2,color:#fff
@@ -556,54 +497,7 @@ npm run test:backend:integration
 
 ---
 
-## 10.0 Project Implementation Status
-
-### Core Application (Complete)
-- 3-tier distributed architecture: React → FastAPI → MySQL / MongoDB / Redis
-- **Member module**: CRUD, search, profile UI, public profile
-- **Recruiter module**: CRUD, search, admin panel
-- **Job module**: create, search, close, save, view tracking, Redis cache
-- **Application module**: submit, status update, recruiter notes, duplicate/closed-job checks
-- **Messaging module**: threads, send, list — body in MongoDB, metadata in MySQL
-- **Connection module**: request, accept, reject, mutual detection
-- **Post/Feed module**: create, like, comment, repost, share to message
-- **Notification module**: API-driven, polling refresh, read-state persistence
-
-### Kafka (Complete — 6 Workers)
-- All 5 domain topics with independent consumer groups
-- Analytics worker mirrors all events to MongoDB
-- 7-field envelope validation on both publish and consume paths
-- trace_id propagated from UI header → Kafka envelope → worker logs
-
-### Data Storage (Complete)
-- **MySQL**: all OLTP relational data with secondary indexes on all filter/search columns
-- **MongoDB**: messages, analytics events, AI task traces, step results, outreach drafts, parsed resume cache
-- **MongoDB indexes**: created at startup for all query patterns
-- **Redis**: JWT session cache, job detail/search cache, profile cache, embedding cache, idempotency keys
-
-### Agentic AI (Complete)
-- Multi-step supervisor pipeline: discover → parse → score → shortlist → draft
-- Groq LLM integration with retry + fallback to heuristic
-- Sentence-transformer semantic embeddings with Redis cache
-- HITL approval workflow (approve / edit / reject)
-- WebSocket real-time progress stream
-- Full MongoDB observability: task state, step-level I/O, event log
-- Outreach delivery via messaging API after approval
-- Career coach endpoint
-
-### Analytics (Complete)
-- Member dashboard: 30-day profile views (total + daily line chart), post impressions, search appearances
-- Recruiter dashboard: funnel (view → save → apply start → submit), top/low jobs, geo distribution by city and month, saved/view trend charts, KPI cards
-- All charts wired to live backend endpoints
-
-### Pending (Intentional)
-- JMeter benchmark run / charts (infrastructure exists in `HTTP Header Manager.jmx`)
-- AWS deployment (Kubernetes manifests in `deploy/kubernetes/`, ECS configs in `deploy/aws-ecs/`)
-- Google OAuth (`Continue with Google` is UI-only)
-
----
-
-## 11.0 Project Structure
+## 10.0 Project Structure
 
 ```
 .
