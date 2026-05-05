@@ -52,6 +52,20 @@ export default function ApplicationsPage() {
     }
   }, []);
 
+  async function loadJobApps(nextJobId: string) {
+    if (!nextJobId.trim()) {
+      setJobApps([]);
+      return;
+    }
+    const res = await fetch('/api/applications/byJob', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ job_id: nextJobId.trim() })
+    });
+    const data = await res.json().catch(() => []);
+    setJobApps(Array.isArray(data) ? data : []);
+  }
+
   async function loadMemberApps() {
     const res = await fetch('/api/applications/byMember', {
       method: 'POST',
@@ -408,6 +422,7 @@ export default function ApplicationsPage() {
                           return;
                         }
                         if (jid) await fetchApplicantsForJob(jid);
+                        showToast(`Application moved to ${status}.`, 'success');
                       }}
                     >
                       {status}
@@ -416,7 +431,8 @@ export default function ApplicationsPage() {
                   <button
                     className="rounded-full border border-blue-600 px-3 py-1 text-xs font-semibold text-blue-700 hover:bg-blue-50"
                     onClick={async () => {
-                      const note = window.prompt('Enter recruiter note') || '';
+                      const existingNote = String(app.recruiter_note || '').trim();
+                      const note = window.prompt('Enter recruiter note', existingNote) || '';
                       if (!note) return;
                       const jid = jobId.trim();
                       const res = await fetch('/api/applications/addNote', {
@@ -443,6 +459,9 @@ export default function ApplicationsPage() {
                     Add note
                   </button>
                 </div>
+                {app.recruiter_note ? (
+                  <p className="mt-2 text-xs text-slate-600">Recruiter note: {app.recruiter_note}</p>
+                ) : null}
               </div>
             ))}
           </div>

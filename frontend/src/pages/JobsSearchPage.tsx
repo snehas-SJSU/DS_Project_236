@@ -160,7 +160,7 @@ export default function JobsSearchPage() {
     fetch('/api/jobs/saved', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ member_id: viewerMemberId, limit: 200 })
+      body: JSON.stringify({ member_id: MEMBER_ID, limit: 200 })
     })
       .then((res) => res.json().then((data) => ({ ok: res.ok, data })))
       .then(({ ok, data }) => {

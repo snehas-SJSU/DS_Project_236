@@ -950,12 +950,18 @@ function MetricsView() {
     { label: 'Rejected', pct: metrics.rejection_rate,  color: 'bg-red-400'     },
   ];
 
+  const completedTasks =
+    (metrics as { completed?: number; completed_tasks?: number }).completed_tasks ??
+    (metrics as { completed?: number; completed_tasks?: number }).completed ??
+    metrics.tasks_by_state?.completed ??
+    0;
+
   return (
     <div className="space-y-4">
       <div className="grid grid-cols-2 gap-3">
         {[
           { label: 'Total Tasks',     value: metrics.total_tasks,                                   icon: <Layers size={14} />,      color: 'text-slate-600'   },
-          { label: 'Completed',       value: metrics.completed_tasks,                               icon: <CheckCircle size={14} />, color: 'text-emerald-600' },
+          { label: 'Completed',       value: completedTasks,                                        icon: <CheckCircle size={14} />, color: 'text-emerald-600' },
           { label: 'Avg Match Score', value: `${Math.round(metrics.avg_match_score * 100)}%`,       icon: <Target size={14} />,      color: 'text-[#0a66c2]'  },
           {
             label: 'Avg Completion',
